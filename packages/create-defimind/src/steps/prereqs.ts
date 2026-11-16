@@ -109,12 +109,12 @@ async function checkout(ctx: Ctx): Promise<string> {
     return target
   }
   const clone = await ctx.prompt.ask({
-    text: 'This folder is not an DefiMind checkout. Clone it into ~/DefiMind and continue there?',
+    text: 'This folder is not a DefiMind checkout. Clone it into ~/DefiMind and continue there?',
     default: 'yes',
     parse: (raw) => yesNo(raw, true),
   })
   if (!clone) {
-    throw new WizardError('PREREQUISITE', 'run create-defimind from an DefiMind checkout')
+    throw new WizardError('PREREQUISITE', 'run create-defimind from a DefiMind checkout')
   }
   await ctx.run.run(cloneCommand(target))
   return target

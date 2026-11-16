@@ -427,7 +427,7 @@ integrator before any session writes code, since every package imports those typ
   (both adapters' `getAllowanceState`, the stub), guard-core (the stub chain), bot (the chains
   line). The policy engine, the amounts and the agent API do not change.
 
-### CR-009 — An DefiMind token on Robinhood Chain, for governance and holder benefits
+### CR-009 — A DefiMind token on Robinhood Chain, for governance and holder benefits
 
 - **From:** integrator, for the owner
 - **Date:** 2026-11-09
@@ -618,3 +618,96 @@ generic>` prints the exact command or config block for that client, with the gua
      request: everything in the repository is English (ADR 004).
 - **Blast radius:** guard-core (agent routes, doctor, the shadow default), onchain
   (`getHotWalletGas`), bot (commands), mcp (`setup`), integrator (wizard, compose, docs, shared types).
+
+### CR-012 — The owner panel: a web app with passkeys and push, replacing Telegram for approvals
+
+- **From:** integrator, for the owner
+- **Date:** 2026-11-16
+- **Status:** approved by the owner on 2026-11-16 ("pode começar a construir"). Applied as SPEC
+  v0.8. The panel approves; Telegram stays as an optional channel for alerts and the kill only.
+- **Why:** an approval in Telegram is only as safe as the owner's Telegram account. A passkey is bound
+  to the owner's device and biometrics, and phishing cannot capture it. guard-core already approves
+  with passkeys (CR-010), but only from a link the bot sends. This change makes a passkey the only
+  way to approve, and gives the owner one place for everything the bot does today.
+- **What:**
+  1. **The panel.** A new package, `packages/panel`: static TypeScript built with esbuild, no
+     framework and no third-party script at runtime. guard-core serves it at `/panel` on the public
+     listener, with this Content-Security-Policy: `default-src 'none'; script-src 'self';
+style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self';
+manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'`. It is an
+     installable PWA: a web manifest and a service worker that handles push and caches the app shell
+     only, never an API response.
+  2. **Owner sessions, by passkey.**
+     - `POST /v1/owner/session/options` -> WebAuthn authentication options, with a 2-minute
+       single-use challenge.
+     - `POST /v1/owner/session { assertion }` -> `{ expiresAt }`. It sets the cookie `dm_session`:
+       HttpOnly, Secure, `SameSite=Strict`, `Path=/v1/owner`. The session ends after 30 minutes idle
+       or 12 hours in all. It is stored as a SHA-256 hash, with the passkey that opened it.
+     - `POST /v1/owner/session/logout`.
+     - Every state-changing owner route also requires the header `X-DefiMind-Request: 1` and an
+       `Origin` equal to `PASSKEY_ORIGIN`.
+  3. **Step-up for anything that moves money or loosens a limit.** These need a fresh passkey
+     assertion in the same request, on top of the session:
+     - approving a payment or a task budget;
+     - a policy change that raises a limit, adds an allowed recipient, domain, chain or token, sets
+       `mode` to `live`, or sets `requireMandate` to false;
+     - resuming an agent, creating an agent.
+
+     `POST /v1/owner/challenge { action, body }` returns a single-use challenge bound to the SHA-256
+     of the canonical JSON of the action and its body. An assertion for one action never authorizes
+     another. Rejecting, pausing, the kill, switching to shadow, revoking an agent and any tightening
+     of a policy need the session only.
+
+  4. **Owner routes,** session-authenticated, mirroring the admin routes that stay on the private
+     listener for scripts and the wizard:
+     - `GET /v1/owner/overview`: chains with their caps, agents, and pending approvals.
+     - `POST /v1/owner/intents/:id/decision { decision, assertion? }` and
+       `POST /v1/owner/mandates/:id/decision { decision, assertion? }`: approve needs the assertion.
+     - `GET /v1/owner/report`, `GET /v1/owner/doctor`, `GET /v1/owner/budget/:agentId`.
+     - `GET /v1/owner/agents`, `POST /v1/owner/agents { agentId, assertion }` (the token is shown
+       once), `POST /v1/owner/agents/:id/revoke`.
+     - `GET /v1/owner/policy/:agentId`, `PUT /v1/owner/policy/:agentId { policy, assertion? }`.
+     - `POST /v1/owner/pause`, `POST /v1/owner/resume { agentId, assertion }`.
+     - `POST /v1/owner/kill`: the same as the admin kill, with the per-chain signing page links.
+     - `GET /v1/owner/passkeys`.
+  5. **Web Push.** guard-core signs with VAPID keys (`VAPID_PRIVATE_KEY_FILE`, `VAPID_SUBJECT`) and
+     sends encrypted pushes (RFC 8291) to each subscription.
+     - `POST /v1/owner/push { subscription }` and `DELETE /v1/owner/push/:id`. Subscriptions are
+       stored with the passkey that added them. A 404 or 410 from the push service deletes them.
+     - Pushed: an approval needed, a payment executed at or above `NOTIFY_ABOVE_AMOUNT`, an attack
+       code (throttled as in the bot), a tripped breaker, a new passkey, a kill.
+     - The payload carries the event, the agent, the chain and the amount, never a recipient or a
+       URL. The panel loads the details after login.
+     - Push service hosts (FCM, Apple, Mozilla) are listed in the self-host guide for strict egress.
+  6. **The first passkey without Telegram.** A script on the machine,
+     `src/scripts/passkey-code.ts`, prints the one-time `/panel/enrol#code=…` link. The wizard runs it
+     at its last step. The step-up rule for every later passkey stays as it is.
+  7. **Every approval is a passkey approval.** In the panel, approving always needs a passkey,
+     whatever the amount, and the intent records `approvedBy: "passkey"`. A new setting,
+     `TELEGRAM_APPROVALS`, false by default, makes `POST /v1/bot/decision` refuse `approve` with 403
+     `approve_in_panel` while it still accepts `reject`. `PASSKEY_ABOVE` keeps its meaning for
+     deployments that turn Telegram approvals back on.
+  8. **The bot becomes optional:** alerts, `/status`, `/report` and `/kill`. Its approve buttons are
+     shown only when `TELEGRAM_APPROVALS` is true. A deployment can run without the bot at all.
+- **Tests:**
+  - guard-core, with the existing software authenticator:
+    - login, idle and absolute expiry, logout;
+    - the step-up binding: an assertion for one action is refused for another, and for the same
+      action with another body;
+    - CSRF: a missing header or a foreign Origin is refused;
+    - every route without a session is refused;
+    - push to a fake push service: encryption, VAPID and deleting gone subscriptions.
+  - The panel in Playwright, with a virtual authenticator, at 390 and 1280 px.
+  - e2e: a payment over the threshold approved in the panel, and the same payment refused when
+    Telegram tries to approve it.
+  - An independent security review before release.
+- **Rollout:** with the move of the infrastructure to the DefiMind apps. The running deployment is
+  not changed by this CR.
+- **Blast radius:**
+  - guard-core: sessions, owner routes, push, two migrations (`owner_sessions`, `push_subscriptions`);
+  - a new package, `packages/panel`, owned by a new `panel` role, the bot session renamed;
+  - bot: approvals behind `TELEGRAM_APPROVALS`;
+  - shared: the owner route types;
+  - wizard: the enrolment link and the VAPID key;
+  - SPEC v0.8, docs, and an ADR.
+- **Out of scope:** native iOS and Android apps.
