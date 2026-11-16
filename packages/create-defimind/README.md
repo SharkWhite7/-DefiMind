@@ -7,7 +7,7 @@ with a default for almost every answer.
 
 ## Run it
 
-From an DefiMind checkout, after `pnpm install`:
+From a DefiMind checkout, after `pnpm install`:
 
 ```bash
 pnpm --filter create-defimind start             # the setup, or continue one
