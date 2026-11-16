@@ -12,7 +12,8 @@ Read /SPEC.md before anything. SPEC is the source of truth for interfaces.
 
 ## Roles
 - manager: owns /coordination, talks to the human owner, assigns tasks, never writes product code
-- onchain | guard-core | mcp | bot: own ONLY their /packages/<name>
+- onchain | guard-core | mcp: own ONLY their /packages/<name>
+- panel: owns /packages/panel (the owner web app, CR-012) and /packages/telegram-bot
 - integrator: owns /packages/shared and /e2e, merges branches, can touch everything during integration
 
 ## Coordination protocol (how sessions talk)
