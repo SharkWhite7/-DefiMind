@@ -623,9 +623,8 @@ generic>` prints the exact command or config block for that client, with the gua
 
 - **From:** integrator, for the owner
 - **Date:** 2026-11-16
-- **Status:** proposed. The owner chose the direction on 2026-11-16 ("vamos fazer isso para
-  substituir o telegram"): the panel approves, and Telegram stays as an optional channel for alerts
-  and the kill only. The details below wait for the owner's approval.
+- **Status:** approved by the owner on 2026-11-16 ("pode começar a construir"). Applied as SPEC
+  v0.8. The panel approves; Telegram stays as an optional channel for alerts and the kill only.
 - **Why:** an approval in Telegram is only as safe as the owner's Telegram account. A passkey is bound
   to the owner's device and biometrics, and phishing cannot capture it. guard-core already approves
   with passkeys (CR-010), but only from a link the bot sends. This change makes a passkey the only

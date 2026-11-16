@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.7 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.8 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -238,6 +238,43 @@ GET  /owner/approve/:intentId            public page: WebAuthn for this origin, 
 POST /v1/owner/approve { intentId, assertion } -> PayIntent
   With PASSKEY_ABOVE set, an intent at or above it is approved only here; /v1/bot/decision still
   rejects it but refuses to approve it. The challenge is single-use and expires with the intent.
+## Owner panel (CR-012)
+guard-core serves the panel (packages/panel, static) at /panel on the public listener, with
+CSP default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self';
+worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'.
+Owner routes need the session cookie; every state-changing one also needs X-DefiMind-Request: 1 and
+Origin == PASSKEY_ORIGIN. 401 { error: "no_session" }, 403 { error: "bad_origin" | "step_up_required" }.
+POST /v1/owner/session/options -> WebAuthn authentication options (single use, 2 minutes)
+POST /v1/owner/session { assertion } -> { expiresAt }   sets dm_session: HttpOnly, Secure,
+  SameSite=Strict, Path=/v1/owner; 30 minutes idle, 12 hours in all; stored as its SHA-256
+POST /v1/owner/session/logout -> { ok: true }
+POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, single use, bound to
+  sha256(canonical JSON of { action, body }); the step-up assertion for that exact action and body
+  OwnerAction = "approve_intent" | "approve_mandate" | "loosen_policy" | "resume" | "create_agent"
+GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
+  pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
+POST /v1/owner/intents/:id/decision { decision: "approve" | "reject", assertion? } -> PayIntent
+POST /v1/owner/mandates/:id/decision { decision, assertion? } -> Mandate
+  approve needs the step-up assertion; every panel approval records approvedBy "passkey"
+GET  /v1/owner/report?from&to, GET /v1/owner/doctor, GET /v1/owner/budget/:agentId   as the admin ones
+GET  /v1/owner/agents; POST /v1/owner/agents { agentId, assertion } -> { agentId, token } (once);
+POST /v1/owner/agents/:id/revoke
+GET  /v1/owner/policy/:agentId; PUT /v1/owner/policy/:agentId { policy, assertion? }
+  assertion required when the PUT raises perTxMax, dailyMax or approvalThreshold, adds to chains,
+  tokens, allowedRecipients or allowedDomains, sets mode "live", or sets requireMandate false
+POST /v1/owner/pause { agentId }; POST /v1/owner/resume { agentId, assertion }
+POST /v1/owner/kill {} -> the same body as POST /v1/admin/kill
+GET  /v1/owner/passkeys -> as GET /v1/admin/passkeys
+POST /v1/owner/push { subscription: { endpoint, keys: { p256dh, auth } } } -> { id }
+DELETE /v1/owner/push/:id
+  Web Push with VAPID (VAPID_PRIVATE_KEY_FILE, VAPID_SUBJECT) and RFC 8291 encryption. Payload
+  { kind: "approval" | "mandate" | "executed" | "attack" | "breaker" | "passkey_enrolled" | "kill",
+  agentId?, chain?, amount?, intentId?, sentAt } and never a recipient or URL. A 404 or 410 from the
+  push service deletes the subscription.
+GET  /panel/enrol#code=…   the first-passkey page; src/scripts/passkey-code.ts prints the link
+TELEGRAM_APPROVALS (default false): when false, POST /v1/bot/decision and /v1/bot/mandates/:id/decision
+  refuse "approve" with 403 { error: "approve_in_panel" } and still accept "reject".
+
 GET  /v1/admin/budget/:agentId -> BudgetView   same body as GET /v1/agent/budget/:agentId;
                                   404 { error: "not_found" } for an unknown agent
 GET  /v1/admin/chains -> { chains: { chain: string, allowance: AllowanceState | null }[] }
@@ -285,6 +322,8 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.8 (2026-11-16): CR-012, approved by the owner. The owner panel: passkey sessions, step-up
+  assertions bound to each action, owner routes, Web Push, and TELEGRAM_APPROVALS (default false).
 - v0.7 (2026-11-09): CR-011, approved by the owner. Agent creation, listing and revocation and a
   doctor on the admin API, for the bot's owner commands and the setup wizard; new agents start in
   shadow mode; ChainAdapter.getHotWalletGas.
