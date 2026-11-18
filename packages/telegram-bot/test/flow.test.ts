@@ -649,3 +649,42 @@ describe('task budget approvals', () => {
     )
   })
 })
+
+describe('with Telegram approvals off, the default', () => {
+  const labels = (call: { payload: Record<string, unknown> } | undefined) =>
+    (call?.payload['reply_markup'] as { inline_keyboard: { text: string }[][] }).inline_keyboard
+      .flat()
+      .map((button) => button.text)
+
+  it('offers Reject only, and says to approve in the panel', async () => {
+    const { calls, deliver } = await harness({ telegramApprovals: false })
+    await deliver('/hooks/approval-request', approval())
+    const posted = sent(calls, 'sendMessage')[0]
+    expect(labels(posted)).toEqual(['Reject', 'Show full recipient'])
+    expect(posted?.payload['text']).toContain(
+      '🔐 <b>Approve in the DefiMind panel.</b> Here you can only reject it.',
+    )
+  })
+
+  it('answers an old Approve button without asking guard-core, and still rejects', async () => {
+    const { bot, guard, calls, deliver } = await harness({ telegramApprovals: false })
+    await deliver('/hooks/approval-request', approval())
+    await bot.handleUpdate(press(OWNER, `approve:${INTENT_ID}`))
+    expect(guard.decide).not.toHaveBeenCalled()
+    expect(sent(calls, 'answerCallbackQuery')[0]?.payload['text']).toBe(
+      'Approve in the DefiMind panel: here you can only reject.',
+    )
+    await bot.handleUpdate(press(OWNER, `reject:${INTENT_ID}`))
+    expect(guard.decide).toHaveBeenCalledWith(INTENT_ID, 'reject', OWNER.id)
+  })
+
+  it('offers Reject only on a task budget, and refuses its Approve', async () => {
+    const { bot, guard, calls, deliver } = await harness({ telegramApprovals: false })
+    await deliver('/hooks/approval-request', mandateRequest())
+    const posted = sent(calls, 'sendMessage')[0]
+    expect(labels(posted)).toEqual(['Reject'])
+    expect(posted?.payload['text']).toContain('Approve in the DefiMind panel.')
+    await bot.handleUpdate(press(OWNER, `task-approve:${MANDATE_ID}`))
+    expect(guard.decideMandate).not.toHaveBeenCalled()
+  })
+})

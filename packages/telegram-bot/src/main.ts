@@ -49,6 +49,7 @@ const { bot, desk, commands, owner } = createBot({
   log,
   phantomKills,
   guardPublicUrl: config.GUARD_PUBLIC_URL,
+  telegramApprovals: config.TELEGRAM_APPROVALS,
   weekly:
     config.REPORT_WEEKDAY === undefined || config.REPORT_HOUR_UTC === undefined
       ? undefined
