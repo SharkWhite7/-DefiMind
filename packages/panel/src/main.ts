@@ -20,11 +20,17 @@ let after: Route = { name: 'overview' }
 
 const ERRORS: Record<string, string> = {
   step_up_required: 'This needs your passkey. Try again.',
+  passkey_not_verified: 'The passkey was not accepted. Try again.',
   bad_origin: 'Open the panel from its own address, not through another site.',
+  code_not_valid: 'This enrol link is used or expired. Ask for a new one.',
+  passkey_exists: 'A passkey exists already: an enrolled one has to approve a new one.',
   already_decided: 'Already decided.',
+  not_pending: 'Already decided.',
   expired: 'It expired before the decision.',
   exists: 'An agent with that name exists.',
   not_found: 'Not found.',
+  invalid_request: 'guard-core did not accept that request.',
+  rate_limited: 'Too many requests. Wait a minute and try again.',
 }
 
 const ctx: Context = {
@@ -45,7 +51,8 @@ function fail(error: unknown) {
   } else if (error instanceof Cancelled) {
     ctx.say('Passkey cancelled: nothing was sent.')
   } else if (error instanceof ApiError) {
-    ctx.say(ERRORS[error.code] ?? `guard-core refused it (${error.code}).`, 'stop')
+    const known = error.status === 429 ? 'rate_limited' : error.code
+    ctx.say(ERRORS[known] ?? `guard-core refused it (${error.code}).`, 'stop')
   } else {
     ctx.say(error instanceof Error ? error.message : 'Something went wrong.', 'stop')
   }

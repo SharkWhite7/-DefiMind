@@ -156,16 +156,22 @@ export async function guardCore(dist: string) {
 
     if (path === '/v1/owner/passkeys/options') {
       return send(200, {
-        challenge: issue(null).challenge,
-        rp: { id: 'localhost', name: 'DefiMind' },
-        user: { id: b64(randomBytes(16)), name: 'owner', displayName: 'Owner' },
-        pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
-        authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
+        registration: {
+          challenge: issue(null).challenge,
+          rp: { id: 'localhost', name: 'DefiMind' },
+          user: { id: b64(randomBytes(16)), name: 'owner', displayName: 'Owner' },
+          pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
+          authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
+        },
+        ...(state.passkeys > 0 ? { stepUp: issue(null) } : {}),
       })
     }
     if (path === '/v1/owner/passkeys' && method === 'POST') {
+      if (state.passkeys > 0 && redeem(body['assertion']) === undefined) {
+        return send(409, { error: 'step_up_required' })
+      }
       state.passkeys++
-      return send(200, { ok: true })
+      return send(200, { enrolled: true })
     }
     if (path === '/v1/owner/session/options') {
       return send(200, issue(null))

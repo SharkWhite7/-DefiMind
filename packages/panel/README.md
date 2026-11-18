@@ -65,10 +65,9 @@ be cached. The worker's scope is `/panel/`.
 ## Open items
 
 - The logo is a placeholder drawn by `icons.ts` until the owner's arrives.
-- Push needs the VAPID public key: the panel reads `GET /v1/owner/push/key -> { publicKey }`,
-  proposed to guard-core and not in SPEC yet.
-- `POST /v1/owner/kill` returns each chain's transaction as `payload`. The panel shows a
-  `link` (Phantom) and `pageLink` (desktop) for a chain when guard-core adds them; until then it shows
-  the transaction, and the bot's `/kill` buttons still work.
+- Push reads `GET /v1/owner/push/key -> { publicKey }`, agreed with guard-core and on its way into SPEC.
+- `POST /v1/owner/kill` gains `link` (Phantom) and `pageLink` (desktop) per chain when guard-core has
+  `SIGN_PAGE_URL`. Without them the panel shows the transaction, and the bot's `/kill` buttons still
+  work.
 - `app.js` is about 480 kB minified, nearly all zod. The worker caches it, so only the first load
   pays for it.

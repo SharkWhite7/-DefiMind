@@ -18,6 +18,12 @@ const assertion: Assertion = {
   response: { clientDataJSON: 'a', authenticatorData: 'b', signature: 'c' },
 }
 const options = { challenge: 'AAEC' }
+const creation = {
+  challenge: 'AAEC',
+  rp: { name: 'D' },
+  user: { id: 'AQ', name: 'o', displayName: 'O' },
+  pubKeyCredParams: [],
+}
 
 interface Call {
   method: string
@@ -161,26 +167,23 @@ describe('owner api', () => {
       [
         [200, options],
         [200, { expiresAt: '2026-11-18T12:00:00.000Z' }],
-        [
-          200,
-          {
-            ...options,
-            rp: { name: 'D' },
-            user: { id: 'AQ', name: 'o', displayName: 'O' },
-            pubKeyCredParams: [],
-          },
-        ],
-        [200, { ok: true }],
+        [200, { registration: creation }],
+        [200, { enrolled: true }],
+        [200, { registration: creation, stepUp: options }],
+        [200, { enrolled: true }],
       ],
       { register: async () => registration as never },
     )
     await expect(api.login()).resolves.toEqual({ expiresAt: '2026-11-18T12:00:00.000Z' })
     await api.enrol('code-1')
+    await api.enrol('code-2')
     expect(calls.map((call) => call.body)).toEqual([
       {},
       { assertion },
       { code: 'code-1' },
       { code: 'code-1', response: registration },
+      { code: 'code-2' },
+      { code: 'code-2', response: registration, assertion },
     ])
   })
 

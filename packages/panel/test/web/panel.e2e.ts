@@ -157,3 +157,13 @@ it('sends a signed-out owner to the passkey and back to the link they opened', a
   expect(new URL(page.url()).pathname).toBe(`/panel/approvals/${guard.intentId}`)
   await close()
 })
+
+it('adds a second passkey only with the first one vouching for it', async () => {
+  const { guard, page, close } = await device(390)
+  await signIn(page, guard.origin)
+  await page.goto(`${guard.origin}/panel/enrol#code=second`)
+  await page.getByRole('button', { name: 'Create passkey' }).click()
+  await expect.poll(() => status(page).textContent()).toContain('Passkey saved')
+  expect(guard.state.passkeys).toBe(2)
+  await close()
+})

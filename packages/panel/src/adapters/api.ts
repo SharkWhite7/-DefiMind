@@ -1,12 +1,6 @@
-import type { z } from 'zod'
+import { z } from 'zod'
 import * as s from './schemas.js'
-import {
-  type Assertion,
-  type Authenticator,
-  creationOptions,
-  type Registration,
-  requestOptions,
-} from './webauthn.js'
+import { type Assertion, type Authenticator, creationOptions, requestOptions } from './webauthn.js'
 
 /** The step-up actions of SPEC: each assertion is bound to one action and its exact body. */
 export type OwnerAction =
@@ -34,6 +28,7 @@ export class Cancelled extends Error {
 }
 
 const json = { 'content-type': 'application/json' }
+const enrolOptions = z.object({ registration: creationOptions, stepUp: requestOptions.optional() })
 
 /**
  * Every call guard-core's owner routes take. Same origin, with the session cookie; every
@@ -89,13 +84,24 @@ export function ownerApi(passkey: Authenticator, fetchImpl: typeof fetch = fetch
     },
     logout: () => post(ignored, '/v1/owner/session/logout'),
 
+    /** After the first passkey, an enrolled one must vouch for the new one (stepUp). */
     async enrol(code: string) {
-      const options = await post(creationOptions, '/v1/owner/passkeys/options', { code })
-      const response: Registration | null = await passkey.register(options)
+      const { registration, stepUp } = await post(enrolOptions, '/v1/owner/passkeys/options', {
+        code,
+      })
+      const assertion = stepUp ? await passkey.assert(stepUp) : undefined
+      if (assertion === null) {
+        throw new Cancelled()
+      }
+      const response = await passkey.register(registration)
       if (response === null) {
         throw new Cancelled()
       }
-      return post(ignored, '/v1/owner/passkeys', { code, response })
+      return post(ignored, '/v1/owner/passkeys', {
+        code,
+        response,
+        ...(assertion ? { assertion } : {}),
+      })
     },
 
     overview: () => get(s.overview, '/v1/owner/overview'),
