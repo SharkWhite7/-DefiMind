@@ -277,6 +277,10 @@ export interface OwnerTransaction {
   description: string
   /** Null when the transaction could not be built: that chain's allowance is still live. */
   payload: unknown
+  /** CR-014: the Phantom universal link to the signing page; owner kill only, with SIGN_PAGE_URL. */
+  link?: string
+  /** CR-014: the signing page itself, for Phantom's desktop extension. */
+  pageLink?: string
 }
 
 /** Response of POST /v1/admin/kill. */

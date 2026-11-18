@@ -834,7 +834,8 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
 
 - **From:** integrator, for the panel role
 - **Date:** 2026-11-18
-- **Status:** proposed
+- **Status:** approved by the owner on 2026-11-18 ("cr14 eu aprovo", in the panel session). Applied as
+  SPEC v0.10.
 - **Why:** the panel (CR-012, merged in #5) cannot subscribe to push without the server's VAPID
   public key, and its Stop screen can only show raw transactions, while the bot gives the owner
   one-tap Phantom links for the onchain kill.
