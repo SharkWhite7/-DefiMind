@@ -167,3 +167,18 @@ it('adds a second passkey only with the first one vouching for it', async () => 
   expect(guard.state.passkeys).toBe(2)
   await close()
 })
+
+it('keeps the owner signed in when guard-core refuses a passkey', async () => {
+  const { guard, page, close } = await device(390)
+  await signIn(page, guard.origin)
+  guard.state.refuseNextPasskey = true
+  await page.getByText('$2.50 USDC').click()
+  await page.getByRole('button', { name: 'Approve with passkey' }).click()
+  await expect
+    .poll(() => status(page).textContent())
+    .toBe('The passkey was not accepted. Try again.')
+  expect(new URL(page.url()).pathname).toBe(`/panel/approvals/${guard.intentId}`)
+  await page.getByRole('button', { name: 'Approve with passkey' }).click()
+  await expect.poll(() => status(page).textContent()).toBe('Approved.')
+  await close()
+})
