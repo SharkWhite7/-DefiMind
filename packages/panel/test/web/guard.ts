@@ -55,6 +55,8 @@ export async function guardCore(dist: string) {
     decisions: [] as Decision[],
     puts: [] as { policy: Record<string, unknown>; stepUp?: { action: string; body: unknown } }[],
     killed: false,
+    /** guard-core's answer to an assertion it cannot verify, for the next decision. */
+    refuseNextPasskey: false,
     policy: {
       agentId: 'research-bot',
       chains: [chain],
@@ -198,6 +200,10 @@ export async function guardCore(dist: string) {
     }
     const decision = /^\/v1\/owner\/(intents|mandates)\/([^/]+)\/decision$/.exec(path)
     if (decision) {
+      if (state.refuseNextPasskey && body['assertion'] !== undefined) {
+        state.refuseNextPasskey = false
+        return send(401, { error: 'passkey_not_verified' })
+      }
       const bound = stepUp()
       if (body['decision'] === 'approve' && bound === undefined) {
         return send(403, { error: 'step_up_required' })
