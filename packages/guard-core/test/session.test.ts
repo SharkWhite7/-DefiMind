@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { schema } from '../src/db/client.js'
 import { pruneSessions } from '../src/db/sessions.js'
+import { removePasskey } from '../src/service/remove-passkey.js'
 import { ADMIN_TOKEN, harness, NOW, PASSKEY_RP, type Harness } from './harness.js'
 import { softAuthenticator } from './webauthn.js'
 
@@ -152,5 +153,20 @@ describe('owner sessions', () => {
     at(h, 12 * 60)
     pruneSessions(h.db, h.clock.now)
     expect(h.db.select().from(schema.ownerSessions).all()).toHaveLength(0)
+  })
+
+  it('ends the sessions of a passkey when it is removed', async () => {
+    const token = await session(h, device)
+    expect(removePasskey(h.db, device.id.slice(0, 8), h.clock.now)).toMatchObject({
+      ok: true,
+      sessions: 1,
+    })
+    expect((await passkeys(h, token)).statusCode).toBe(401)
+    expect(h.auditEvents()).toContain('passkey_removed')
+  })
+
+  it('removes nothing for a prefix shorter than 8 characters, or one matching none', () => {
+    expect(removePasskey(h.db, '', h.clock.now)).toMatchObject({ ok: false, reason: 'too_short' })
+    expect(removePasskey(h.db, 'zzzzzzzzzz', h.clock.now)).toMatchObject({ reason: 'none' })
   })
 })

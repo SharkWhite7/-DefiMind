@@ -253,7 +253,7 @@ detail: <first 8 characters of the credential id>, sentAt }`, so the owner hears
 - Removing a passkey has no route: it takes a shell on the machine.
   `pnpm --filter @defimind/guard-core remove-passkey` lists them, and
   `pnpm --filter @defimind/guard-core remove-passkey <id or prefix>` removes one, audited. The
-  prefix must be at least 8 characters and match exactly one passkey.
+  prefix must be at least 8 characters and match exactly one passkey. Every panel session the passkey opened ends with it.
 - Both require user verification. Challenges are single-use and last five minutes. Opening a page
   again reuses the challenge still out, and a challenge is used up only by a verified answer, so a
   stray or forged request cannot spoil the owner's open page. Challenges and codes are used up by
