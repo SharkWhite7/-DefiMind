@@ -23,7 +23,7 @@ const ERRORS: Record<string, string> = {
   passkey_not_verified: 'The passkey was not accepted. Try again.',
   bad_origin: 'Open the panel from its own address, not through another site.',
   code_not_valid: 'This enrol link is used or expired. Ask for a new one.',
-  passkey_exists: 'A passkey exists already: an enrolled one has to approve a new one.',
+  passkey_exists: 'This passkey is already enrolled.',
   already_decided: 'Already decided.',
   not_pending: 'Already decided.',
   expired: 'It expired before the decision.',
