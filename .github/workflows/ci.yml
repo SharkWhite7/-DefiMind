@@ -109,6 +109,29 @@ jobs:
       - name: test:web
         run: pnpm --filter @defimind/onchain test:web
 
+  # The owner panel (CR-012) in a real Chromium, with a virtual authenticator and a stand-in
+  # guard-core that enforces the owner-route rules. Served under the SPEC's CSP.
+  panel:
+    name: owner panel (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: npx --prefix packages/panel playwright install --with-deps chromium
+
+      - name: test:web
+        run: pnpm --filter @defimind/panel test:web
+
   # The deployable images, built from the repo root as `fly deploy` builds them. Two checks: the
   # build context of every Dockerfile, which is what gets uploaded to a remote builder, holds none of
   # the planted decoys; and the images build. A Dockerfile-specific .dockerignore would replace the

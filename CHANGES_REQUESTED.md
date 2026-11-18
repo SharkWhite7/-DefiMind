@@ -829,3 +829,23 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   - credit or underwriting built on the receipts, which needs a legal and licensing review first;
   - signing inside a TEE;
   - a Python SDK.
+
+### CR-014 — Two owner-route additions the panel needs: the VAPID key and kill links
+
+- **From:** integrator, for the panel role
+- **Date:** 2026-11-18
+- **Status:** proposed
+- **Why:** the panel (CR-012, merged in #5) cannot subscribe to push without the server's VAPID
+  public key, and its Stop screen can only show raw transactions, while the bot gives the owner
+  one-tap Phantom links for the onchain kill.
+- **What:**
+  1. `GET /v1/owner/push/key -> { publicKey }`: the VAPID public key, base64url. It needs a session,
+     and it never returns the private key.
+  2. `OwnerTransaction` gains `link?: string` (the Phantom universal link) and `pageLink?: string` (the
+     signing page itself, for the desktop extension). Only `POST /v1/owner/kill` fills them, and only
+     when guard-core has `SIGN_PAGE_URL` and the chain has a signing-page target. The admin kill and
+     the bot are unchanged.
+  3. `phantomKillUrl` and `killPageUrl` move from the bot to `@defimind/shared`, unchanged, so
+     guard-core and the bot build the same links. They are pure, and every input is public.
+- **Blast radius:** guard-core (the route, the kill links, `SIGN_PAGE_URL`), shared (the two
+  functions and the optional fields), the bot (imports from shared), SPEC v0.10.
