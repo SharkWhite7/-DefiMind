@@ -218,6 +218,8 @@ export function setup(
     phantomKills?: PhantomKill[]
     weekly?: ReportSchedule
     guardPublicUrl?: string
+    /** The tests of Telegram approvals turn them on; the panel tests leave them off. */
+    telegramApprovals?: boolean
     admin?: AdminClient
     log?: Logger
   } = {},
@@ -236,6 +238,7 @@ export function setup(
     phantomKills: options.phantomKills,
     weekly: options.weekly,
     guardPublicUrl: options.guardPublicUrl,
+    telegramApprovals: options.telegramApprovals ?? true,
   })
   const calls = mockTelegram(bot, options.fail)
   return { bot, desk, commands, owner, guard, admin, calls }

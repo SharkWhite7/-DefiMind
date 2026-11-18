@@ -23,6 +23,8 @@ export interface BotDeps {
   phantomKills?: PhantomKill[]
   /** guard-core's public origin, for the passkey approval link. */
   guardPublicUrl?: string
+  /** Approve buttons in Telegram; off by default, when the panel approves. */
+  telegramApprovals?: boolean
   /** When the weekly report goes out; none without one. */
   weekly?: ReportSchedule
 }
@@ -43,9 +45,19 @@ export function createBot({
   phantomKills,
   weekly,
   guardPublicUrl,
+  telegramApprovals,
 }: BotDeps) {
   const bot = new Bot(token, botConfig)
-  const desk = new Desk({ api: bot.api, owners, guard, notifyAbove, log, now, guardPublicUrl })
+  const desk = new Desk({
+    api: bot.api,
+    owners,
+    guard,
+    notifyAbove,
+    log,
+    now,
+    guardPublicUrl,
+    telegramApprovals,
+  })
 
   // Anyone who is not an owner gets no reply at all: even an error tells them the bot is listening.
   bot.use(async (ctx, next) => {

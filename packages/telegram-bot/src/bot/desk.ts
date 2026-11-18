@@ -31,6 +31,8 @@ export interface DeskDeps {
   now?: () => Date
   /** Where owners open guard-core's passkey page; without it a passkey request has no approve link. */
   guardPublicUrl?: string
+  /** False (the default) leaves approving to the panel: the bot only rejects. */
+  telegramApprovals?: boolean
 }
 
 export interface Owner {
@@ -42,6 +44,8 @@ export interface Owner {
 export type PostResult = Admission | 'undelivered'
 
 type Pressed = MessageRef & { text: string }
+
+const PANEL_ANSWER = 'Approve in the DefiMind panel: here you can only reject.'
 
 const HTML = { parse_mode: 'HTML' } as const
 
@@ -82,8 +86,14 @@ export class Desk {
     id: (request) => request.intent.id,
     post: (request) => {
       const id = request.intent.id
-      const page = request.passkey === true ? this.#passkeyPage(id) : undefined
-      return [approvalText(request, page !== null), approvalKeyboard(id, page)]
+      if (!this.#approvesHere) {
+        return [approvalText(request, 'panel'), approvalKeyboard(id, null)]
+      }
+      if (request.passkey !== true) {
+        return [approvalText(request), approvalKeyboard(id)]
+      }
+      const page = this.#passkeyPage(id)
+      return [approvalText(request, page === null ? 'no-link' : 'link'), approvalKeyboard(id, page)]
     },
     settled: settledText,
     decide: (id, decision, owner) => this.#deps.guard.decide(id, decision, owner),
@@ -92,9 +102,16 @@ export class Desk {
   readonly #tasks: Counter<MandateRequest> = {
     book: this.#mandates,
     id: (request) => request.mandate.id,
-    post: (request) => [mandateText(request), mandateKeyboard(request.mandate.id)],
+    post: (request) => [
+      mandateText(request, !this.#approvesHere),
+      mandateKeyboard(request.mandate.id, this.#approvesHere),
+    ],
     settled: mandateSettledText,
     decide: (id, decision, owner) => this.#deps.guard.decideMandate(id, decision, owner),
+  }
+
+  get #approvesHere(): boolean {
+    return this.#deps.telegramApprovals === true
   }
 
   pendingTasks(): number {
@@ -109,7 +126,10 @@ export class Desk {
 
   /** Returns the short text shown to the owner who pressed the button. */
   async decide(intentId: string, decision: Decision, owner: Owner, pressed: Pressed) {
-    // guard-core refuses it too; an old or forged Approve button should not even ask.
+    // guard-core refuses these too; an old or forged Approve button should not even ask.
+    if (decision === 'approve' && !this.#approvesHere) {
+      return PANEL_ANSWER
+    }
     if (decision === 'approve' && this.book.get(intentId)?.request.passkey === true) {
       return 'This one needs your passkey: use Approve with passkey.'
     }
@@ -117,6 +137,9 @@ export class Desk {
   }
 
   async decideMandate(mandateId: string, decision: Decision, owner: Owner, pressed: Pressed) {
+    if (decision === 'approve' && !this.#approvesHere) {
+      return PANEL_ANSWER
+    }
     return this.#decide(this.#tasks, mandateId, decision, owner, pressed)
   }
 

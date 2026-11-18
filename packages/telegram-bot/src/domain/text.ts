@@ -93,6 +93,9 @@ const PASSKEY_LINE =
   "🔑 <b>Passkey required.</b> Approve it with your passkey on guard-core's page; " +
   'a Telegram tap can only reject it.'
 
+/** With Telegram approvals off (the default), the panel is the only place a payment is approved. */
+export const PANEL_LINE = '🔐 <b>Approve in the DefiMind panel.</b> Here you can only reject it.'
+
 const PASSKEY_NO_LINK =
   "🔑 <b>Passkey required.</b> Approve it with your passkey on guard-core's page; this bot " +
   'has no link to it (GUARD_PUBLIC_URL is not set). A Telegram tap can only reject it.'
@@ -138,8 +141,13 @@ function flagLines(flag: ApprovalFlag, { intent, pinned, flags = [] }: FlaggedRe
 }
 
 /** A flag is why this payment is in front of the owner at all, so it comes first. */
-/** linked: whether the message carries a button to guard-core's passkey page. */
-export function approvalText(request: FlaggedRequest, linked = true): string {
+/**
+ * approve: how this message lets the owner approve. A Telegram button, a link to guard-core's passkey
+ * page (or none, when that page's address is not set), or not here at all but in the panel.
+ */
+export type ApproveVia = 'telegram' | 'link' | 'no-link' | 'panel'
+
+export function approvalText(request: FlaggedRequest, approve: ApproveVia = 'telegram'): string {
   const flags = (request.flags ?? []).flatMap((flag) => {
     const [warning, ...detail] = flagLines(flag, request)
     return [`⚠️ <b>${warning}</b>`, ...detail]
@@ -148,8 +156,15 @@ export function approvalText(request: FlaggedRequest, linked = true): string {
     (flag) => `⚠️ <b>guard-core flagged this payment:</b> <code>${escapeHtml(flag)}</code>`,
   )
   flags.push(...unknown)
-  const passkey = request.passkey === true ? [linked ? PASSKEY_LINE : PASSKEY_NO_LINK] : []
-  return [...flags, '<b>Approval needed</b>', ...passkey, ...details(request, false)].join('\n')
+  const how = {
+    telegram: [],
+    link: [PASSKEY_LINE],
+    'no-link': [PASSKEY_NO_LINK],
+    panel: [PANEL_LINE],
+  }
+  return [...flags, '<b>Approval needed</b>', ...how[approve], ...details(request, false)].join(
+    '\n',
+  )
 }
 
 export function settledText(request: ApprovalRequest, outcome: Outcome): string {

@@ -1,15 +1,16 @@
 import { InlineKeyboard } from 'grammy'
 
 /**
- * Callback data is capped at 64 bytes by Telegram; an action plus a uuid fits. A passkey request has
- * no Approve callback at all: only the passkey page can approve it, so the bot offers a link there.
+ * Callback data is capped at 64 bytes by Telegram; an action plus a uuid fits. approve: undefined for
+ * an Approve button; a URL for a passkey request, which only guard-core's passkey page can approve;
+ * null for no way to approve here at all, for the panel or a passkey page whose address is unknown.
  */
-export function approvalKeyboard(intentId: string, passkeyPage?: string | null): InlineKeyboard {
+export function approvalKeyboard(intentId: string, approve?: string | null): InlineKeyboard {
   const keyboard = new InlineKeyboard()
-  if (passkeyPage === undefined) {
+  if (approve === undefined) {
     keyboard.text('Approve', `approve:${intentId}`)
-  } else if (passkeyPage !== null) {
-    keyboard.url('Approve with passkey', passkeyPage)
+  } else if (approve !== null) {
+    keyboard.url('Approve with passkey', approve)
   }
   return keyboard
     .text('Reject', `reject:${intentId}`)
@@ -17,8 +18,10 @@ export function approvalKeyboard(intentId: string, passkeyPage?: string | null):
     .text('Show full recipient', `recipient:${intentId}`)
 }
 
-export function mandateKeyboard(mandateId: string): InlineKeyboard {
-  return new InlineKeyboard()
-    .text('Approve', `task-approve:${mandateId}`)
-    .text('Reject', `task-reject:${mandateId}`)
+export function mandateKeyboard(mandateId: string, approve = true): InlineKeyboard {
+  const keyboard = new InlineKeyboard()
+  if (approve) {
+    keyboard.text('Approve', `task-approve:${mandateId}`)
+  }
+  return keyboard.text('Reject', `task-reject:${mandateId}`)
 }
