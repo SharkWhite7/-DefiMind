@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.8 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.9 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -45,7 +45,9 @@ Neither chain needs a contract we write. Both primitives are audited and already
 /packages/onchain       Session 1 — ChainAdapter interface + svm/ (Squads) and evm/ (Safe) implementations
 /packages/guard-core    Session 2 — policy engine, simulation, signer, x402 client, HTTP API, DB
 /packages/mcp-server    Session 3 — MCP server exposing tools to agents
-/packages/telegram-bot  Session 4 — owner approvals + kill switch
+/packages/telegram-bot  Session 4 — owner approvals + kill switch (panel role since CR-012)
+/packages/panel         panel role — the owner web app (CR-012)
+/packages/sdk           mcp role — withReceipt and the defimind-verify CLI (CR-013)
 /e2e                    Session 5 — end-to-end + attack tests, run once per chain
 
 ## Chain identifiers
@@ -125,6 +127,31 @@ interface Receipt {                // CR-010: one per executed intent
   approvedBy: "policy" | "owner" | "passkey"
   issuedAt: string
   signature: string                // hex Ed25519 over the canonical JSON of the fields above
+}
+
+interface ExecutionReceipt {       // CR-013: one per tool call or payment, one chain per deployment
+  type: "defimind.execution.v1"    // domain separation from Receipt
+  seq: number                      // 1, 2, 3… with no gap
+  prevHash: string                 // hash of receipt seq-1; 64 zeros for seq 1
+  agentId: string
+  kind: "tool_call" | "payment"
+  server: string                   // the downstream MCP server, or "defimind" for payments
+  tool: string
+  requestHash: string              // hex SHA-256 of the canonical JSON of the arguments
+  responseHash: string             // hex SHA-256 of the canonical JSON of the result
+  outcome: "ok" | "error" | "refused"
+  assurance: "executed" | "relayed"
+  paymentReceipt?: string          // kind "payment" only
+  startedAt: string; endedAt: string; issuedAt: string
+  hash: string                     // hex SHA-256 of the canonical JSON of the fields above
+  signature: string                // hex Ed25519 over the same bytes
+}
+
+interface Anchor { fromSeq: number; toSeq: number; root: string; chain: string; txId: string; anchoredAt: string }
+interface ProofBundle {            // what the owner hands a third party
+  receipt: ExecutionReceipt
+  siblings: { side: "left" | "right"; hash: string }[]   // leaf to root
+  anchor: Anchor
 }
 
 ## Reject codes
@@ -283,6 +310,42 @@ GET  /v1/admin/chains -> { chains: { chain: string, allowance: AllowanceState | 
   configured, so every payment is refused. The bot shows status 'none' as "no onchain limit (killed)"
   and null as "could not be read" (CR-008).
 
+## Verified execution (CR-013)
+One hash chain of ExecutionReceipt per deployment, signed with RECEIPT_SIGNING_KEY. A single writer
+appends in one DB transaction, so seq and prevHash cannot fork. guard-core stores hashes and metadata
+only, never tool arguments or results. Every executed payment also appends a "payment" entry whose
+paymentReceipt is the hex SHA-256 of the canonical JSON of its CR-010 Receipt.
+assurance "executed": guard-core ran the action itself. "relayed": a gateway or the SDK reported a
+call it made; guard-core vouches for when it heard of it and that the record never changed since, not
+for what the tool really did. Docs and the panel must say this plainly.
+
+POST /v1/agent/executions { server, tool, requestHash, responseHash, outcome, startedAt, endedAt }
+  -> ExecutionReceipt (assurance "relayed")   agent token; agentId comes from the token
+GET  /v1/owner/executions?agentId&from&to -> { receipts: ExecutionReceipt[] }   the panel timeline
+GET  /v1/owner/executions/integrity -> { lastSeq, lastHash, brokenAt?: number, lastAnchor?: Anchor }
+  The whole chain is re-checked at start-up and daily. A break sends the alert
+  { kind: "chain_broken", detail, sentAt } to the bot and a push to the panel.
+GET  /v1/owner/executions/:seq/proof -> ProofBundle   404 until the receipt is anchored
+GET  /v1/admin/executions?from&to -> { receipts: ExecutionReceipt[] }
+GET  /v1/anchors?from&to -> { anchors: Anchor[] }   public; anchors only, never a receipt
+
+Anchoring, only with ANCHOR_CHAIN set (CAIP-2; Solana first): every hour or 1,000 receipts, whichever
+comes first, and never with no new receipt. Merkle leaf = SHA-256(0x00 || hash), node =
+SHA-256(0x01 || left || right), an odd node promoted unchanged. One tx carries the memo
+defimind:anchor:v1:<fromSeq>-<toSeq>:<rootHex>: the Memo program on Solana; on EVM later, calldata to
+the anchor key's own address. ANCHOR_KEY_FILE is its own keypair, funded for fees only, never the
+hot wallet. A failed publication is retried; receipts stay valid without an anchor.
+
+Gateway mode (mcp-server): a file lists downstream MCP servers (stdio command or HTTP URL). Their
+tools are exposed as <server>__<tool>; each call is forwarded, then reported to POST
+/v1/agent/executions. Fail closed: an unrecorded result waits in a local outbox and is retried, and
+no new call is forwarded while the outbox is not empty. GATEWAY_KEEP_BODIES (default false) keeps
+bodies in a local file for the operator.
+SDK (packages/sdk): withReceipt(server, tool, fn) reports any async call the same way.
+defimind-verify <bundle.json> [--key <hex>] [--rpc <url>]: checks offline the signature, the
+receipt hash, the Merkle path and the root in the anchor tx, and, given a run of receipts, that seq
+has no gap and every prevHash links. Prints pass or fail per check; trusts no DefiMind server.
+
 ## Webhook guard-core -> telegram-bot
 POST {BOT_URL}/hooks/approval-request  (header X-Guard-Signature: HMAC-SHA256 of body with BOT_WEBHOOK_SECRET)
 { intent: PayIntent, simulation: { summary: string, balanceChanges: {token, delta}[] }, approveBefore: string }
@@ -298,6 +361,7 @@ status. Attack-code alerts are throttled per agent and code; large-payment alert
 POST {BOT_URL}/hooks/alert             (same X-Guard-Signature scheme; CR-010)
 { kind: "breaker_tripped", agentId: string, detail: string, sentAt: string }
   | { kind: "passkey_enrolled", detail: string, sentAt: string }
+  | { kind: "chain_broken", detail: string, sentAt: string }   (CR-013)
 The approval-request body gains flags: ("RECIPIENT_CHANGED" | "PRICE_JUMP")[] (empty when none),
 pinned?: { recipient, amount } (the last executed payment to that domain, present with a flag),
 passkey: boolean (approve only through /owner/approve), and mandate?: Mandate when the request is to
@@ -322,6 +386,9 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.9 (2026-11-18): CR-013, approved by the owner. Verified execution: a signed, hash-chained
+  ExecutionReceipt for every tool call and payment, the MCP gateway mode, the SDK, optional Merkle
+  anchoring with no custom contract, defimind-verify, and the executions routes for the panel.
 - v0.8 (2026-11-16): CR-012, approved by the owner. The owner panel: passkey sessions, step-up
   assertions bound to each action, owner routes, Web Push, and TELEGRAM_APPROVALS (default false).
 - v0.7 (2026-11-09): CR-011, approved by the owner. Agent creation, listing and revocation and a

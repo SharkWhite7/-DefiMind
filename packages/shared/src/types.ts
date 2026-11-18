@@ -76,6 +76,54 @@ export interface Receipt {
   signature: string
 }
 
+/** CR-013: one per tool call or payment, in one hash chain per deployment. */
+export interface ExecutionReceipt {
+  type: 'defimind.execution.v1'
+  /** 1, 2, 3… with no gap. */
+  seq: number
+  /** The previous receipt's hash; 64 zeros for seq 1. */
+  prevHash: string
+  agentId: string
+  kind: 'tool_call' | 'payment'
+  /** The downstream MCP server, or "defimind" for payments. */
+  server: string
+  tool: string
+  /** Hex SHA-256 of the canonical JSON of the arguments; the arguments are never stored. */
+  requestHash: string
+  responseHash: string
+  outcome: 'ok' | 'error' | 'refused'
+  /** executed: guard-core ran it. relayed: a gateway reported it, so only its record is vouched for. */
+  assurance: 'executed' | 'relayed'
+  /** Hex SHA-256 of the canonical JSON of the CR-010 Receipt; kind "payment" only. */
+  paymentReceipt?: string
+  startedAt: string
+  endedAt: string
+  issuedAt: string
+  /** Hex SHA-256 of the canonical JSON of the fields above. */
+  hash: string
+  /** Hex Ed25519 over the same bytes, with the receipt key. */
+  signature: string
+}
+
+/** CR-013: a Merkle root over receipts fromSeq..toSeq, published in one transaction. */
+export interface Anchor {
+  fromSeq: number
+  toSeq: number
+  root: string
+  /** CAIP-2. */
+  chain: string
+  txId: string
+  anchoredAt: string
+}
+
+/** CR-013: everything a third party needs to verify one receipt offline. */
+export interface ProofBundle {
+  receipt: ExecutionReceipt
+  /** From the leaf up to the root. */
+  siblings: { side: 'left' | 'right'; hash: string }[]
+  anchor: Anchor
+}
+
 /** Body of POST {BOT_URL}/hooks/alert (CR-010). */
 export type AlertEvent =
   | { kind: 'breaker_tripped'; agentId: string; detail: string; sentAt: string }
