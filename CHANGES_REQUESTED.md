@@ -716,7 +716,7 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
 
 - **From:** integrator, for the owner
 - **Date:** 2026-11-18
-- **Status:** proposed
+- **Status:** approved by the owner on 2026-11-18 ("CR013 aprovado"). Applied as SPEC v0.9.
 - **Depends on:** CR-010 (receipts and the receipt key), CR-012 (the panel, for the dashboard only)
 - **Why:** today DefiMind proves what an agent paid. An operator, a client or an auditor also needs
   to prove what the agent did: which tools it called, when, with what input and what result, and
