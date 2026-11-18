@@ -1,6 +1,5 @@
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
-import { listPasskeys } from '../db/passkeys.js'
 import * as repo from '../db/repo.js'
 import type { OwnerSession } from '../db/sessions.js'
 import { verifyAssertion } from '../service/passkeys.js'
@@ -92,19 +91,6 @@ export function ownerSessionRoutes(
       })
       await gated(scope)
     })
-  }
-}
-
-/** The session-only routes of this change; the rest of the owner routes join them. */
-export function sessionGated(deps: PaymentDeps) {
-  return async (app: FastifyInstance) => {
-    app.get('/v1/owner/passkeys', async () => ({
-      passkeys: listPasskeys(deps.db).map(({ id, createdAt, lastUsedAt }) => ({
-        id,
-        createdAt,
-        lastUsedAt,
-      })),
-    }))
   }
 }
 

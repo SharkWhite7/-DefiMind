@@ -1,9 +1,10 @@
-import type { ApprovalFlag, PayIntent, SimulationResult } from '@defimind/shared'
+import type { ApprovalFlag, ApprovalRequest, PayIntent, SimulationResult } from '@defimind/shared'
 import { APPROVAL_TTL_MS } from '@defimind/shared'
 import { and, eq, inArray, lte, or } from 'drizzle-orm'
 import type { BotNotifier } from '../adapters/bot.js'
 import type { Db } from '../db/client.js'
 import { audit, getIntent, saveIntent } from '../db/repo.js'
+import { saveRequest } from '../db/requests.js'
 import { intents } from '../db/schema.js'
 import type { Pin } from '../domain/pinning.js'
 import type { PaymentDeps } from './payments.js'
@@ -26,7 +27,7 @@ export async function requestApproval(
   ask: { flags: ApprovalFlag[]; pinned?: Pin; passkey: boolean },
 ): Promise<void> {
   saveIntent(db, { ...intent, status: 'pending_approval' })
-  await bot.requestApproval({
+  const request: ApprovalRequest = {
     intent,
     simulation,
     approveBefore: intent.expiresAt,
@@ -35,7 +36,9 @@ export async function requestApproval(
     ...(ask.pinned === undefined
       ? {}
       : { pinned: { recipient: ask.pinned.recipient, amount: ask.pinned.amount } }),
-  })
+  }
+  saveRequest(db, request)
+  await bot.requestApproval(request)
 }
 
 /** Asks the owner, and keeps the intent pending whether or not the bot heard. */

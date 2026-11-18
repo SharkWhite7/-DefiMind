@@ -1,3 +1,4 @@
+import { saveRequest } from '../db/requests.js'
 import type { Amount, Mandate, MandateApprovalRequest, RejectCode } from '@defimind/shared'
 import { randomUUID } from 'node:crypto'
 import { insertMandate } from '../db/mandates.js'
@@ -77,6 +78,7 @@ export async function openMandate(
         simulation: { summary: 'opens a task budget; no funds move now', balanceChanges: [] },
         approveBefore: mandate.expiresAt,
       }
+      saveRequest(db, request)
       await deps.bot.requestApproval(request)
     } catch (error) {
       // Saved as pending first, so the sweep closes it if the bot never hears.
