@@ -198,6 +198,18 @@ describe('owner api', () => {
     await expect(api.kill()).rejects.toMatchObject({ status: 403, code: 'error', noSession: false })
   })
 
+  it('keeps the session when only the passkey failed', async () => {
+    const { api } = server([
+      [200, options],
+      [401, { error: 'passkey_not_verified' }],
+    ])
+    await expect(api.approveIntent('i-1')).rejects.toMatchObject({
+      status: 401,
+      code: 'passkey_not_verified',
+      noSession: false,
+    })
+  })
+
   it('refuses an answer that does not match the schema', async () => {
     const { api } = server([[200, { passkeys: 'none' }]])
     await expect(api.passkeys()).rejects.toThrow()

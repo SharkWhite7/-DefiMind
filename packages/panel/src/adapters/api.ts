@@ -15,8 +15,9 @@ export class ApiError extends Error {
     super(`${status} ${code}`)
   }
 
+  /** Only no_session means signing in again: a 401 passkey_not_verified is a failed passkey. */
   get noSession(): boolean {
-    return this.status === 401
+    return this.status === 401 && this.code === 'no_session'
   }
 }
 
