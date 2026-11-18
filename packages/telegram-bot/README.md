@@ -1,8 +1,16 @@
 # @defimind/telegram-bot
 
-The owner's control surface: approve or reject payments above the threshold, watch for attacks, and
-stop everything. Built on [grammY](https://grammy.dev) (long polling) and Fastify (the hooks
-guard-core calls).
+Telegram alerts for DefiMind: attacks, tripped breakers, large payments, `/status`, `/report` and
+`/kill`. Built on [grammY](https://grammy.dev) (long polling) and Fastify (the hooks guard-core
+calls).
+
+**The bot is optional (CR-012).** The owner panel (`packages/panel`) is where payments and task
+budgets are approved, with a passkey. A deployment can run without this bot at all. With it, and
+`TELEGRAM_APPROVALS` left at its default `false`, an approval request reaches Telegram with **Reject**
+only and the line "Approve in the DefiMind panel." guard-core refuses a Telegram approve in that mode
+too (`403 approve_in_panel`), so set `TELEGRAM_APPROVALS` the same in both. `true` brings back the
+Telegram **Approve** buttons for deployments that want them; `PASSKEY_ABOVE` then still sends larger
+payments to the passkey page.
 
 - **Contract:** [`/SPEC.md`](../../SPEC.md) — webhook and `/v1/bot/decision`. The parts not in the
   SPEC yet are proposed in CR-004 in [`/CHANGES_REQUESTED.md`](../../CHANGES_REQUESTED.md).
@@ -266,7 +274,7 @@ fly apps create defimind-bot --org <your-fly-org>
 
 # 3. Secrets: read from the bot's .env and piped straight in, never typed or printed.
 #    Fill packages/telegram-bot/.env first (see Run above). HOST, PORT and GUARD_URL come from fly.toml.
-cd ~/DefiMind && grep -E '^(TELEGRAM_BOT_TOKEN|OWNER_TELEGRAM_IDS|GUARD_BOT_TOKEN|GUARD_ADMIN_TOKEN|BOT_WEBHOOK_SECRET|NOTIFY_ABOVE_AMOUNT|SOLANA_CHAIN|SIGN_PAGE_URL|SQUADS_MULTISIG|SOLANA_HOT_WALLET_PUBKEY|ROBINHOOD_CHAIN|ROBINHOOD_SAFE_ADDRESS|REPORT_WEEKDAY|REPORT_HOUR_UTC|GUARD_PUBLIC_URL)=.' packages/telegram-bot/.env | fly secrets import --app defimind-bot --stage
+cd ~/DefiMind && grep -E '^(TELEGRAM_BOT_TOKEN|OWNER_TELEGRAM_IDS|GUARD_BOT_TOKEN|GUARD_ADMIN_TOKEN|BOT_WEBHOOK_SECRET|NOTIFY_ABOVE_AMOUNT|SOLANA_CHAIN|SIGN_PAGE_URL|SQUADS_MULTISIG|SOLANA_HOT_WALLET_PUBKEY|ROBINHOOD_CHAIN|ROBINHOOD_SAFE_ADDRESS|REPORT_WEEKDAY|REPORT_HOUR_UTC|GUARD_PUBLIC_URL|TELEGRAM_APPROVALS)=.' packages/telegram-bot/.env | fly secrets import --app defimind-bot --stage
 
 # 4. Deploy one machine. The test refuses to run unless the root .dockerignore applies and excludes
 #    .env files. A Dockerfile.dockerignore next to the Dockerfile would replace it, not add to it.

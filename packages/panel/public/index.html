@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="theme-color" content="#0b1220" />
+    <title>DefiMind</title>
+    <link rel="manifest" href="/panel/manifest.webmanifest" />
+    <link rel="icon" href="/panel/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/panel/icons/icon-192.png" />
+    <link rel="stylesheet" href="/panel/app.css" />
+    <script type="module" src="/panel/app.js"></script>
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="/panel/">DefiMind</a>
+      <nav>
+        <a href="/panel/">Overview</a>
+        <a href="/panel/agents">Agents</a>
+        <a href="/panel/report">Report</a>
+        <a href="/panel/doctor">Doctor</a>
+        <a href="/panel/settings">Settings</a>
+        <a class="stop" href="/panel/kill">Stop</a>
+      </nav>
+    </header>
+    <p id="status" role="status" aria-live="polite"></p>
+    <main id="app"></main>
+  </body>
+</html>

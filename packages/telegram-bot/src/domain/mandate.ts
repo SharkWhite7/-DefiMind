@@ -1,6 +1,6 @@
 import type { MandateRequest } from '../http/schemas.js'
 import { formatUsd } from './money.js'
-import { escapeHtml, type Outcome, outcomeLine, utcTime } from './text.js'
+import { escapeHtml, type Outcome, outcomeLine, PANEL_LINE, utcTime } from './text.js'
 
 // Enough to judge the request while the message stays far under Telegram's 4096 characters.
 const SHOWN = 10
@@ -32,8 +32,11 @@ function details({ mandate, approveBefore, ttlSeconds }: MandateRequest): string
   ]
 }
 
-export function mandateText(request: MandateRequest): string {
-  return ['<b>Task budget requested</b>', ...details(request)].join('\n')
+/** panel: Telegram approvals are off, so this message can only reject. */
+export function mandateText(request: MandateRequest, panel = false): string {
+  return ['<b>Task budget requested</b>', ...(panel ? [PANEL_LINE] : []), ...details(request)].join(
+    '\n',
+  )
 }
 
 function settledLine(outcome: Outcome): string {
