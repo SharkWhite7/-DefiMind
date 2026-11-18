@@ -65,9 +65,9 @@ be cached. The worker's scope is `/panel/`.
 ## Open items
 
 - The logo is a placeholder drawn by `icons.ts` until the owner's arrives.
-- Push reads `GET /v1/owner/push/key -> { publicKey }`, agreed with guard-core and on its way into SPEC.
+- Push reads `GET /v1/owner/push/key -> { publicKey }`, proposed (CR-014), not in SPEC until the owner approves it.
 - `POST /v1/owner/kill` gains `link` (Phantom) and `pageLink` (desktop) per chain when guard-core has
-  `SIGN_PAGE_URL`. Without them the panel shows the transaction, and the bot's `/kill` buttons still
+  `SIGN_PAGE_URL`: proposed (CR-014). Without them the panel shows the transaction, and the bot's `/kill` buttons still
   work.
 - `app.js` is about 480 kB minified, nearly all zod. The worker caches it, so only the first load
   pays for it.
