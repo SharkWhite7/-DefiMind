@@ -1,5 +1,6 @@
 import { expireMandates } from '../db/mandates.js'
 import { pruneExpired } from '../db/passkeys.js'
+import { pruneRequests } from '../db/requests.js'
 import { pruneSessions } from '../db/sessions.js'
 import * as repo from '../db/repo.js'
 import { expirePending } from './approvals.js'
@@ -11,6 +12,7 @@ export function sweep(deps: PaymentDeps): number {
   expireMandates(deps.db, deps.now())
   pruneExpired(deps.db, deps.now())
   pruneSessions(deps.db, deps.now())
+  pruneRequests(deps.db, deps.now())
   const expired = expirePending(deps.db, deps.now())
   for (const id of expired) {
     const intent = repo.getIntent(deps.db, id)
