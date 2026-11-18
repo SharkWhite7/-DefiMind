@@ -26,6 +26,7 @@ import { adminRoutes } from './admin.js'
 import { agentRoutes } from './agent.js'
 import { botRoutes } from './bot.js'
 import { ownerRoutes } from './owner.js'
+import { ownerSessionRoutes, sessionGated } from './owner-session.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -73,7 +74,12 @@ export async function buildServers(
       logger: {
         level: config.LOG_LEVEL,
         // A bearer token in a log file is the same as a bearer token in a repository.
-        redact: ['req.headers.authorization', 'req.headers["x-guard-signature"]'],
+        redact: [
+          'req.headers.authorization',
+          'req.headers.cookie',
+          'req.headers["x-guard-signature"]',
+          'res.headers["set-cookie"]',
+        ],
         serializers: { err: serializeError },
       },
     }),
@@ -176,6 +182,9 @@ async function serve(app: FastifyInstance, surface: Surface, deps: X402Deps, con
         ? undefined
         : { rpId: config.PASSKEY_RP_ID, origin: config.PASSKEY_ORIGIN }
     app.register(ownerRoutes(deps, rp))
+    if (rp !== undefined) {
+      app.register(ownerSessionRoutes(deps, rp, sessionGated(deps)))
+    }
     app.register(
       agentRoutes(deps, {
         perIp: config.RATE_LIMIT_PER_IP,
