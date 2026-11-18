@@ -217,8 +217,7 @@ SameSite=Strict; Path=/v1/owner`. A session ends after 30 minutes idle, or 12 ho
   however active it is. Only the SHA-256 of its token is stored (`owner_sessions`). Sessions past
   their 12 hours are pruned by the sweep.
 - `POST /v1/owner/session/logout` ends the session and clears the cookie.
-- Without a live session, a session route answers 401 `{ "error": "no_session" }`. For now the
-  only one is `GET /v1/owner/passkeys`; the other owner routes join it.
+- Without a live session, a panel route answers 401 `{ "error": "no_session" }`.
 - Every state-changing request needs `X-DefiMind-Request: 1` and an `Origin` equal to
   `PASSKEY_ORIGIN`, or it gets 403 `{ "error": "bad_origin" }`. This covers sign-in and sign-out
   too. No plain form or cross-site request can set that header.
@@ -226,7 +225,37 @@ SameSite=Strict; Path=/v1/owner`. A session ends after 30 minutes idle, or 12 ho
 
 ### Passkey approvals
 
-With `PASSKEY_ABOVE` set (an amount), an intent at or above it can be approved only with a passkey
+With `PASSKEY_ABOVE` set (an amount), an intent at or above it ### Owner panel routes
+
+Behind the panel session, with the same `X-DefiMind-Request` and `Origin` check on every state
+change. They mirror the admin routes, through the same code (`src/http/control.ts`), so the two
+cannot drift. The audit says which one a change came through (`via: "admin" | "panel"`).
+
+- `GET /v1/owner/overview` returns `{ chains, agents, pending, mandates }`. `pending` and `mandates`
+  are the approval requests still waiting, as the bot received them. They are kept in
+  `approval_requests` until their deadline passes.
+- `POST /v1/owner/challenge { action, body }` returns WebAuthn options for one exact request. The
+  challenge is keyed by the SHA-256 of the canonical JSON of `{ action, body }`. The route that takes
+  the assertion rebuilds that body from its own request, so an assertion made for another action, or
+  for the same action with another body, finds no challenge. A challenge lasts five minutes, and is
+  used up by compare-and-delete: one assertion sent twice at once gets through once.
+- These need a step-up, as `{ assertion }` in the body. Without one the answer is 403
+  `step_up_required`; with a bad or reused one, 401 `passkey_not_verified`.
+  - `POST /v1/owner/intents/:id/decision` and `POST /v1/owner/mandates/:id/decision` with
+    `approve`. The step-up bodies are `{ intentId }` and `{ mandateId }`. A rejection needs the
+    session only. Every panel approval records `approvedBy: "passkey"`.
+  - `POST /v1/owner/agents { agentId }`, with the body `{ agentId }`.
+  - `POST /v1/owner/resume { agentId }`, with the body `{ agentId }`.
+  - `PUT /v1/owner/policy/:agentId { policy }` when the change loosens the policy. The body is
+    `{ agentId, policy }`, with `policy` exactly as sent. A loosening is SPEC's list (a raised
+    `perTxMax`, `dailyMax` or `approvalThreshold`, anything added to an allowlist, going live, no
+    longer requiring a mandate) plus three more: unpausing (otherwise a resume without its passkey),
+    and a raised `maxPaymentsPerMinute` or `priceIncreaseMaxPct`. A change that only tightens
+    needs the session only.
+- Session only: `GET /v1/owner/report`, `/doctor`, `/budget/:agentId`, `/agents`,
+  `/policy/:agentId`, `/passkeys`; `POST /v1/owner/agents/:id/revoke`, `/pause` and `/kill`.
+
+can be approved only with a passkey
 the owner enrolled, never by a Telegram tap alone. A stolen Telegram account can still reject it,
 never approve it. `PASSKEY_RP_ID` and `PASSKEY_ORIGIN` name guard-core's public address, which the
 passkey is bound to, so a look-alike site cannot use it.

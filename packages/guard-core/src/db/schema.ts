@@ -265,3 +265,15 @@ export const ownerSessions = sqliteTable('owner_sessions', {
   /** Twelve hours after sign-in, however active the session. */
   expiresAt: text('expires_at').notNull(),
 })
+
+/**
+ * What the owner was asked, kept so the panel can show it (CR-012): the bot gets it once, the
+ * panel reads it on every visit. Pruned once its approval deadline has passed.
+ */
+export const approvalRequests = sqliteTable('approval_requests', {
+  /** The intent's id, or the mandate's. */
+  id: text('id').primaryKey(),
+  kind: text('kind', { enum: ['intent', 'mandate'] }).notNull(),
+  body: text('body', { mode: 'json' }).notNull(),
+  approveBefore: text('approve_before').notNull(),
+})

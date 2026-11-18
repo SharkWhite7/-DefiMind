@@ -120,7 +120,7 @@ export const idParam = z.object({ id: z.uuid() })
  * A WebAuthn response is checked in full by the library; here only its outer shape and size, so
  * nothing unbounded reaches it.
  */
-const webAuthnResponse = z
+export const webAuthnResponse = z
   .object({ id: z.string().min(1).max(1024), type: z.literal('public-key') })
   .loose()
   .refine((value) => JSON.stringify(value).length <= 16_384, 'response too large')
@@ -137,3 +137,26 @@ export const ownerEnrolment = z.object({
   /** From an enrolled passkey, once there is one: it vouches for the new one. */
   assertion: webAuthnResponse.optional(),
 })
+
+const OWNER_ACTIONS = [
+  'approve_intent',
+  'approve_mandate',
+  'loosen_policy',
+  'resume',
+  'create_agent',
+] as const
+
+/** CR-012. `body` is hashed as sent, so it is only bounded here, never reshaped. */
+export const ownerChallenge = z.object({
+  action: z.enum(OWNER_ACTIONS),
+  body: z
+    .unknown()
+    .refine((value) => JSON.stringify(value ?? null).length <= 16_384, 'body too large'),
+})
+export const ownerDecision = z.object({
+  decision: z.enum(['approve', 'reject']),
+  assertion: webAuthnResponse.optional(),
+})
+export const ownerNewAgent = z.object({ agentId: newAgentId, assertion: webAuthnResponse })
+export const ownerResume = z.object({ agentId, assertion: webAuthnResponse })
+export const ownerPolicy = z.object({ policy: policyBody, assertion: webAuthnResponse.optional() })

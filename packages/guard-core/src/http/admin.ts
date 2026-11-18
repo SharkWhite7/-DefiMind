@@ -1,18 +1,12 @@
-import type { ChainStatus } from '@defimind/shared'
 import type { RegistrationResponseJSON } from '@simplewebauthn/server'
 import type { FastifyInstance } from 'fastify'
-import { createAgent, listAgents, revokeAgent } from '../db/agents.js'
-import { clearWindow } from '../db/breaker.js'
 import { revokeMandate } from '../db/mandates.js'
 import { receiptsBetween } from '../db/receipts.js'
 import * as repo from '../db/repo.js'
-import { summarise } from '../domain/report.js'
-import { budget } from '../service/budget.js'
-import { listPasskeys } from '../db/passkeys.js'
-import { doctor } from '../service/doctor.js'
-import { enrol, enrolmentOptions, issueEnrolCode } from '../service/passkeys.js'
 import { openMandate } from '../service/mandates.js'
+import { enrol, enrolmentOptions, issueEnrolCode } from '../service/passkeys.js'
 import type { PaymentDeps } from '../service/payments.js'
+import { controls } from './control.js'
 import { HttpError } from './errors.js'
 import { mandateReply } from './mandates.js'
 import { enrolledNotice, refusal } from './owner.js'
@@ -24,33 +18,14 @@ import {
   newAgentRequest,
   passkeyEnrolment,
   policyBody,
-  REPORT_DEFAULT_SPAN_MS,
-  REPORT_MAX_SPAN_MS,
-  reportQuery,
 } from './schemas.js'
-
-/**
- * A report or receipt period: the last seven days by default, a year at most. Checked once both
- * ends are known, so a lone `from` cannot ask for ten years.
- */
-function period(query: unknown, now: () => Date) {
-  const parsed = reportQuery.parse(query)
-  const to = parsed.to === undefined ? now() : new Date(parsed.to)
-  const from =
-    parsed.from === undefined
-      ? new Date(to.getTime() - REPORT_DEFAULT_SPAN_MS)
-      : new Date(parsed.from)
-  if (from >= to || to.getTime() - from.getTime() > REPORT_MAX_SPAN_MS) {
-    throw new HttpError(400, 'invalid_request')
-  }
-  return { from, to }
-}
 
 export function adminRoutes(
   deps: PaymentDeps & { fetch: typeof fetch },
   setup: { botUrl: string; databaseUrl: string; passkeyRpId?: string; passkeyOrigin?: string },
 ) {
   const { db, now } = deps
+  const control = controls(deps, 'admin')
 
   function passkeyAddress() {
     if (setup.passkeyRpId === undefined || setup.passkeyOrigin === undefined) {
@@ -60,30 +35,15 @@ export function adminRoutes(
   }
 
   return async (app: FastifyInstance) => {
-    // A new agent pays nothing: its policy denies everything and it starts in shadow mode.
-    app.post('/agents', async (request, reply) => {
-      const { agentId } = newAgentRequest.parse(request.body)
-      if (repo.agentExists(db, agentId)) {
-        return reply.code(409).send({ error: 'exists' })
-      }
-      const token = createAgent(db, agentId, now())
-      repo.audit(db, { event: 'agent_created', agentId }, now())
-      return { agentId, token }
-    })
+    app.post('/agents', async (request) =>
+      control.addAgent(newAgentRequest.parse(request.body).agentId),
+    )
 
-    app.get('/agents', async () => ({ agents: listAgents(db) }))
+    app.get('/agents', async () => control.agents())
 
-    app.post('/agents/:id/revoke', async (request) => {
-      const { id } = agentRouteParam.parse(request.params)
-      const result = revokeAgent(db, id, now())
-      if (result === 'not_found') {
-        throw new HttpError(404, 'not_found')
-      }
-      if (result === 'revoked') {
-        repo.audit(db, { event: 'agent_revoked', agentId: id }, now())
-      }
-      return { agentId: id, revoked: true }
-    })
+    app.post('/agents/:id/revoke', async (request) =>
+      control.revokeAgent(agentRouteParam.parse(request.params).id),
+    )
 
     // The passkey is bound to guard-core's public address, so enrolment needs it configured.
     app.post('/passkeys/options', async () => {
@@ -117,50 +77,19 @@ export function adminRoutes(
       return { enrolled: true }
     })
 
-    app.get('/passkeys', async () => ({
-      passkeys: listPasskeys(db).map(({ id, createdAt, lastUsedAt }) => ({
-        id,
-        createdAt,
-        lastUsedAt,
-      })),
-    }))
+    app.get('/passkeys', async () => control.passkeys())
 
-    app.get('/doctor', async () => ({
-      checks: await doctor({ ...deps, ...setup, passkeyAbove: deps.passkey?.above }),
-    }))
+    app.get('/doctor', async () => control.doctor({ ...setup, fetch: deps.fetch }))
 
-    app.get('/policy/:agentId', async (request) => {
-      const { agentId } = agentIdParam.parse(request.params)
-      const policy = repo.getPolicy(db, agentId)
-      if (policy === undefined) {
-        throw new HttpError(404, 'not_found')
-      }
-      return policy
-    })
+    app.get('/policy/:agentId', async (request) =>
+      control.existing(agentIdParam.parse(request.params).agentId),
+    )
 
-    app.get('/budget/:agentId', async (request) => {
-      const { agentId } = agentIdParam.parse(request.params)
-      const policy = repo.getPolicy(db, agentId)
-      if (policy === undefined) {
-        throw new HttpError(404, 'not_found')
-      }
-      return budget(deps, policy)
-    })
+    app.get('/budget/:agentId', async (request) =>
+      control.budget(agentIdParam.parse(request.params).agentId),
+    )
 
-    // CR-006. A chain whose allowance cannot be read stays listed with null, like a kill payload:
-    // the bot still has to show the owner that the chain exists.
-    app.get('/chains', async (request) => ({
-      chains: await Promise.all(
-        [...deps.chains.values()].map(async (adapter): Promise<ChainStatus> => {
-          try {
-            return { chain: adapter.chain, allowance: await adapter.getAllowanceState() }
-          } catch (error) {
-            request.log.warn({ err: error, chain: adapter.chain }, 'allowance read failed')
-            return { chain: adapter.chain, allowance: null }
-          }
-        }),
-      ),
-    }))
+    app.get('/chains', async (request) => ({ chains: await control.chains(request.log) }))
 
     // The owner's own mandates start active: there is nobody else to ask.
     app.post('/mandates', async (request, reply) =>
@@ -182,84 +111,25 @@ export function adminRoutes(
       return mandate
     })
 
-    app.get('/report', async (request) => {
-      const { from, to } = period(request.query, now)
-      const intents = repo.intentsBetween(db, from, to)
-      // A revoked agent is listed only for the window it was still active in.
-      const revoked = repo.revokedAgentIds(db)
-      const active = new Set(intents.map((intent) => intent.agentId))
-      const ids = repo.agentIds(db).filter((id) => !revoked.has(id) || active.has(id))
-      return { agents: summarise(ids, intents) }
-    })
+    app.get('/report', async (request) => control.report(request.query))
 
     app.get('/receipts', async (request) => {
-      const { from, to } = period(request.query, now)
+      const { from, to } = control.period(request.query)
       return { receipts: receiptsBetween(db, from, to) }
     })
 
     app.put('/policy/:agentId', async (request) => {
       const { agentId } = agentIdParam.parse(request.params)
-      const policy = { agentId, ...policyBody.parse(request.body) }
-      if (!repo.agentExists(db, agentId)) {
-        throw new HttpError(404, 'not_found')
-      }
-      repo.putPolicy(db, policy, now().toISOString())
-      // Read back, so the answer shows the fields this request left as they were.
-      const stored = repo.getPolicy(db, agentId)
-      repo.audit(db, { event: 'policy_updated', agentId, detail: { policy: stored } }, now())
-      return stored
+      return control.putPolicy({ agentId, ...policyBody.parse(request.body) })
     })
 
-    for (const paused of [true, false]) {
-      app.post(paused ? '/pause' : '/resume', async (request) => {
-        const { agentId } = agentIdParam.parse(request.body)
-        if (!repo.setPaused(db, agentId, paused, now().toISOString())) {
-          throw new HttpError(404, 'not_found')
-        }
-        // A resumed agent starts a fresh minute: the payments that tripped the breaker are not
-        // counted against it again.
-        if (!paused) {
-          clearWindow(db, agentId)
-        }
-        repo.audit(db, { event: paused ? 'paused' : 'resumed', agentId }, now())
-        return { agentId, paused }
-      })
-    }
+    app.post('/pause', async (request) =>
+      control.setPaused(agentIdParam.parse(request.body).agentId, true),
+    )
+    app.post('/resume', async (request) =>
+      control.setPaused(agentIdParam.parse(request.body).agentId, false),
+    )
 
-    // Pausing comes first and cannot fail on a chain: whatever happens to the owner transactions,
-    // guard-core has stopped signing.
-    app.post('/kill', async (request) => {
-      const pausedAgents = repo.pauseAll(db, now().toISOString())
-      const ownerTransactions = await Promise.all(
-        [...deps.chains.values()].map(async (adapter) => {
-          try {
-            return { chain: adapter.chain, ...(await adapter.buildKillTx()) }
-          } catch (error) {
-            request.log.error({ err: error, chain: adapter.chain }, 'kill tx build failed')
-            // The owner still has to act on this chain, so it stays in the list, saying so.
-            return {
-              chain: adapter.chain,
-              description: `Could not build the kill transaction for ${adapter.chain}. Remove the hot wallet's spend limit on this chain by hand.`,
-              payload: null,
-            }
-          }
-        }),
-      )
-      repo.audit(
-        db,
-        {
-          event: 'killed',
-          detail: {
-            pausedAgents,
-            chains: ownerTransactions.map((tx) => ({
-              chain: tx.chain,
-              built: tx.payload !== null,
-            })),
-          },
-        },
-        now(),
-      )
-      return { pausedAgents, ownerTransactions }
-    })
+    app.post('/kill', async (request) => control.kill(request.log))
   }
 }

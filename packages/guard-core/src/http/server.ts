@@ -26,7 +26,8 @@ import { adminRoutes } from './admin.js'
 import { agentRoutes } from './agent.js'
 import { botRoutes } from './bot.js'
 import { ownerRoutes } from './owner.js'
-import { ownerSessionRoutes, sessionGated } from './owner-session.js'
+import { ownerPanelRoutes } from './owner-panel.js'
+import { ownerSessionRoutes } from './owner-session.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -183,7 +184,13 @@ async function serve(app: FastifyInstance, surface: Surface, deps: X402Deps, con
         : { rpId: config.PASSKEY_RP_ID, origin: config.PASSKEY_ORIGIN }
     app.register(ownerRoutes(deps, rp))
     if (rp !== undefined) {
-      app.register(ownerSessionRoutes(deps, rp, sessionGated(deps)))
+      app.register(
+        ownerSessionRoutes(
+          deps,
+          rp,
+          ownerPanelRoutes(deps, rp, { botUrl: config.BOT_URL, databaseUrl: config.DATABASE_URL }),
+        ),
+      )
     }
     app.register(
       agentRoutes(deps, {
