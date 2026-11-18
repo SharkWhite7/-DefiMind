@@ -31,7 +31,10 @@ export interface DeskDeps {
   now?: () => Date
   /** Where owners open guard-core's passkey page; without it a passkey request has no approve link. */
   guardPublicUrl?: string
-  /** False (the default) leaves approving to the panel: the bot only rejects. */
+  /**
+   * False leaves approving to the panel: the bot only rejects. TELEGRAM_APPROVALS defaults it to
+   * false; left out here, Telegram approves as before.
+   */
   telegramApprovals?: boolean
 }
 
@@ -111,7 +114,7 @@ export class Desk {
   }
 
   get #approvesHere(): boolean {
-    return this.#deps.telegramApprovals === true
+    return this.#deps.telegramApprovals !== false
   }
 
   pendingTasks(): number {

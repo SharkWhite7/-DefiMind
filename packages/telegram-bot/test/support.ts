@@ -238,7 +238,7 @@ export function setup(
     phantomKills: options.phantomKills,
     weekly: options.weekly,
     guardPublicUrl: options.guardPublicUrl,
-    telegramApprovals: options.telegramApprovals ?? true,
+    telegramApprovals: options.telegramApprovals,
   })
   const calls = mockTelegram(bot, options.fail)
   return { bot, desk, commands, owner, guard, admin, calls }

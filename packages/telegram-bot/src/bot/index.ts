@@ -23,7 +23,7 @@ export interface BotDeps {
   phantomKills?: PhantomKill[]
   /** guard-core's public origin, for the passkey approval link. */
   guardPublicUrl?: string
-  /** Approve buttons in Telegram; off by default, when the panel approves. */
+  /** Approve buttons in Telegram. main.ts passes TELEGRAM_APPROVALS, which defaults to false. */
   telegramApprovals?: boolean
   /** When the weekly report goes out; none without one. */
   weekly?: ReportSchedule
