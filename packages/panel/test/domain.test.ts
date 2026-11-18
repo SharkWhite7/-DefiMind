@@ -118,6 +118,17 @@ describe('policy', () => {
     expect(loosens(before, { ...before, requireMandate: false })).toBe(true)
   })
 
+  it('also counts what guard-core counts: unpausing, a wider breaker or price margin', () => {
+    expect(loosens({ ...before, paused: true }, { ...before, paused: false })).toBe(true)
+    expect(loosens(before, { ...before, maxPaymentsPerMinute: 11 })).toBe(true)
+    expect(loosens(before, { ...before, priceIncreaseMaxPct: 101 })).toBe(true)
+    expect(loosens({ ...before, maxPaymentsPerMinute: 20 }, before)).toBe(false)
+    expect(loosens(before, { ...before, maxPaymentsPerMinute: 10, priceIncreaseMaxPct: 50 })).toBe(
+      false,
+    )
+    expect(loosens({ ...before, paused: false }, { ...before, paused: true })).toBe(false)
+  })
+
   it('lets a tightening through without a passkey', () => {
     expect(loosens(before, before)).toBe(false)
     expect(loosens(before, { ...before, perTxMax: '1', allowedRecipients: [] })).toBe(false)
