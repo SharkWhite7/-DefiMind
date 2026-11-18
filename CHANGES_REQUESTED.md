@@ -711,3 +711,121 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   - wizard: the enrolment link and the VAPID key;
   - SPEC v0.8, docs, and an ADR.
 - **Out of scope:** native iOS and Android apps.
+
+### CR-013 — Verified execution: a signed, chained receipt for every tool call an agent makes
+
+- **From:** integrator, for the owner
+- **Date:** 2026-11-18
+- **Status:** proposed
+- **Depends on:** CR-010 (receipts and the receipt key), CR-012 (the panel, for the dashboard only)
+- **Why:** today DefiMind proves what an agent paid. An operator, a client or an auditor also needs
+  to prove what the agent did: which tools it called, when, with what input and what result, and
+  that nobody edited or deleted a record afterwards. Logs written by the agent's own process cannot
+  prove that, because whoever runs the agent can rewrite them. guard-core already signs payment
+  receipts outside the agent; this change extends the same idea to every tool call, chains the
+  receipts so a gap or an edit shows, and lets the operator anchor them on a public chain.
+- **What:**
+  1. **The execution receipt.** One per tool call or payment, in one hash chain per deployment:
+     ```ts
+     interface ExecutionReceipt {
+       type: 'defimind.execution.v1' // domain separation from the CR-010 Receipt
+       seq: number // 1, 2, 3… with no gap
+       prevHash: string // hash of receipt seq-1; 64 zeros for seq 1
+       agentId: string
+       kind: 'tool_call' | 'payment'
+       server: string // the downstream MCP server, or "defimind" for payments
+       tool: string
+       requestHash: string // hex SHA-256 of the canonical JSON of the arguments
+       responseHash: string // hex SHA-256 of the canonical JSON of the result
+       outcome: 'ok' | 'error' | 'refused'
+       assurance: 'executed' | 'relayed'
+       paymentReceipt?: string // hex SHA-256 of the CR-010 Receipt, kind "payment" only
+       startedAt: string
+       endedAt: string
+       issuedAt: string
+       hash: string // hex SHA-256 of the canonical JSON of the fields above
+       signature: string // hex Ed25519 over the same bytes, with the receipt key
+     }
+     ```
+     - `assurance` says what the signature is worth, and the docs and the panel must say it plainly.
+       `executed`: guard-core ran the action itself (a payment). `relayed`: the gateway reported a
+       call it forwarded; guard-core vouches for when it heard of it and that the record has not
+       changed since, not for what the downstream tool really did.
+     - guard-core stores hashes and metadata only, never the arguments or the result. Whoever wants
+       to show the content later keeps the bodies; the receipt proves they match.
+     - The CR-010 `Receipt` is unchanged. Each executed payment also appends a `payment` entry that
+       points to it.
+     - A single writer appends in one database transaction, so `seq` and `prevHash` cannot fork.
+  2. **The MCP gateway.** `mcp-server` gains a gateway mode. A file lists downstream MCP servers
+     (a stdio command or an HTTP URL each). The gateway exposes their tools as `<server>__<tool>`,
+     forwards each call, and reports it to
+     `POST /v1/agent/executions { server, tool, requestHash, responseHash, outcome, startedAt, endedAt }`
+     -> `ExecutionReceipt`, with the agent's token. It fails closed: when a receipt cannot be
+     recorded, the result is kept in a local outbox and retried, and the gateway refuses new calls
+     until the outbox is empty. `GATEWAY_KEEP_BODIES`, false by default, keeps the bodies in a local
+     file for the operator.
+  3. **The SDK,** for agents that do not use MCP. A new package, `packages/sdk`:
+     `withReceipt(server, tool, fn)` wraps any async call and reports it the same way, with
+     `assurance: "relayed"`.
+  4. **Anchoring, optional, with no custom contract.** With `ANCHOR_CHAIN` set, a job builds a
+     Merkle tree over the receipt hashes since the last anchor (every hour, or every 1,000 receipts,
+     whichever comes first, and never when there is none). The tree hashes a leaf as
+     `SHA-256(0x00 || hash)` and a node as `SHA-256(0x01 || left || right)`, so a node can never
+     pass for a leaf, and promotes an odd node unchanged.
+     - It publishes `defimind:anchor:v1:<fromSeq>-<toSeq>:<rootHex>` in one transaction: the Memo
+       program on Solana first; calldata to the anchor key's own address on an EVM chain later.
+     - The anchor key (`ANCHOR_KEY_FILE`) is its own keypair, funded for fees only. It is never the
+       hot wallet and never holds the token being protected.
+     - Each anchor `{ fromSeq, toSeq, root, chain, txId, anchoredAt }` is stored. A failed
+       publication is retried; the receipts stay valid without it.
+     - Without `ANCHOR_CHAIN` the receipts are still signed and chained.
+  5. **Verification.**
+     - `GET /v1/anchors?from&to` is public and lists anchors only, never a receipt.
+     - `GET /v1/owner/executions/:seq/proof` -> `{ receipt, siblings, anchor }`: the proof bundle the
+       owner can hand to a third party.
+     - `defimind-verify <bundle.json>`, a CLI in `packages/sdk`, checks offline:
+       - the signature, against `GET /v1/receipts/key` or a key given on the command line;
+       - the receipt's own hash;
+       - the Merkle path up to the anchored root;
+       - the root against the anchor transaction, through a public RPC chosen by the verifier.
+
+       It prints each check with pass or fail and never needs a DefiMind server to be trusted.
+
+     - Given a run of receipts, it also checks that `seq` has no gap and that every `prevHash`
+       links.
+  6. **The dashboard, in the panel.**
+     - `GET /v1/owner/executions?agentId&from&to` -> the timeline: tool, outcome, assurance and time,
+       with payments shown with their amounts.
+     - `GET /v1/owner/executions/integrity` -> `{ lastSeq, lastHash, brokenAt?, lastAnchor }`.
+       guard-core re-checks the whole chain at start-up and once a day; a break raises an alert to
+       the panel and the bot.
+     - A download of the proof bundle for any receipt.
+     - The admin route `GET /v1/admin/executions?from&to` gives the same timeline to scripts.
+- **Tests:**
+  - guard-core:
+    - the chain: append, a gap or an edited row found by the integrity check, two concurrent
+      appends that cannot fork;
+    - Merkle vectors: one leaf, two, an odd count, and a leaf that cannot pass for a node;
+    - the anchor job against a fake chain, a failed publication retried, no anchor without receipts.
+  - mcp-server: the gateway forwards to a fake downstream server; the namespacing; the outbox; fail
+    closed while guard-core is down.
+  - sdk: `withReceipt` on success, on a thrown error, and on a refused call; `defimind-verify`
+    against good bundles and against every kind of tampering: signature, hash, path, root, gap.
+  - e2e: a gateway call and a payment land in one chain, and their bundle verifies after anchoring
+    on Solana devnet.
+- **Rollout:**
+  - The chain, the gateway, the SDK and the CLI can start now.
+  - The dashboard waits for the panel (CR-012).
+  - Anchoring starts on devnet and moves to mainnet with the infrastructure migration.
+- **Blast radius:**
+  - guard-core: the chain, the anchor job, the routes, two migrations (`executions`, `anchors`);
+  - mcp-server: the gateway mode;
+  - a new package, `packages/sdk`, owned by the `mcp` role;
+  - panel: the executions screen;
+  - shared: the types;
+  - SPEC v0.9, the docs, and an ADR.
+- **Out of scope:**
+  - scoring or judging what an agent did;
+  - credit or underwriting built on the receipts, which needs a legal and licensing review first;
+  - signing inside a TEE;
+  - a Python SDK.
