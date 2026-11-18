@@ -254,3 +254,14 @@ export const enrolCodes = sqliteTable('enrol_codes', {
   hash: text('hash').primaryKey(),
   expiresAt: text('expires_at').notNull(),
 })
+
+/** An owner's signed-in panel session (CR-012). The cookie holds the token; only its hash is here. */
+export const ownerSessions = sqliteTable('owner_sessions', {
+  tokenHash: text('token_hash').primaryKey(),
+  /** The passkey that signed in, so a removed passkey's sessions can be ended. */
+  passkeyId: text('passkey_id').notNull(),
+  createdAt: text('created_at').notNull(),
+  lastSeenAt: text('last_seen_at').notNull(),
+  /** Twelve hours after sign-in, however active the session. */
+  expiresAt: text('expires_at').notNull(),
+})

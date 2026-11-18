@@ -204,6 +204,26 @@ Without the key, receipts are off and nothing else changes. Generate one with
 `openssl genpkey -algorithm ed25519 -out receipt.pem`. On Fly it is the `RECEIPT_SIGNING_KEY`
 secret, which the entrypoint moves to tmpfs like the hot keys.
 
+### Owner panel sign-in
+
+The owner panel (CR-012) signs the owner in with an enrolled passkey. These routes are on the
+public listener, and only exist with `PASSKEY_RP_ID` and `PASSKEY_ORIGIN` set.
+
+- `POST /v1/owner/session/options` returns WebAuthn authentication options. Each request gets its
+  own challenge, good for one use within two minutes.
+- `POST /v1/owner/session { assertion }` verifies the assertion and returns `{ expiresAt }`, the
+  time the session ends if left idle. It sets the cookie `dm_session` with `HttpOnly; Secure;
+SameSite=Strict; Path=/v1/owner`. A session ends after 30 minutes idle, or 12 hours after sign-in
+  however active it is. Only the SHA-256 of its token is stored (`owner_sessions`). Sessions past
+  their 12 hours are pruned by the sweep.
+- `POST /v1/owner/session/logout` ends the session and clears the cookie.
+- Without a live session, a session route answers 401 `{ "error": "no_session" }`. For now the
+  only one is `GET /v1/owner/passkeys`; the other owner routes join it.
+- Every state-changing request needs `X-DefiMind-Request: 1` and an `Origin` equal to
+  `PASSKEY_ORIGIN`, or it gets 403 `{ "error": "bad_origin" }`. This covers sign-in and sign-out
+  too. No plain form or cross-site request can set that header.
+- Sign-ins, refused sign-ins and sign-outs are audited. Cookies are redacted from the logs.
+
 ### Passkey approvals
 
 With `PASSKEY_ABOVE` set (an amount), an intent at or above it can be approved only with a passkey
