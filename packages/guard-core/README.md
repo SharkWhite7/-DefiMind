@@ -204,6 +204,23 @@ Without the key, receipts are off and nothing else changes. Generate one with
 `openssl genpkey -algorithm ed25519 -out receipt.pem`. On Fly it is the `RECEIPT_SIGNING_KEY`
 secret, which the entrypoint moves to tmpfs like the hot keys.
 
+### The panel and Telegram
+
+- guard-core serves the panel's static build at `/panel/` on the public listener, from
+  `packages/panel/dist` or `PANEL_DIR`. Run `pnpm --filter @defimind/panel build` first.
+  - `/panel` redirects (308) to `/panel/`.
+  - Only the build's own files are read from disk, by a fixed list of names. Any other path under
+    `/panel/` gets `index.html`, and the app routes itself.
+  - Every response carries the SPEC CSP, `nosniff`, `X-Frame-Options: DENY` and HSTS.
+  - `index.html` and `sw.js` are always revalidated. The other files are cached for a day: their
+    names carry no hash, so a longer cache would keep an old `app.js` next to a new page.
+- `TELEGRAM_APPROVALS` (default `false`): while false, `/v1/bot/decision` and
+  `/v1/bot/mandates/:id/decision` refuse `approve` with 403 `approve_in_panel` and still take
+  `reject`. Approving is then a passkey in the panel, and a stolen Telegram account moves nothing.
+- `pnpm --filter @defimind/guard-core passkey-code` prints `{PASSKEY_ORIGIN}/panel/enrol#code=…`,
+  the link that enrols the owner's first passkey. The code is good for one enrolment within ten
+  minutes, sits in the fragment so no server log sees it, and its issue is audited.
+
 ### Owner panel sign-in
 
 The owner panel (CR-012) signs the owner in with an enrolled passkey. These routes are on the
@@ -370,12 +387,15 @@ Env vars are documented in [`.env.example`](./.env.example).
 
 ## Deploy on Fly.io
 
+The image builds the panel in its own stage and copies `packages/panel/dist` next to guard-core,
+with `PANEL_DIR` pointing at it, so `/panel/` works with no extra step.
+
 `Dockerfile` and `fly.toml` run guard-core as one machine, `defimind-guard-core`, in the same org
 and region (`gru`) as the bot (`defimind-bot`, see its README):
 
 - **Two listeners**, each with only its own routes registered:
-  - **public**, `0.0.0.0:8080` behind Fly's TLS (`force_https`): `/v1/agent/*` and `/health`,
-    nothing else. Agents call `https://defimind-guard-core.fly.dev/v1/agent/...`. The per-IP
+  - **public**, `0.0.0.0:8080` behind Fly's TLS (`force_https`): `/v1/agent/*`, the owner's
+    `/v1/owner/*` and `/owner/*` pages, the panel at `/panel/`, and `/health`. Agents call `https://defimind-guard-core.fly.dev/v1/agent/...`. The per-IP
     limit keys on `Fly-Client-IP`, the real client, believed on this listener only.
   - **private**, `fly-local-6pn:8787`: `/v1/admin/*`, `/v1/bot/*` and `/health`. No Fly service
     exposes it. The bot reaches it at `http://defimind-guard-core.internal:8787`, and guard-core

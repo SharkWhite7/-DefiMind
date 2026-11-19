@@ -71,6 +71,14 @@ export const configSchema = z
     PASSKEY_RP_ID: optional(z.hostname()),
     PASSKEY_ORIGIN: optional(z.url({ protocol: /^https$/ })),
 
+    /**
+     * CR-012. When false, the default, the panel is the only place to approve: a Telegram tap can
+     * still reject, never approve, so a stolen Telegram account moves nothing.
+     */
+    TELEGRAM_APPROVALS: z.enum(['true', 'false']).default('false'),
+    /** The panel's static build, served at /panel. Defaults to packages/panel/dist. */
+    PANEL_DIR: optional(z.string().min(1)),
+
     /** Offline chains that move no money. For local development only. */
     GUARD_STUB_CHAINS: z.enum(['true', 'false']).default('false'),
     EXPIRY_SWEEP_MS: z.coerce.number().int().positive().default(30_000),

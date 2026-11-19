@@ -51,6 +51,9 @@ export async function harness(
     balance?: bigint
     sweepMs?: number
     receiptKey?: KeyObject
+    /** Most tests approve through the bot; the panel-only default has its own. */
+    telegramApprovals?: 'true' | 'false'
+    panelDir?: string
     /** Turns passkey approvals on at this amount, for the relying party in PASSKEY_RP. */
     passkeyAbove?: string
   } = {},
@@ -91,6 +94,8 @@ export async function harness(
       BOT_URL: 'http://bot.local',
       BOT_WEBHOOK_SECRET: 'c'.repeat(64),
       LOG_LEVEL: 'fatal',
+      TELEGRAM_APPROVALS: options.telegramApprovals ?? 'true',
+      ...(options.panelDir === undefined ? {} : { PANEL_DIR: options.panelDir }),
       PASSKEY_RP_ID: PASSKEY_RP.id,
       PASSKEY_ORIGIN: PASSKEY_RP.origin,
       ...(options.passkeyAbove === undefined ? {} : { PASSKEY_ABOVE: options.passkeyAbove }),

@@ -27,6 +27,7 @@ import { agentRoutes } from './agent.js'
 import { botRoutes } from './bot.js'
 import { ownerRoutes } from './owner.js'
 import { ownerPanelRoutes } from './owner-panel.js'
+import { DEFAULT_PANEL_DIR, panelRoutes } from './panel.js'
 import { ownerSessionRoutes } from './owner-session.js'
 
 declare module 'fastify' {
@@ -183,6 +184,7 @@ async function serve(app: FastifyInstance, surface: Surface, deps: X402Deps, con
         ? undefined
         : { rpId: config.PASSKEY_RP_ID, origin: config.PASSKEY_ORIGIN }
     app.register(ownerRoutes(deps, rp))
+    app.register(panelRoutes(config.PANEL_DIR ?? DEFAULT_PANEL_DIR))
     if (rp !== undefined) {
       app.register(
         ownerSessionRoutes(
@@ -221,7 +223,7 @@ async function serve(app: FastifyInstance, surface: Surface, deps: X402Deps, con
     app.register(
       async (bot) => {
         bot.addHook('preHandler', requireToken(config.BOT_TOKEN))
-        await bot.register(botRoutes(deps))
+        await bot.register(botRoutes(deps, config.TELEGRAM_APPROVALS === 'true'))
       },
       { prefix: '/v1/bot' },
     )

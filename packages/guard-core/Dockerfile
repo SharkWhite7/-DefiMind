@@ -17,12 +17,29 @@ COPY packages/guard-core/migrations packages/guard-core/migrations
 COPY packages/guard-core/deploy packages/guard-core/deploy
 RUN pnpm --filter @defimind/guard-core deploy --prod --legacy --ignore-scripts /out
 
+# The owner panel (CR-012): static files, built here and served by guard-core at /panel.
+FROM node:22-slim AS panel
+RUN corepack enable
+WORKDIR /repo
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/shared/package.json packages/shared/
+COPY packages/panel/package.json packages/panel/
+RUN pnpm install --frozen-lockfile --ignore-scripts --filter @defimind/panel...
+COPY packages/shared/src packages/shared/src
+COPY tsconfig.base.json ./
+COPY packages/panel/build.ts packages/panel/icons.ts packages/panel/tsconfig.json packages/panel/tsconfig.sw.json packages/panel/
+COPY packages/panel/src packages/panel/src
+COPY packages/panel/public packages/panel/public
+RUN pnpm --filter @defimind/panel build
+
 FROM node:22-slim
 ENV NODE_ENV=production
+ENV PANEL_DIR=/srv/defimind/packages/panel/dist
 # The same depth as in the repository, so db/placement.ts takes /srv/defimind as the repo root
 # and the /data volume counts as outside it.
 WORKDIR /srv/defimind/packages/guard-core
 COPY --from=build /out .
+COPY --from=panel /repo/packages/panel/dist /srv/defimind/packages/panel/dist
 # Starts as root only to mount tmpfs for the hot keys, then runs node as the node user.
 ENTRYPOINT ["./deploy/entrypoint.sh"]
 CMD ["node", "--import", "tsx", "src/main.ts"]
