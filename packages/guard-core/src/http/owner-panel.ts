@@ -1,3 +1,4 @@
+import { type KillTarget, killPageUrl, phantomKillUrl } from '@defimind/shared'
 import type { FastifyInstance } from 'fastify'
 import { listAgents } from '../db/agents.js'
 import * as repo from '../db/repo.js'
@@ -30,7 +31,11 @@ type Address = Pick<PasskeySetup, 'rpId' | 'origin'>
 export function ownerPanelRoutes(
   deps: X402Deps,
   rp: Address,
-  setup: { botUrl: string; databaseUrl: string },
+  setup: {
+    botUrl: string
+    databaseUrl: string
+    signing?: { page: string; targets: KillTarget[] }
+  },
 ) {
   const { db, now } = deps
   const control = controls(deps, 'panel')
@@ -121,6 +126,25 @@ export function ownerPanelRoutes(
       return control.setPaused(agentId, false)
     })
 
-    app.post('/v1/owner/kill', async (request) => control.kill(request.log))
+    app.post('/v1/owner/kill', async (request) => {
+      const killed = await control.kill(request.log)
+      const { signing } = setup
+      if (signing === undefined) {
+        return killed
+      }
+      // Stamped now: the signing page refuses a link more than 15 minutes old.
+      const issued = now()
+      const ownerTransactions = killed.ownerTransactions.map((tx) => {
+        const target = signing.targets.find((t) => t.chain === tx.chain)
+        return target === undefined
+          ? tx
+          : {
+              ...tx,
+              link: phantomKillUrl(signing.page, target, issued),
+              pageLink: killPageUrl(signing.page, target, issued),
+            }
+      })
+      return { ...killed, ownerTransactions }
+    })
   }
 }

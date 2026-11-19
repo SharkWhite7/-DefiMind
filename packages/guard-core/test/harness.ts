@@ -1,5 +1,5 @@
 import type { LightMyRequestResponse } from 'fastify'
-import type { Policy } from '@defimind/shared'
+import type { KillTarget, Policy } from '@defimind/shared'
 import { CHAINS } from '@defimind/shared'
 import { encodePaymentRequiredHeader, encodePaymentResponseHeader } from '@x402/core/http'
 import type { PaymentRequirements } from '@x402/core/types'
@@ -54,6 +54,9 @@ export async function harness(
     /** Most tests approve through the bot; the panel-only default has its own. */
     telegramApprovals?: 'true' | 'false'
     panelDir?: string
+    /** Turns on the owner kill's signing-page links (CR-014). */
+    signPage?: string
+    killTargets?: KillTarget[]
     /** Turns passkey approvals on at this amount, for the relying party in PASSKEY_RP. */
     passkeyAbove?: string
   } = {},
@@ -96,6 +99,7 @@ export async function harness(
       LOG_LEVEL: 'fatal',
       TELEGRAM_APPROVALS: options.telegramApprovals ?? 'true',
       ...(options.panelDir === undefined ? {} : { PANEL_DIR: options.panelDir }),
+      ...(options.signPage === undefined ? {} : { SIGN_PAGE_URL: options.signPage }),
       PASSKEY_RP_ID: PASSKEY_RP.id,
       PASSKEY_ORIGIN: PASSKEY_RP.origin,
       ...(options.passkeyAbove === undefined ? {} : { PASSKEY_ABOVE: options.passkeyAbove }),
@@ -106,6 +110,7 @@ export async function harness(
     now: () => clock.now,
     ...(options.sweepMs === undefined ? {} : { sweepMs: options.sweepMs }),
     ...(options.receiptKey === undefined ? {} : { receiptKey: options.receiptKey }),
+    ...(options.killTargets === undefined ? {} : { killTargets: options.killTargets }),
   })
 
   return {

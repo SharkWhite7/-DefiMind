@@ -1,5 +1,5 @@
 import type { ChainAdapter } from '@defimind/onchain'
-import type { ChainId } from '@defimind/shared'
+import type { ChainId, KillTarget } from '@defimind/shared'
 import rateLimit from '@fastify/rate-limit'
 import Fastify, {
   type FastifyBaseLogger,
@@ -47,6 +47,8 @@ export interface ServerDeps {
   sweepMs?: number
   /** Signs receipts. Receipts are off without it. */
   receiptKey?: KeyObject
+  /** The chains the owner kill links to the signing page for, with SIGN_PAGE_URL (CR-014). */
+  killTargets?: KillTarget[]
 }
 
 /**
@@ -89,7 +91,7 @@ export async function buildServers(
   const [first] = apps as [Server, ...Server[]]
   const deps = paymentDeps(options, first.log)
   for (const [i, surface] of surfaces.entries()) {
-    await serve(apps[i] as Server, surface, deps, config)
+    await serve(apps[i] as Server, surface, deps, config, options.killTargets ?? [])
   }
 
   if (options.sweepMs !== undefined) {
@@ -149,7 +151,13 @@ function clientIp(surface: Surface): (request: FastifyRequest) => string {
   }
 }
 
-async function serve(app: FastifyInstance, surface: Surface, deps: X402Deps, config: Config) {
+async function serve(
+  app: FastifyInstance,
+  surface: Surface,
+  deps: X402Deps,
+  config: Config,
+  killTargets: KillTarget[],
+) {
   const ipOf = clientIp(surface)
   await app.register(rateLimit, {
     max: config.RATE_LIMIT_PER_IP,
@@ -190,7 +198,13 @@ async function serve(app: FastifyInstance, surface: Surface, deps: X402Deps, con
         ownerSessionRoutes(
           deps,
           rp,
-          ownerPanelRoutes(deps, rp, { botUrl: config.BOT_URL, databaseUrl: config.DATABASE_URL }),
+          ownerPanelRoutes(deps, rp, {
+            botUrl: config.BOT_URL,
+            databaseUrl: config.DATABASE_URL,
+            ...(config.SIGN_PAGE_URL === undefined
+              ? {}
+              : { signing: { page: config.SIGN_PAGE_URL, targets: killTargets } }),
+          }),
         ),
       )
     }

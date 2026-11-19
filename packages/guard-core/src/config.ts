@@ -76,6 +76,8 @@ export const configSchema = z
      * still reject, never approve, so a stolen Telegram account moves nothing.
      */
     TELEGRAM_APPROVALS: z.enum(['true', 'false']).default('false'),
+    /** CR-014. The onchain signing page; with it, the owner kill links each chain's kill there. */
+    SIGN_PAGE_URL: optional(z.url({ protocol: /^https$/ })),
     /** The panel's static build, served at /panel. Defaults to packages/panel/dist. */
     PANEL_DIR: optional(z.string().min(1)),
 

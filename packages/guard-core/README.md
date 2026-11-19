@@ -269,6 +269,12 @@ cannot drift. The audit says which one a change came through (`via: "admin" | "p
     longer requiring a mandate) plus three more: unpausing (otherwise a resume without its passkey),
     and a raised `maxPaymentsPerMinute` or `priceIncreaseMaxPct`. A change that only tightens
     needs the session only.
+- `POST /v1/owner/kill` returns what the admin kill returns. With `SIGN_PAGE_URL` set, each
+  entry for a chain the signing page can kill also carries `link` (the Phantom universal link) and
+  `pageLink` (the page itself), stamped now, since the page refuses a link more than 15 minutes old
+  (CR-014). On Solana the target is `SQUADS_MULTISIG` with the hot wallet's public key, read from
+  its own keypair file. On Robinhood Chain it is `ROBINHOOD_SAFE_ADDRESS`. The admin kill never
+  carries links.
 - Session only: `GET /v1/owner/report`, `/doctor`, `/budget/:agentId`, `/agents`,
   `/policy/:agentId`, `/passkeys`; `POST /v1/owner/agents/:id/revoke`, `/pause` and `/kill`.
 
