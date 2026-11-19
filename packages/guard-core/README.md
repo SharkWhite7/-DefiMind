@@ -221,6 +221,31 @@ secret, which the entrypoint moves to tmpfs like the hot keys.
   the link that enrols the owner's first passkey. The code is good for one enrolment within ten
   minutes, sits in the fragment so no server log sees it, and its issue is audited.
 
+### Web Push
+
+With `VAPID_PRIVATE_KEY_FILE` (a P-256 private key in PEM) and `VAPID_SUBJECT` (`mailto:` or
+`https:`), guard-core pushes to the owner's browsers. Messages use RFC 8291 encryption and RFC 8292
+VAPID, by the pinned `web-push` library.
+
+- `GET /v1/owner/push/key` returns `{ publicKey }`, the uncompressed P-256 point in base64url
+  (CR-014).
+- `POST /v1/owner/push { subscription: { endpoint, keys: { p256dh, auth } } }` returns `{ id }`. The
+  endpoint must be https, since it is the only place guard-core posts to. The same endpoint
+  subscribing again keeps its id.
+- `DELETE /v1/owner/push/:id` removes a subscription.
+- All three need the session. Without VAPID keys they answer 404 `push_not_configured`.
+- The payload is `{ kind, agentId?, chain?, amount?, intentId?, sentAt }`, never a recipient or a
+  URL. The kinds:
+  - `approval` and `mandate`: sent before the bot is called, so the panel hears even when the bot is
+    down;
+  - `executed`;
+  - `attack`: throttled like the bot, once per agent and code every 5 minutes;
+  - `breaker`;
+  - `passkey_enrolled`;
+  - `kill`.
+- A 404 or 410 from the push service deletes the subscription. Pushes are never awaited, so a slow
+  push service holds up no payment. Each message lives 10 minutes (`TTL`), the life of an approval.
+
 ### Owner panel sign-in
 
 The owner panel (CR-012) signs the owner in with an enrolled passkey. These routes are on the

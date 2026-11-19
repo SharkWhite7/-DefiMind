@@ -18,6 +18,7 @@ import { needsPasskey, type PasskeySetup } from './passkeys.js'
 import { issueReceipt, policyHash } from './receipts.js'
 import { simulate } from './simulate.js'
 import { alert, notify } from './events.js'
+import type { Pusher } from './push.js'
 import type { Serial } from './serial.js'
 
 export interface PaymentDeps {
@@ -31,6 +32,8 @@ export interface PaymentDeps {
   log: Pick<FastifyBaseLogger, 'warn' | 'error'>
   /** Signs a receipt for every executed payment. Receipts are off without it. */
   receiptKey?: KeyObject
+  /** Web Push to the owner's panel (CR-012). Off without VAPID keys. */
+  push?: Pusher
   /** Set when approvals at or above an amount need the owner's passkey. */
   passkey?: PasskeySetup
 }

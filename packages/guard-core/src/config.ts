@@ -76,6 +76,12 @@ export const configSchema = z
      * still reject, never approve, so a stolen Telegram account moves nothing.
      */
     TELEGRAM_APPROVALS: z.enum(['true', 'false']).default('false'),
+    /**
+     * CR-012. Web Push to the owner's panel: a P-256 private key in PEM, and the contact the push
+     * services may reach (mailto: or https:). Both or neither; push is off without them.
+     */
+    VAPID_PRIVATE_KEY_FILE: optional(z.string().min(1)),
+    VAPID_SUBJECT: optional(z.string().regex(/^(mailto:|https:\/\/)\S+$/)),
     /** CR-014. The onchain signing page; with it, the owner kill links each chain's kill there. */
     SIGN_PAGE_URL: optional(z.url({ protocol: /^https$/ })),
     /** The panel's static build, served at /panel. Defaults to packages/panel/dist. */
@@ -98,6 +104,9 @@ export const configSchema = z
       path: ['PASSKEY_ORIGIN'],
     },
   )
+  .refine((c) => (c.VAPID_PRIVATE_KEY_FILE === undefined) === (c.VAPID_SUBJECT === undefined), {
+    path: ['VAPID_SUBJECT'],
+  })
   // A passkey is bound to an address, so turning them on without one would approve nothing.
   .refine(
     (c) =>

@@ -160,3 +160,15 @@ export const ownerDecision = z.object({
 export const ownerNewAgent = z.object({ agentId: newAgentId, assertion: webAuthnResponse })
 export const ownerResume = z.object({ agentId, assertion: webAuthnResponse })
 export const ownerPolicy = z.object({ policy: policyBody, assertion: webAuthnResponse.optional() })
+
+const base64url = z.string().regex(/^[A-Za-z0-9_-]+$/)
+/**
+ * A browser's PushSubscription. The endpoint is the push service's own https URL; guard-core posts
+ * only there, so nothing else is accepted.
+ */
+export const ownerPush = z.object({
+  subscription: z.object({
+    endpoint: z.url({ protocol: /^https$/ }).max(2048),
+    keys: z.object({ p256dh: base64url.min(80).max(100), auth: base64url.min(16).max(32) }),
+  }),
+})

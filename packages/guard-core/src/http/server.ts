@@ -28,6 +28,8 @@ import { botRoutes } from './bot.js'
 import { ownerRoutes } from './owner.js'
 import { ownerPanelRoutes } from './owner-panel.js'
 import { DEFAULT_PANEL_DIR, panelRoutes } from './panel.js'
+import type { PushService } from '../adapters/push.js'
+import { pusher } from '../service/push.js'
 import { ownerSessionRoutes } from './owner-session.js'
 
 declare module 'fastify' {
@@ -47,6 +49,8 @@ export interface ServerDeps {
   sweepMs?: number
   /** Signs receipts. Receipts are off without it. */
   receiptKey?: KeyObject
+  /** Web Push to the owner's panel, with the VAPID public key the panel subscribes with. */
+  push?: { service: PushService; publicKey: string }
   /** The chains the owner kill links to the signing page for, with SIGN_PAGE_URL (CR-014). */
   killTargets?: KillTarget[]
 }
@@ -91,7 +95,14 @@ export async function buildServers(
   const [first] = apps as [Server, ...Server[]]
   const deps = paymentDeps(options, first.log)
   for (const [i, surface] of surfaces.entries()) {
-    await serve(apps[i] as Server, surface, deps, config, options.killTargets ?? [])
+    await serve(
+      apps[i] as Server,
+      surface,
+      deps,
+      config,
+      options.killTargets ?? [],
+      options.push?.publicKey,
+    )
   }
 
   if (options.sweepMs !== undefined) {
@@ -133,6 +144,16 @@ function paymentDeps(options: ServerDeps, log: FastifyBaseLogger): X402Deps {
     log,
     ...(options.receiptKey === undefined ? {} : { receiptKey: options.receiptKey }),
     ...(passkeySetup(options.config) ?? {}),
+    ...(options.push === undefined
+      ? {}
+      : {
+          push: pusher({
+            db: options.db,
+            service: options.push.service,
+            now: options.now ?? (() => new Date()),
+            log,
+          }),
+        }),
   }
 }
 
@@ -157,6 +178,7 @@ async function serve(
   deps: X402Deps,
   config: Config,
   killTargets: KillTarget[],
+  pushKey: string | undefined,
 ) {
   const ipOf = clientIp(surface)
   await app.register(rateLimit, {
@@ -201,6 +223,7 @@ async function serve(
           ownerPanelRoutes(deps, rp, {
             botUrl: config.BOT_URL,
             databaseUrl: config.DATABASE_URL,
+            ...(pushKey === undefined ? {} : { pushKey }),
             ...(config.SIGN_PAGE_URL === undefined
               ? {}
               : { signing: { page: config.SIGN_PAGE_URL, targets: killTargets } }),
