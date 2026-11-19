@@ -286,3 +286,30 @@ export const pushSubscriptions = sqliteTable('push_subscriptions', {
   auth: text('auth').notNull(),
   createdAt: text('created_at').notNull(),
 })
+
+/**
+ * CR-013: one row per tool call or payment, in one hash chain. Hashes and metadata only: the
+ * arguments and results never reach guard-core's database.
+ */
+export const executions = sqliteTable(
+  'executions',
+  {
+    seq: integer('seq').primaryKey(),
+    prevHash: text('prev_hash').notNull(),
+    agentId: text('agent_id').notNull(),
+    kind: text('kind', { enum: ['tool_call', 'payment'] }).notNull(),
+    server: text('server').notNull(),
+    tool: text('tool').notNull(),
+    requestHash: text('request_hash').notNull(),
+    responseHash: text('response_hash').notNull(),
+    outcome: text('outcome', { enum: ['ok', 'error', 'refused'] }).notNull(),
+    assurance: text('assurance', { enum: ['executed', 'relayed'] }).notNull(),
+    paymentReceipt: text('payment_receipt'),
+    startedAt: text('started_at').notNull(),
+    endedAt: text('ended_at').notNull(),
+    issuedAt: text('issued_at').notNull(),
+    hash: text('hash').notNull().unique(),
+    signature: text('signature').notNull(),
+  },
+  (t) => [index('executions_agent_issued').on(t.agentId, t.issuedAt)],
+)

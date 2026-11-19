@@ -221,6 +221,29 @@ secret, which the entrypoint moves to tmpfs like the hot keys.
   the link that enrols the owner's first passkey. The code is good for one enrolment within ten
   minutes, sits in the fragment so no server log sees it, and its issue is audited.
 
+### Verified execution (CR-013)
+
+With the receipt key (`RECEIPT_SIGNING_KEY_FILE`), guard-core keeps one hash chain of
+`ExecutionReceipt`s per deployment: one entry per tool call an agent reports, and one per payment.
+
+- `POST /v1/agent/executions { server, tool, requestHash, responseHash, outcome, startedAt, endedAt }`
+  returns the signed receipt. It is called with the agent token, and the agent comes from the token.
+  The hashes are hex SHA-256: guard-core never sees or stores the arguments or the result. Without
+  the receipt key the answer is 409 `receipts_not_configured`.
+- **What a receipt is worth** is in `assurance`, and should be read as written:
+  - `executed`: guard-core made the payment itself. An executed payment's receipt points to its
+    payment receipt by `paymentReceipt`, the SHA-256 of that receipt's canonical JSON.
+  - `relayed`: a gateway or the SDK reported the call. guard-core vouches for when it heard of it
+    and that the record has not changed since. It does not vouch for what the tool really did.
+- Every receipt has `seq` (1, 2, 3… with no gap), `prevHash` (the previous receipt's hash, 64 zeros
+  for the first) and `hash`, the SHA-256 of the canonical JSON of every other field. `signature`
+  is Ed25519 over the same bytes, with the key `GET /v1/receipts/key` serves. The last link is read
+  and the next written in one synchronous transaction, so two appends at once cannot fork the chain.
+- guard-core re-checks the whole chain at start-up and once a day: every `seq`, every `prevHash`,
+  every hash and signature. A deleted, inserted or edited row breaks one of them. A break is
+  logged, sent to the bot as `{ kind: "chain_broken", detail: "seq <n>" }` and pushed to the
+  panel, once per break.
+
 ### Web Push
 
 With `VAPID_PRIVATE_KEY_FILE` (a P-256 private key in PEM) and `VAPID_SUBJECT` (`mailto:` or

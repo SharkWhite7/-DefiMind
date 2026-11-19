@@ -30,6 +30,7 @@ import { ownerPanelRoutes } from './owner-panel.js'
 import { DEFAULT_PANEL_DIR, panelRoutes } from './panel.js'
 import type { PushService } from '../adapters/push.js'
 import { pusher } from '../service/push.js'
+import { INTEGRITY_EVERY_MS, integrityMonitor } from '../service/integrity.js'
 import { ownerSessionRoutes } from './owner-session.js'
 
 declare module 'fastify' {
@@ -94,6 +95,9 @@ export async function buildServers(
   )
   const [first] = apps as [Server, ...Server[]]
   const deps = paymentDeps(options, first.log)
+  if (deps.receiptKey !== undefined) {
+    deps.integrity = integrityMonitor(deps, deps.receiptKey)
+  }
   for (const [i, surface] of surfaces.entries()) {
     await serve(
       apps[i] as Server,
@@ -105,6 +109,13 @@ export async function buildServers(
     )
   }
 
+  if (deps.integrity !== undefined) {
+    const { integrity } = deps
+    integrity.check()
+    const daily = setInterval(() => integrity.check(), INTEGRITY_EVERY_MS)
+    daily.unref()
+    first.addHook('onClose', async () => clearInterval(daily))
+  }
   if (options.sweepMs !== undefined) {
     const timer = setInterval(() => {
       const expired = sweep(deps)
