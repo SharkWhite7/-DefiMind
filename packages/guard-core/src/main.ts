@@ -5,6 +5,7 @@ import { migrateDb, openDb } from './db/client.js'
 import { countPasskeys } from './db/passkeys.js'
 import { requirePersistentDb } from './db/placement.js'
 import { buildServers } from './http/server.js'
+import { killTargets } from './kill-targets.js'
 
 const config = loadConfig()
 
@@ -25,6 +26,8 @@ const receiptKey =
     ? undefined
     : await readReceiptKeyFile(config.RECEIPT_SIGNING_KEY_FILE)
 
+const targets = config.SIGN_PAGE_URL === undefined ? [] : await killTargets(config)
+
 const split = config.PUBLIC_PORT !== undefined
 const [app, publicApp] = await buildServers(
   {
@@ -32,6 +35,7 @@ const [app, publicApp] = await buildServers(
     config,
     chains,
     sweepMs: config.EXPIRY_SWEEP_MS,
+    killTargets: targets,
     ...(receiptKey === undefined ? {} : { receiptKey }),
   },
   split ? (['private', 'public'] as const) : (['all'] as const),
