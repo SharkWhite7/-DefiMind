@@ -72,6 +72,17 @@ export function registerGateway(server: McpServer, deps: GatewayDeps): number {
   return count
 }
 
+/** A downstream or transport error can quote URLs or headers, so only its name and code are logged. */
+export function errorFields(error: unknown): { errName: string; errCode?: string | number } {
+  if (!(error instanceof Error)) {
+    return { errName: typeof error }
+  }
+  const code = (error as { code?: unknown }).code
+  return typeof code === 'string' || typeof code === 'number'
+    ? { errName: error.name, errCode: code }
+    : { errName: error.name }
+}
+
 /** MCP arguments are an object; anything else is sent as none. */
 function asArguments(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -106,7 +117,7 @@ async function forward(
   try {
     result = await downstream.call(tool, args)
   } catch (error) {
-    log.warn({ server: downstream.name, tool, err: error }, 'downstream call failed')
+    log.warn({ server: downstream.name, tool, ...errorFields(error) }, 'downstream call failed')
     result = failure(`${downstream.name} did not complete the call.`)
   }
   const report = {
