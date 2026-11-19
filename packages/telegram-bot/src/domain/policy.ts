@@ -69,17 +69,9 @@ export function policyText(policy: Policy): string {
   ].join('\n')
 }
 
-export function raiseText(agentId: string, before: Policy, after: Policy, up: Limit[]): string {
-  const lines = up.map(
-    (limit) =>
-      `• ${LIMIT_NAMES[limit]}: ${formatUsd(before[limit])} → <b>${formatUsd(after[limit])}</b>`,
-  )
-  return [`<b>Raise the limits</b> of <code>${escapeHtml(agentId)}</code>?`, ...lines].join('\n')
-}
-
 export function agentsText(agents: AgentSummary[]): string {
   if (agents.length === 0) {
-    return 'No agents yet. Create one with /agent new &lt;id&gt;.'
+    return 'No agents yet. Create one in the DefiMind panel.'
   }
   return [
     `<b>Agents</b> (${agents.length})`,

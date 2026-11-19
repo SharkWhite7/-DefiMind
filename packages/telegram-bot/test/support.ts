@@ -133,7 +133,7 @@ export function fakeGuard(overrides: Partial<GuardClient> = {}): GuardClient {
       }),
     })),
     decideMandate: vi.fn(async () => ({ ok: true as const })),
-    setPaused: vi.fn(async () => 'ok' as const),
+    pause: vi.fn(async () => 'ok' as const),
     kill: vi.fn(async () => ({ pausedAgents: 2, ownerTransactions: [] })),
     budget: vi.fn(async () => undefined),
     chains: vi.fn(async () => undefined),
@@ -162,7 +162,6 @@ export function policy(overrides: Partial<Policy> = {}): Policy {
 export function fakeAdmin(overrides: Partial<AdminClient> = {}): AdminClient {
   let stored = policy()
   return {
-    createAgent: vi.fn(async (agentId: string) => ({ agentId, token: 'agt_' + 'z'.repeat(40) })),
     listAgents: vi.fn(async () => [
       { agentId: 'research-agent', paused: false, mode: 'shadow' as const },
     ]),
@@ -173,10 +172,6 @@ export function fakeAdmin(overrides: Partial<AdminClient> = {}): AdminClient {
       return next
     }),
     doctor: vi.fn(async () => []),
-    enrolCode: vi.fn(async () => ({
-      code: 'enrol-code-123456',
-      expiresAt: new Date(NOW.getTime() + 600_000).toISOString(),
-    })),
     ...overrides,
   }
 }

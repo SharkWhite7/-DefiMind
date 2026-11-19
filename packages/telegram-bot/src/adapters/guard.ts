@@ -16,7 +16,7 @@ export type Settled = { ok: true } | Refusal
 export interface GuardClient {
   decide(intentId: string, decision: Decision, telegramUserId: number): Promise<DecisionResult>
   decideMandate(mandateId: string, decision: Decision, telegramUserId: number): Promise<Settled>
-  setPaused(agentId: string, paused: boolean): Promise<'ok' | 'not_found'>
+  pause(agentId: string): Promise<'ok' | 'not_found'>
   kill(): Promise<KillResponse>
   budget(agentId: string): Promise<BudgetView | undefined>
   /** Undefined while guard-core has no chains route (CR-006). */
@@ -180,10 +180,8 @@ export function httpGuardClient(options: GuardClientOptions): GuardClient {
       return { ok: true }
     },
 
-    async setPaused(agentId, paused) {
-      const response = await admin('POST', paused ? '/v1/admin/pause' : '/v1/admin/resume', {
-        agentId,
-      })
+    async pause(agentId) {
+      const response = await admin('POST', '/v1/admin/pause', { agentId })
       if (response.status === 404) {
         return 'not_found'
       }

@@ -2,21 +2,19 @@ import type { Policy } from '@defimind/shared'
 import { type Bot, type Context, InlineKeyboard } from 'grammy'
 import type { Logger } from 'pino'
 import type { AdminClient } from '../adapters/admin.js'
-import type { GuardClient, ShadowTotal } from '../adapters/guard.js'
+import type { GuardClient } from '../adapters/guard.js'
 import { formatUsd } from '../domain/money.js'
 import {
   hostname,
-  loosens,
   LIMIT_NAMES,
   LIMITS,
   type Limit,
+  loosens,
   parseDollars,
   policyText,
   PRESETS,
-  raises,
-  raiseText,
 } from '../domain/policy.js'
-import { PANEL_ONLY, utcTime } from '../domain/text.js'
+import { PANEL_ONLY } from '../domain/text.js'
 import type { Desk } from './desk.js'
 import { args, code, guarded, HTML, type Press, validAgent } from './owner-kit.js'
 
@@ -27,23 +25,19 @@ export interface PolicyDeps {
   log: Logger
   now: () => Date
   button: (run: Press, ttlMs?: number) => string
-  cancel: InlineKeyboard
-  /** Loosening is the panel's: the bot only tightens. */
-  panelOnly: boolean
 }
 
 type Change = Partial<Pick<Policy, Limit | 'mode' | 'allowedDomains'>>
 
-const MAX_DOMAINS = 256
-const OFFER_TTL_MS = 7 * 86_400_000
-/** How long an agent runs in shadow mode before the bot offers to take it live. */
+/** How long an agent runs in shadow mode before the bot points the owner to the panel to go live. */
 export const GRADUATION_MS = 3 * 86_400_000
 const GRADUATION_CHECK_MS = 5 * 60_000
 
-export function registerPolicies(
-  bot: Bot,
-  { admin, guard, desk, log, now, button, panelOnly }: PolicyDeps,
-) {
+/**
+ * The policy from Telegram, tightening only (CR-016): lower a limit, drop a domain, go back to
+ * shadow. Anything that widens what the agent may spend is the panel's, behind a passkey.
+ */
+export function registerPolicies(bot: Bot, { admin, guard, desk, log, now, button }: PolicyDeps) {
   /** The prompts waiting for the owner's reply, keyed by chat and prompt message. */
   const edits = new Map<string, { agentId: string; limit: Limit }>()
 
@@ -71,30 +65,16 @@ export function registerPolicies(
     return keyboard
   }
 
-  /**
-   * Reads the policy, applies the change and writes it back. A raise of any limit is shown first
-   * and applied only from its confirm button, which reads the policy again when pressed.
-   */
-  async function change(ctx: Context, agentId: string, next: Change, confirmed = false) {
+  /** Reads the policy and writes the change back, unless it would loosen anything. */
+  async function change(ctx: Context, agentId: string, next: Change) {
     const before = await admin.policy(agentId)
     if (before === undefined) {
       await ctx.reply(`No agent ${code(agentId)}.`, HTML)
       return
     }
     const after = { ...before, ...next }
-    if (panelOnly && loosens(before, after)) {
+    if (loosens(before, after)) {
       await ctx.reply(PANEL_ONLY)
-      return
-    }
-    const up = raises(before, after)
-    if (up.length > 0 && !confirmed) {
-      const keyboard = new InlineKeyboard()
-        .text(
-          'Raise',
-          button((press) => change(press, agentId, next, true)),
-        )
-        .text('Cancel', 'own:cancel')
-      await ctx.reply(raiseText(agentId, before, after, up), { ...HTML, reply_markup: keyboard })
       return
     }
     const saved = await admin.putPolicy(after)
@@ -132,79 +112,41 @@ export function registerPolicies(
     await guarded(ctx, log, () => change(ctx, edit.agentId, { [edit.limit]: amount }))
   })
 
-  for (const [command, add] of [
-    ['allow', true],
-    ['deny', false],
-  ] as const) {
-    bot.command(command, (ctx) => {
-      const [agentId, domain] = args(ctx)
-      const host = hostname(domain ?? '')
-      if (!validAgent(agentId) || host === undefined) {
-        return ctx.reply(
-          `Usage: /${command} &lt;agentId&gt; &lt;domain&gt;, like api.example.com`,
-          HTML,
-        )
+  bot.command('allow', (ctx) => ctx.reply(PANEL_ONLY))
+
+  bot.command('deny', (ctx) => {
+    const [agentId, domain] = args(ctx)
+    const host = hostname(domain ?? '')
+    if (!validAgent(agentId) || host === undefined) {
+      return ctx.reply('Usage: /deny &lt;agentId&gt; &lt;domain&gt;, like api.example.com', HTML)
+    }
+    return guarded(ctx, log, async () => {
+      const policy = await admin.policy(agentId)
+      if (policy === undefined) {
+        await ctx.reply(`No agent ${code(agentId)}.`, HTML)
+        return
       }
-      if (add && panelOnly) {
-        return ctx.reply(PANEL_ONLY)
-      }
-      return guarded(ctx, log, async () => {
-        const policy = await admin.policy(agentId)
-        if (policy === undefined) {
-          await ctx.reply(`No agent ${code(agentId)}.`, HTML)
-          return
-        }
-        const others = policy.allowedDomains.filter((d) => d !== host)
-        if (add && others.length >= MAX_DOMAINS) {
-          await ctx.reply(
-            `${code(agentId)} already allows ${MAX_DOMAINS} domains, the most it can.`,
-            HTML,
-          )
-          return
-        }
-        await change(ctx, agentId, { allowedDomains: add ? [...others, host] : others })
+      await change(ctx, agentId, {
+        allowedDomains: policy.allowedDomains.filter((d) => d !== host),
       })
     })
-  }
-
-  const payments = (count: number) => `${count} ${count === 1 ? 'payment' : 'payments'}`
-
-  function liveText(agentId: string, shadow: ShadowTotal | undefined): string {
-    const would =
-      shadow === undefined || shadow.count === 0
-        ? 'guard-core reports no shadowed payment for it.'
-        : `In shadow mode it would have spent ${formatUsd(shadow.total)} in ` +
-          `${payments(shadow.count)} since ${utcTime(shadow.since)}.`
-    return `<b>Go live</b> with ${code(agentId)}? It starts signing real payments.\n${would}`
-  }
-
-  async function offerLive(ctx: Context, agentId: string) {
-    if (panelOnly) {
-      await ctx.reply(PANEL_ONLY)
-      return
-    }
-    const keyboard = new InlineKeyboard()
-      .text(
-        'Go live',
-        button((press) => change(press, agentId, { mode: 'live' })),
-      )
-      .text('Cancel', 'own:cancel')
-    const shadow = (await guard.budget(agentId))?.shadow
-    await ctx.reply(liveText(agentId, shadow), { ...HTML, reply_markup: keyboard })
-  }
+  })
 
   bot.command('mode', (ctx) => {
     const [agentId, mode] = args(ctx)
-    if (!validAgent(agentId) || (mode !== 'live' && mode !== 'shadow')) {
-      return ctx.reply('Usage: /mode &lt;agentId&gt; live|shadow', HTML)
+    if (mode === 'live') {
+      return ctx.reply(PANEL_ONLY)
     }
-    return guarded(ctx, log, () =>
-      mode === 'live' ? offerLive(ctx, agentId) : change(ctx, agentId, { mode: 'shadow' }),
-    )
+    if (!validAgent(agentId) || mode !== 'shadow') {
+      return ctx.reply('Usage: /mode &lt;agentId&gt; shadow', HTML)
+    }
+    return guarded(ctx, log, () => change(ctx, agentId, { mode: 'shadow' }))
   })
 
-  // Only "already offered" is kept here: guard-core keeps the totals, so a bot restart repeats an
-  // offer at most once.
+  const payments = (count: number) => `${count} ${count === 1 ? 'payment' : 'payments'}`
+
+  // Only "already told" is kept here: guard-core keeps the totals, so a bot restart repeats a
+  // message at most once.
   const offered = new Set<string>()
   let checked = 0
 
@@ -223,20 +165,10 @@ export function registerPolicies(
         continue
       }
       offered.add(agentId)
-      const spent =
+      await desk.announce(
         `Your agent ${code(agentId)} would have spent ${formatUsd(shadow.total)} ` +
-        `in ${payments(shadow.count)}.`
-      if (panelOnly) {
-        await desk.announce(`${spent} Go live in the DefiMind panel.`)
-        continue
-      }
-      const text = `${spent} Go live?`
-      const keyboard = new InlineKeyboard().text(
-        'Go live…',
-        // An offer the owner may only read the next day: it stays usable longer than a confirm.
-        button((press) => offerLive(press, agentId), OFFER_TTL_MS),
+          `in ${payments(shadow.count)}. Go live in the DefiMind panel.`,
       )
-      await desk.announce(text, keyboard)
     }
   }
 

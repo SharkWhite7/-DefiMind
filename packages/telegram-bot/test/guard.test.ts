@@ -86,16 +86,16 @@ describe('httpGuardClient', () => {
     await expect(guard.decide(INTENT_ID, 'reject', 1)).rejects.toBeInstanceOf(GuardError)
   })
 
-  it('pauses and resumes with the admin token', async () => {
+  it('pauses with the admin token and reads 404 as unknown', async () => {
     const { fetch, guard } = client(
       json(200, { agentId: 'a1', paused: true }),
       json(404, { error: 'not_found' }),
     )
-    expect(await guard.setPaused('a1', true)).toBe('ok')
-    expect(await guard.setPaused('a2', false)).toBe('not_found')
+    expect(await guard.pause('a1')).toBe('ok')
+    expect(await guard.pause('a2')).toBe('not_found')
     expect(sentTo(fetch).url).toBe('http://guard/v1/admin/pause')
     expect(sentTo(fetch).headers.get('authorization')).toBe(`Bearer ${ADMIN}`)
-    expect(fetch.mock.calls[1]?.[0]).toBe('http://guard/v1/admin/resume')
+    expect(fetch.mock.calls[1]?.[0]).toBe('http://guard/v1/admin/pause')
   })
 
   it('reads the kill result', async () => {

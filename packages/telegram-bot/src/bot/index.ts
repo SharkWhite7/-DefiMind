@@ -90,9 +90,7 @@ export function createBot({
     ctx.answerCallbackQuery({ text: desk.recipient(ctx.match[1] ?? ''), show_alert: true }),
   )
 
-  // Left out, Telegram approves as before; main.ts passes TELEGRAM_APPROVALS, false by default.
-  const panelOnly = telegramApprovals === false
-  const commands = registerCommands(bot, { guard, desk, log, phantomKills, weekly, now, panelOnly })
+  const commands = registerCommands(bot, { guard, desk, log, phantomKills, weekly, now })
   const owner =
     admin === undefined
       ? { sweep: async () => {} }
@@ -102,8 +100,6 @@ export function createBot({
           desk,
           log,
           now: now ?? (() => new Date()),
-          guardPublicUrl,
-          panelOnly,
         })
 
   bot.catch(({ error }) => log.error({ err: error }, 'update failed'))

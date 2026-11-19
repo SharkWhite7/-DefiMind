@@ -89,19 +89,18 @@ describe('owner commands', () => {
     expect(lastReply(calls)).toBe('Usage: /budget &lt;agentId&gt;')
   })
 
-  it('/pause and /resume call guard-core', async () => {
+  it('/pause calls guard-core and says where to resume', async () => {
     const { bot, guard, calls } = setup()
     await bot.handleUpdate(command(OWNER, '/pause a1'))
-    expect(guard.setPaused).toHaveBeenCalledWith('a1', true)
-    expect(lastReply(calls)).toContain('Paused <code>a1</code>')
-    await bot.handleUpdate(command(OWNER, '/resume a1'))
-    expect(guard.setPaused).toHaveBeenCalledWith('a1', false)
-    expect(lastReply(calls)).toContain('Resumed <code>a1</code>')
+    expect(guard.pause).toHaveBeenCalledWith('a1')
+    expect(lastReply(calls)).toBe(
+      'Paused <code>a1</code>. Its payments are refused until you resume it in the DefiMind panel.',
+    )
   })
 
   it('says so when guard-core is down', async () => {
-    const setPaused = vi.fn().mockRejectedValue(new Error('timeout'))
-    const { bot, calls } = setup({ guard: fakeGuard({ setPaused }) })
+    const pause = vi.fn().mockRejectedValue(new Error('timeout'))
+    const { bot, calls } = setup({ guard: fakeGuard({ pause }) })
     await bot.handleUpdate(command(OWNER, '/pause a1'))
     expect(lastReply(calls)).toContain('guard-core did not answer')
   })
@@ -112,7 +111,7 @@ describe('owner commands', () => {
     await bot.handleUpdate(command(STRANGER, '/pause a1'))
     await bot.handleUpdate(press(STRANGER, 'kill:confirm'))
     expect(calls).toHaveLength(0)
-    expect(guard.setPaused).not.toHaveBeenCalled()
+    expect(guard.pause).not.toHaveBeenCalled()
     expect(guard.kill).not.toHaveBeenCalled()
   })
 })

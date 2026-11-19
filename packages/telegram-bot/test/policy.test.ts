@@ -81,21 +81,6 @@ describe('httpAdminClient', () => {
     }
   }
 
-  it('creates an agent with the admin token, and reads 409 as exists', async () => {
-    const { fetch, admin } = client(
-      json(200, { agentId: 'a/1', token: 't'.repeat(32) }),
-      json(409, { error: 'exists' }),
-    )
-    expect(await admin.createAgent('a/1')).toEqual({ agentId: 'a/1', token: 't'.repeat(32) })
-    expect(sent(fetch)).toEqual({
-      url: 'http://guard/v1/admin/agents',
-      method: 'POST',
-      body: JSON.stringify({ agentId: 'a/1' }),
-      auth: 'Bearer ADMIN',
-    })
-    expect(await admin.createAgent('a/1')).toBeUndefined()
-  })
-
   it('lists, revokes and reads 404 as unknown', async () => {
     const { fetch, admin } = client(
       json(200, { agents: [{ agentId: 'a', paused: false, mode: 'live' }] }),
@@ -119,17 +104,6 @@ describe('httpAdminClient', () => {
       url: 'http://guard/v1/admin/policy/research-agent',
       method: 'PUT',
       body: JSON.stringify(body),
-    })
-  })
-
-  it('asks for a passkey enrol code with the admin token', async () => {
-    const body = { code: 'c'.repeat(16), expiresAt: NOW.toISOString() }
-    const { fetch, admin } = client(json(200, body))
-    expect(await admin.enrolCode()).toEqual(body)
-    expect(sent(fetch)).toMatchObject({
-      url: 'http://guard/v1/admin/passkeys/code',
-      method: 'POST',
-      auth: 'Bearer ADMIN',
     })
   })
 
