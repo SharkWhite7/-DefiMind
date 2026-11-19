@@ -14,7 +14,7 @@ import { connectDownstream, transportFor } from '../src/adapters/downstream.js'
 import { fileOutbox } from '../src/adapters/outbox.js'
 import { gatewayName, serversFile } from '../src/domain/gateway.js'
 import { createServer } from '../src/server.js'
-import { type GatewayDeps, paused } from '../src/tools/gateway.js'
+import { type GatewayDeps, errorFields, paused } from '../src/tools/gateway.js'
 import { fakeGuard } from './support.js'
 
 const log = pino({ level: 'silent' })
@@ -211,6 +211,17 @@ describe('pause log', () => {
       .find((item) => item['msg'] === 'receipts paused: call not recorded, kept in outbox')
     expect(entry).toMatchObject({ httpStatus: 401, code: 'unauthorized', server: 'issues' })
     expect(lines.join('')).not.toContain('private title')
+  })
+})
+
+describe('errorFields', () => {
+  it('keeps the name and code of an error, never its message', () => {
+    const error = Object.assign(new Error('GET https://u:secret@host/x failed'), {
+      code: 'ECONNRESET',
+    })
+    expect(errorFields(error)).toEqual({ errName: 'Error', errCode: 'ECONNRESET' })
+    expect(errorFields(new TypeError('Bearer abc'))).toEqual({ errName: 'TypeError' })
+    expect(errorFields('raw string')).toEqual({ errName: 'string' })
   })
 })
 
