@@ -1,9 +1,10 @@
-import { randomBytes, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { extname, join, normalize } from 'node:path'
 import { CHAINS, getAddress } from '@defimind/shared'
+import { canonicalJson } from '../../src/domain/canonical.js'
 
 /** SPEC's panel CSP, so a test fails on anything the real one would block. */
 export const CSP = [
@@ -89,6 +90,23 @@ export async function guardCore(dist: string) {
     signature: 'e'.repeat(128),
     ...extra,
   })
+  // The CR-010 receipt of execution #2, as GET /v1/owner/receipts returns it; #2 names it by hash.
+  const payment = {
+    intent: {
+      id: randomUUID(),
+      agentId: 'research-bot',
+      chain,
+      token: usd,
+      amount: '1750000',
+      status: 'executed',
+    },
+    policyHash: 'p'.repeat(64),
+    simulation: 'Pays 1.75 USDC.',
+    approvedBy: 'policy',
+    issuedAt: later,
+    signature: 's'.repeat(128),
+  }
+  const paymentHash = createHash('sha256').update(canonicalJson(payment)).digest('hex')
   const receipts = [
     receipt(1, {
       kind: 'tool_call',
@@ -103,7 +121,7 @@ export async function guardCore(dist: string) {
       tool: 'paid_fetch',
       outcome: 'refused',
       assurance: 'executed',
-      paymentReceipt: 'f'.repeat(64),
+      paymentReceipt: paymentHash,
     }),
   ]
   const executionAnchor = {
@@ -277,6 +295,9 @@ export async function guardCore(dist: string) {
         perTxMax: state.policy['perTxMax'],
         paused: false,
       })
+    }
+    if (path === '/v1/owner/receipts') {
+      return send(200, { receipts: [payment] })
     }
     if (path === '/v1/owner/executions') {
       return send(200, { receipts })
