@@ -18,7 +18,7 @@ type Log = Pick<FastifyBaseLogger, 'warn' | 'error'>
  * What the operator's admin routes and the owner's panel both do, so the two cannot drift. `via`
  * goes into the audit, so the log says which door a change came through.
  */
-export function controls(deps: PaymentDeps, via: 'admin' | 'panel') {
+export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
   const { db, now } = deps
 
   function existing(agentId: string) {

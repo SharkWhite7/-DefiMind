@@ -304,6 +304,23 @@ VAPID, by the pinned `web-push` library.
 - On Fly, set the key as the secret `VAPID_PRIVATE_KEY` (the PEM). The entrypoint moves it to tmpfs
   with the hot keys and sets `VAPID_PRIVATE_KEY_FILE`.
 
+### Bot routes that only tighten or read (CR-016)
+
+The bot holds `BOT_TOKEN` only, never the admin token. Under `/v1/bot`, with that token alone:
+
+- `POST /v1/bot/pause { agentId }`, `POST /v1/bot/kill {}` (the admin kill's body) and
+  `POST /v1/bot/agents/:id/revoke`.
+- `POST /v1/bot/policy/:agentId/tighten { removeDomains?, removeRecipients?, mode?: "shadow",
+perTxMax?, dailyMax?, approvalThreshold? }`. It builds the new policy, then refuses it with 403
+  `loosen_in_panel` if the panel's loosening check finds anything: a limit above the current one
+  counts. Any other field is a 400.
+- `GET /v1/bot/agents`, `/policy/:agentId`, `/budget/:agentId`, `/chains`, `/report` and `/doctor`,
+  with the admin reads' bodies.
+- Every write is audited with `via: "bot"`.
+- Nothing under `/v1/bot` creates an agent, adds to an allowlist, raises a limit, goes live,
+  resumes or issues an enrolment code. Those take the panel's passkey, or the admin token on the
+  machine.
+
 ### Owner panel sign-in
 
 The owner panel (CR-012) signs the owner in with an enrolled passkey. These routes are on the
