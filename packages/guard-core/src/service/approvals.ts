@@ -8,6 +8,7 @@ import { saveRequest } from '../db/requests.js'
 import { intents } from '../db/schema.js'
 import type { Pin } from '../domain/pinning.js'
 import type { PaymentDeps } from './payments.js'
+import type { Pusher } from './push.js'
 
 export type Decision = 'approve' | 'reject'
 
@@ -25,6 +26,7 @@ export async function requestApproval(
   intent: PayIntent,
   simulation: SimulationResult,
   ask: { flags: ApprovalFlag[]; pinned?: Pin; passkey: boolean },
+  push?: Pusher,
 ): Promise<void> {
   saveIntent(db, { ...intent, status: 'pending_approval' })
   const request: ApprovalRequest = {
@@ -38,19 +40,21 @@ export async function requestApproval(
       : { pinned: { recipient: ask.pinned.recipient, amount: ask.pinned.amount } }),
   }
   saveRequest(db, request)
+  // Before the bot, so the panel hears even when the bot is down.
+  push?.approval(request)
   await bot.requestApproval(request)
 }
 
 /** Asks the owner, and keeps the intent pending whether or not the bot heard. */
 export async function askOwner(
-  deps: Pick<PaymentDeps, 'db' | 'bot' | 'now' | 'log'>,
+  deps: Pick<PaymentDeps, 'db' | 'bot' | 'now' | 'log' | 'push'>,
   intent: PayIntent,
   simulation: SimulationResult,
   ask: { flags: ApprovalFlag[]; pinned?: Pin; passkey: boolean },
 ): Promise<PayIntent> {
   const pending: PayIntent = { ...intent, status: 'pending_approval', rejectReasons: [] }
   try {
-    await requestApproval(deps.db, deps.bot, pending, simulation, ask)
+    await requestApproval(deps.db, deps.bot, pending, simulation, ask, deps.push)
     audit(
       deps.db,
       { event: 'approval_requested', intentId: intent.id, agentId: intent.agentId },

@@ -11,6 +11,7 @@ const RETRY_MS = [1_000, 4_000, 16_000]
  * Never awaited: a bot that is down must not hold up or fail a payment that already happened.
  */
 export function notify(deps: Deps, intent: PayIntent): void {
+  deps.push?.intent(intent)
   void deliver(
     deps,
     // Stamped per attempt: the bot refuses events older than five minutes.
@@ -31,6 +32,7 @@ export type AlertBody = AlertEvent extends infer A
  * Never awaited.
  */
 export function alert(deps: Deps, event: AlertBody): void {
+  deps.push?.alert(event)
   void deliver(
     deps,
     () => deps.bot.alert({ ...event, sentAt: deps.now().toISOString() } as AlertEvent),
@@ -38,7 +40,7 @@ export function alert(deps: Deps, event: AlertBody): void {
   )
 }
 
-type Deps = Pick<PaymentDeps, 'bot' | 'now' | 'log'>
+type Deps = Pick<PaymentDeps, 'bot' | 'now' | 'log' | 'push'>
 
 async function deliver(deps: Deps, send: () => Promise<void>, about: Record<string, string>) {
   for (let attempt = 0; ; attempt++) {

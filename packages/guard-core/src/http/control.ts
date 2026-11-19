@@ -148,6 +148,7 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel') {
         built: tx.payload !== null,
       }))
       repo.audit(db, { event: 'killed', detail: { pausedAgents, chains, via } }, now())
+      deps.push?.kill()
       return { pausedAgents, ownerTransactions }
     },
 

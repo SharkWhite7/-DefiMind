@@ -1,9 +1,11 @@
 import { type KillTarget, killPageUrl, phantomKillUrl } from '@defimind/shared'
 import type { FastifyInstance } from 'fastify'
 import { listAgents } from '../db/agents.js'
+import { subscribe, unsubscribe } from '../db/push.js'
 import * as repo from '../db/repo.js'
 import { openRequests } from '../db/requests.js'
 import { loosened } from '../domain/loosen.js'
+import { pushEndpointAllowed } from '../domain/push-host.js'
 import type { PasskeySetup } from '../service/passkeys.js'
 import { type OwnerAction, stepUpChallenge, verifyStepUp } from '../service/step-up.js'
 import type { X402Deps } from '../service/x402.js'
@@ -19,6 +21,7 @@ import {
   ownerDecision,
   ownerNewAgent,
   ownerPolicy,
+  ownerPush,
   ownerResume,
 } from './schemas.js'
 
@@ -34,6 +37,8 @@ export function ownerPanelRoutes(
   setup: {
     botUrl: string
     databaseUrl: string
+    /** The VAPID public key; push is off without it. */
+    pushKey?: string
     signing?: { page: string; targets: KillTarget[] }
   },
 ) {
@@ -124,6 +129,32 @@ export function ownerPanelRoutes(
       const { agentId, assertion } = ownerResume.parse(request.body)
       await stepUp('resume', { agentId }, assertion)
       return control.setPaused(agentId, false)
+    })
+
+    app.get('/v1/owner/push/key', async () => {
+      if (setup.pushKey === undefined) {
+        throw new HttpError(404, 'push_not_configured')
+      }
+      return { publicKey: setup.pushKey }
+    })
+    app.post('/v1/owner/push', async (request) => {
+      if (setup.pushKey === undefined) {
+        throw new HttpError(404, 'push_not_configured')
+      }
+      const { subscription } = ownerPush.parse(request.body)
+      if (!pushEndpointAllowed(subscription.endpoint)) {
+        throw new HttpError(400, 'push_host_not_allowed')
+      }
+      const id = subscribe(db, { endpoint: subscription.endpoint, ...subscription.keys }, now())
+      repo.audit(db, { event: 'push_subscribed', detail: { id } }, now())
+      return { id }
+    })
+    app.delete('/v1/owner/push/:id', async (request) => {
+      const { id } = idParam.parse(request.params)
+      if (!unsubscribe(db, id)) {
+        throw new HttpError(404, 'not_found')
+      }
+      return { ok: true }
     })
 
     app.post('/v1/owner/kill', async (request) => {

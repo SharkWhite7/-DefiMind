@@ -1,5 +1,6 @@
 import type { LightMyRequestResponse } from 'fastify'
 import type { KillTarget, Policy } from '@defimind/shared'
+import type { PushService } from '../src/adapters/push.js'
 import { CHAINS } from '@defimind/shared'
 import { encodePaymentRequiredHeader, encodePaymentResponseHeader } from '@x402/core/http'
 import type { PaymentRequirements } from '@x402/core/types'
@@ -57,6 +58,7 @@ export async function harness(
     /** Turns on the owner kill's signing-page links (CR-014). */
     signPage?: string
     killTargets?: KillTarget[]
+    push?: { service: PushService; publicKey: string }
     /** Turns passkey approvals on at this amount, for the relying party in PASSKEY_RP. */
     passkeyAbove?: string
   } = {},
@@ -111,6 +113,7 @@ export async function harness(
     ...(options.sweepMs === undefined ? {} : { sweepMs: options.sweepMs }),
     ...(options.receiptKey === undefined ? {} : { receiptKey: options.receiptKey }),
     ...(options.killTargets === undefined ? {} : { killTargets: options.killTargets }),
+    ...(options.push === undefined ? {} : { push: options.push }),
   })
 
   return {

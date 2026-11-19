@@ -277,3 +277,12 @@ export const approvalRequests = sqliteTable('approval_requests', {
   body: text('body', { mode: 'json' }).notNull(),
   approveBefore: text('approve_before').notNull(),
 })
+
+/** The owner's browsers that get Web Push (CR-012). The keys are the browser's, public by design. */
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+  id: text('id').primaryKey(),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: text('created_at').notNull(),
+})
