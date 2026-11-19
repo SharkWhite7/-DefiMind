@@ -186,3 +186,10 @@ export const executionReport = z
     endedAt: z.iso.datetime(),
   })
   .refine((r) => r.startedAt <= r.endedAt, { path: ['endedAt'], message: 'before startedAt' })
+
+export const executionsQuery = z.object({
+  agentId: agentId.optional(),
+  from: z.iso.datetime().optional(),
+  to: z.iso.datetime().optional(),
+})
+export const seqParam = z.object({ seq: z.coerce.number().int().positive() })

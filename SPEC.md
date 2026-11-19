@@ -351,6 +351,8 @@ tools are exposed as <server>__<tool>; each call is forwarded, then reported to 
 no new call is forwarded while the outbox is not empty. GATEWAY_KEEP_BODIES (default false) keeps
 bodies in a local file for the operator.
 SDK (packages/sdk): withReceipt(server, tool, fn) reports any async call the same way.
+requestHash and responseHash are the hex SHA-256 of the canonical JSON of the arguments and of the
+result. A thrown error hashes as { error: message }; a call that returns nothing hashes as null.
 defimind-verify <bundle.json> [--key <hex>] [--rpc <url>]: checks offline the signature, the
 receipt hash, the Merkle path and the root in the anchor tx, and, given a run of receipts, that seq
 has no gap and every prevHash links. Prints pass or fail per check; trusts no DefiMind server.

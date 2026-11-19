@@ -82,6 +82,13 @@ export const configSchema = z
      */
     VAPID_PRIVATE_KEY_FILE: optional(z.string().min(1)),
     VAPID_SUBJECT: optional(z.string().regex(/^(mailto:|https:\/\/)\S+$/)),
+    /**
+     * CR-013. Anchoring of the execution chain: a Solana cluster, its RPC, and a keypair of its own,
+     * funded for fees only and never the hot wallet. All three or none; off without them.
+     */
+    ANCHOR_CHAIN: optional(z.enum([CHAINS.solanaDevnet, CHAINS.solanaMainnet])),
+    ANCHOR_RPC_URL: optional(z.url({ protocol: /^https?$/ })),
+    ANCHOR_KEY_FILE: optional(z.string().min(1)),
     /** CR-014. The onchain signing page; with it, the owner kill links each chain's kill there. */
     SIGN_PAGE_URL: optional(z.url({ protocol: /^https$/ })),
     /** The panel's static build, served at /panel. Defaults to packages/panel/dist. */
@@ -109,6 +116,18 @@ export const configSchema = z
     (c) => c.PASSKEY_ORIGIN === undefined || originMatches(c.PASSKEY_ORIGIN, c.PASSKEY_RP_ID),
     {
       path: ['PASSKEY_ORIGIN'],
+    },
+  )
+  .refine(
+    (c) =>
+      [c.ANCHOR_CHAIN, c.ANCHOR_RPC_URL, c.ANCHOR_KEY_FILE].every((v) => v === undefined) ||
+      [c.ANCHOR_CHAIN, c.ANCHOR_RPC_URL, c.ANCHOR_KEY_FILE, c.RECEIPT_SIGNING_KEY_FILE].every(
+        (v) => v !== undefined,
+      ),
+    // Anchoring roots over receipts that are never signed would prove nothing.
+    {
+      path: ['ANCHOR_CHAIN'],
+      message: 'needs ANCHOR_RPC_URL, ANCHOR_KEY_FILE and RECEIPT_SIGNING_KEY_FILE',
     },
   )
   .refine((c) => (c.VAPID_PRIVATE_KEY_FILE === undefined) === (c.VAPID_SUBJECT === undefined), {

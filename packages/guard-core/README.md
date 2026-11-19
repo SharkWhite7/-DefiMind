@@ -249,6 +249,22 @@ With the receipt key (`RECEIPT_SIGNING_KEY_FILE`), guard-core keeps one hash cha
   - The memo is `defimind:anchor:v1:<fromSeq>-<toSeq>:<rootHex>`, published in one transaction.
   - The anchor `{ fromSeq, toSeq, root, chain, txId, anchoredAt }` is stored in `anchors`. A
     failed publication stores nothing and is tried again on the next tick.
+  - Turned on by `ANCHOR_CHAIN` (a Solana cluster), `ANCHOR_RPC_URL` and `ANCHOR_KEY_FILE` together,
+    with the receipt key. The anchor key is a Solana keypair of its own: funded for fees only, never
+    the hot wallet. On Fly, set it as the secret `ANCHOR_KEYPAIR_JSON`, and the entrypoint moves it
+    to tmpfs.
+  - **Limit:** the local `anchors` table lives in the same database as the receipts. Someone who
+    can edit that database can delete anchor rows together with the newest receipts, and the local
+    check then passes. Only a verifier that reads the memo from the chain, such as
+    `defimind-verify`, catches that.
+- **Reading the chain.**
+  - `GET /v1/owner/executions?agentId&from&to` (panel session) and `GET /v1/admin/executions?from&to`
+    (admin token) return `{ receipts }` in seq order, for the last seven days by default.
+  - `GET /v1/owner/executions/integrity` returns `{ lastSeq, lastHash, brokenAt?, lastAnchor? }`,
+    checked on the request.
+  - `GET /v1/owner/executions/:seq/proof` returns the `ProofBundle` `{ receipt, siblings, anchor }`
+    a third party can check offline. It answers 404 until the receipt is under an anchor.
+  - `GET /v1/anchors?from&to` is public and lists anchors only, never a receipt.
 - guard-core re-checks the whole chain at start-up and once a day: every `seq`, every `prevHash`,
   every hash and signature. A deleted, inserted or edited row breaks one of them. Against the
   anchors too: deleting the newest receipts leaves a valid shorter chain, so a chain that ends

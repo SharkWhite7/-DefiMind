@@ -1,5 +1,5 @@
 import type { Anchor } from '@defimind/shared'
-import { and, asc, desc, gte, lt, lte } from 'drizzle-orm'
+import { and, asc, desc, gte, lte } from 'drizzle-orm'
 import type { Db } from './client.js'
 import { anchors, executions } from './schema.js'
 
@@ -20,7 +20,7 @@ export function anchorsBetween(db: Db, from: Date, to: Date): Anchor[] {
     .select()
     .from(anchors)
     .where(
-      and(gte(anchors.anchoredAt, from.toISOString()), lt(anchors.anchoredAt, to.toISOString())),
+      and(gte(anchors.anchoredAt, from.toISOString()), lte(anchors.anchoredAt, to.toISOString())),
     )
     .orderBy(asc(anchors.fromSeq))
     .all()
@@ -45,5 +45,14 @@ export function firstUnanchored(db: Db, afterSeq: number) {
     .where(gte(executions.seq, afterSeq + 1))
     .orderBy(asc(executions.seq))
     .limit(1)
+    .get()
+}
+
+/** The anchor whose range holds this seq, if one does yet. */
+export function anchorFor(db: Db, seq: number): Anchor | undefined {
+  return db
+    .select()
+    .from(anchors)
+    .where(and(lte(anchors.fromSeq, seq), gte(anchors.toSeq, seq)))
     .get()
 }

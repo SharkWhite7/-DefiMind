@@ -68,6 +68,16 @@ is the owner's decision: which firm, what scope, what cost. Until then, the publ
 
 ---
 
+## ⬜ HUMAN-30 — Create the anchoring key (CR-013)
+
+At the infrastructure migration. guard-core anchors the execution chain on Solana, and needs its own
+fee-only keypair for that: never the hot wallet, holding only SOL for fees. Create it on the owner's
+machine straight into a file, fund it on devnet first, then set three Fly secrets on guard-core:
+`ANCHOR_KEYPAIR_JSON` (the keypair), `ANCHOR_CHAIN` and `ANCHOR_RPC_URL`. It is a signing key: never
+commit it, paste it in chat or send it to a session. The manager sends the exact commands then.
+
+---
+
 ## ⬜ HUMAN-27 — Create the Web Push key (CR-012)
 
 When the panel goes live with the infrastructure migration. On the owner's machine, create a P-256

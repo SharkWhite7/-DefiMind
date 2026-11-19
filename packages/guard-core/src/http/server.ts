@@ -27,6 +27,7 @@ import { botRoutes } from './bot.js'
 import { ownerRoutes } from './owner.js'
 import { ownerPanelRoutes } from './owner-panel.js'
 import { DEFAULT_PANEL_DIR, panelRoutes } from './panel.js'
+import { publicAnchors } from './executions.js'
 import type { PushService } from '../adapters/push.js'
 import { pusher } from '../service/push.js'
 import { integrityMonitor } from '../service/integrity.js'
@@ -266,6 +267,10 @@ async function serve(
   }
 
   app.get('/health', async () => ({ status: 'ok' }))
+
+  if (surface !== 'private') {
+    await app.register(publicAnchors(deps))
+  }
 
   // Public on purpose: anyone holding a receipt can check it without trusting this server.
   app.get('/v1/receipts/key', async (_request, reply) =>
