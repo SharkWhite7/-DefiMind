@@ -97,15 +97,38 @@ ORG="$(fly apps list | awk '$1=="agentguard-guard-core"{print $2}')" && echo "or
 
 Check: it prints the org name, then creates two apps and one volume.
 
-**B2. guard-core's tokens, chain settings and hot keys.** These come from its `.env`, as in
-`packages/guard-core/README.md`, steps 2 and 3. The Robinhood line runs only when the `.env`
-names a Robinhood key.
+**B2. guard-core's tokens, chain settings and hot keys,** copied from the old app.
+
+- **Why not the `.env`.** The local `.env` can be the devnet one: the mainnet launch set its values
+  straight in Fly. So the values come from the running `agentguard-guard-core`, through a pipe:
+  - `env` runs inside the old machine;
+  - only the named lines are kept, and they go straight into the new app's secrets;
+  - nothing reaches the screen.
+- **First, a dry count.** The first command counts the lines it would copy, without copying them.
+- **ADMIN_TOKEN** is the one value taken from the `.env`: the fresh token from A2.
 
 ```bash
-cd ~/DefiMind && grep -E '^(ADMIN_TOKEN|BOT_TOKEN|BOT_WEBHOOK_SECRET|SOLANA_CHAIN|SOLANA_RPC_URL|SQUADS_MULTISIG|ROBINHOOD_CHAIN|ROBINHOOD_RPC_URL|ROBINHOOD_SAFE_ADDRESS)=.' packages/guard-core/.env | fly secrets import --app defimind-guard-core --stage
-cd ~/DefiMind && key="$(grep '^SOLANA_HOT_WALLET_KEYPAIR=' packages/guard-core/.env | cut -d= -f2-)" && { printf 'SOLANA_HOT_WALLET_KEYPAIR_JSON='; tr -d ' \n' < "$key"; echo; } | fly secrets import --app defimind-guard-core --stage
-cd ~/DefiMind && key="$(grep '^ROBINHOOD_HOT_WALLET_KEY_FILE=' packages/guard-core/.env | cut -d= -f2-)" && [ -n "$key" ] && { printf 'ROBINHOOD_HOT_WALLET_KEY='; tr -d ' \n' < "$key"; echo; } | fly secrets import --app defimind-guard-core --stage
+N='BOT_TOKEN|BOT_WEBHOOK_SECRET|SOLANA_CHAIN|SOLANA_RPC_URL|SQUADS_MULTISIG|SOLANA_HOT_WALLET_KEYPAIR_JSON|ROBINHOOD_CHAIN|ROBINHOOD_RPC_URL|ROBINHOOD_SAFE_ADDRESS|ROBINHOOD_HOT_WALLET_KEY'
+fly ssh console --app agentguard-guard-core -C env | tr -d '\r' | grep -cE "^($N)="
 ```
+
+Check: it prints `10`, when the old app runs Solana and Robinhood.
+
+- The entrypoint hides the two hot keys from node only. They are still in the machine's
+  environment, so the count includes them.
+- If it prints `8`, the two hot-key lines are missing: stop. Do not fall back to the local key
+  files without a digest check.
+
+Then copy them, and add the fresh admin token:
+
+```bash
+fly ssh console --app agentguard-guard-core -C env | tr -d '\r' | grep -E "^($N)=" | fly secrets import --app defimind-guard-core --stage
+cd ~/DefiMind && grep '^ADMIN_TOKEN=' packages/guard-core/.env | fly secrets import --app defimind-guard-core --stage
+for a in agentguard-guard-core defimind-guard-core; do fly secrets list --app "$a" | awk -v n="^($N)$" 'NR>1 && $1 ~ n {print $1, $2}' | sort > ~/.defimind/"$a".digests; done; diff ~/.defimind/agentguard-guard-core.digests ~/.defimind/defimind-guard-core.digests && echo 'SAME VALUES'
+```
+
+Check: it prints `SAME VALUES`. Fly's digest is a hash of each value, so equal digests mean the
+values were copied exactly, without either one being shown.
 
 **B3. The three new keys.**
 
@@ -127,11 +150,11 @@ cd ~/DefiMind && key="$(grep '^ROBINHOOD_HOT_WALLET_KEY_FILE=' packages/guard-co
 - the Web Push contact;
 - anchoring on devnet first.
 
-guard-core links to the signing page the bot already uses, the live one in the bot's `.env`. First
-print that address, which is public:
+guard-core links to the signing page the old bot already uses. First read that address from the
+running bot. It is public:
 
 ```bash
-cd ~/DefiMind && grep '^SIGN_PAGE_URL=' packages/telegram-bot/.env
+SIGN="$(fly ssh console --app agentguard-bot -C 'printenv SIGN_PAGE_URL' | tr -d '\r' | grep -E '^https://')" && echo "$SIGN"
 ```
 
 Check, before going on:
@@ -143,18 +166,18 @@ Check, before going on:
    `main`.
 
 If any of the three fails, stop. A link to a project nobody holds could serve a fake signing page.
-Then set the settings, the signing page taken from that same line:
+Then set the settings, with the signing page from that same command, in the same terminal:
 
 ```bash
-cd ~/DefiMind && fly secrets set --app defimind-guard-core --stage PASSKEY_RP_ID=defimind-guard-core.fly.dev PASSKEY_ORIGIN=https://defimind-guard-core.fly.dev TELEGRAM_APPROVALS=false "$(grep '^SIGN_PAGE_URL=' packages/telegram-bot/.env)" VAPID_SUBJECT=https://github.com/SharkWhite7/-DefiMind ANCHOR_CHAIN=solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1 ANCHOR_RPC_URL=https://api.devnet.solana.com
+fly secrets set --app defimind-guard-core --stage PASSKEY_RP_ID=defimind-guard-core.fly.dev PASSKEY_ORIGIN=https://defimind-guard-core.fly.dev TELEGRAM_APPROVALS=false "SIGN_PAGE_URL=$SIGN" VAPID_SUBJECT=https://github.com/SharkWhite7/-DefiMind ANCHOR_CHAIN=solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1 ANCHOR_RPC_URL=https://api.devnet.solana.com
 fly secrets list --app defimind-guard-core
 ```
 
 Check: the list shows these names and nothing else:
 
 - `ADMIN_TOKEN`, `BOT_TOKEN`, `BOT_WEBHOOK_SECRET`;
-- the chain settings from the `.env`;
-- `SOLANA_HOT_WALLET_KEYPAIR_JSON`, plus `ROBINHOOD_HOT_WALLET_KEY` if B2 imported it;
+- the chain settings B2 copied;
+- `SOLANA_HOT_WALLET_KEYPAIR_JSON`, plus `ROBINHOOD_HOT_WALLET_KEY` if the old app had it;
 - `RECEIPT_SIGNING_KEY`, `VAPID_PRIVATE_KEY`, `ANCHOR_KEYPAIR_JSON`;
 - the seven names from B4.
 
@@ -175,12 +198,19 @@ Check:
 - `/v1/receipts/key` prints a `publicKey`;
 - the panel prints `200`.
 
-**B6. The bot's secrets, and the "bot gets BOT_TOKEN only" check.** The import is
-`packages/telegram-bot/README.md`, step 3, and it leaves `GUARD_ADMIN_TOKEN` out. Do not deploy the
-bot yet: two bots on one Telegram token make Telegram refuse both.
+**B6. The bot's secrets, and the "bot gets BOT_TOKEN only" check.**
+
+- The values are copied from the running `agentguard-bot`, the same way as B2. The list of names
+  leaves `GUARD_ADMIN_TOKEN` out.
+- `GUARD_PUBLIC_URL` is set to the new address.
+- `TELEGRAM_APPROVALS` is not copied, so the new bot runs on its default, `false`, like guard-core
+  in B4. An old `true` would show Approve buttons that guard-core then refuses.
+- Do not deploy the bot yet: two bots on one Telegram token make Telegram refuse both.
 
 ```bash
-cd ~/DefiMind && grep -E '^(TELEGRAM_BOT_TOKEN|OWNER_TELEGRAM_IDS|GUARD_BOT_TOKEN|BOT_WEBHOOK_SECRET|NOTIFY_ABOVE_AMOUNT|SOLANA_CHAIN|SIGN_PAGE_URL|SQUADS_MULTISIG|SOLANA_HOT_WALLET_PUBKEY|ROBINHOOD_CHAIN|ROBINHOOD_SAFE_ADDRESS|REPORT_WEEKDAY|REPORT_HOUR_UTC|GUARD_PUBLIC_URL|TELEGRAM_APPROVALS)=.' packages/telegram-bot/.env | fly secrets import --app defimind-bot --stage
+B='TELEGRAM_BOT_TOKEN|OWNER_TELEGRAM_IDS|GUARD_BOT_TOKEN|BOT_WEBHOOK_SECRET|NOTIFY_ABOVE_AMOUNT|SOLANA_CHAIN|SIGN_PAGE_URL|SQUADS_MULTISIG|SOLANA_HOT_WALLET_PUBKEY|ROBINHOOD_CHAIN|ROBINHOOD_SAFE_ADDRESS|REPORT_WEEKDAY|REPORT_HOUR_UTC'
+fly ssh console --app agentguard-bot -C env | tr -d '\r' | grep -E "^($B)=" | fly secrets import --app defimind-bot --stage
+fly secrets set --app defimind-bot --stage GUARD_PUBLIC_URL=https://defimind-guard-core.fly.dev
 fly secrets list --app defimind-bot
 fly secrets list --app defimind-bot | grep -c -e GUARD_ADMIN_TOKEN -e '^ADMIN_TOKEN'
 ```
@@ -225,7 +255,7 @@ Check: every machine of both apps is `stopped`.
 
 **C4. Put the database on the new guard-core.**
 
-- The file goes in under a new name, `migrated.db`. The empty `guard.db` that B6 created is never
+- The file goes in under a new name, `migrated.db`. The empty `guard.db` that B5 created is never
   overwritten while it is open.
 - The file is handed to the app's user.
 - `DATABASE_URL` then points at the file. A secret wins over the `fly.toml` value, and setting it
@@ -379,7 +409,8 @@ fly tokens create deploy --app defimind-bot --expiry 8760h | gh secret set FLY_A
 2. Switch the settings:
 
    ```bash
-   fly secrets set --app defimind-guard-core ANCHOR_CHAIN=solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp ANCHOR_RPC_URL="$(grep '^SOLANA_RPC_URL=' ~/DefiMind/packages/guard-core/.env | cut -d= -f2-)"
+   fly ssh console --app defimind-guard-core -C env | tr -d '\r' | grep '^SOLANA_RPC_URL=' | sed 's/^SOLANA_RPC_URL=/ANCHOR_RPC_URL=/' | fly secrets import --app defimind-guard-core --stage
+   fly secrets set --app defimind-guard-core ANCHOR_CHAIN=solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp
    ```
 
 ## Rollback
