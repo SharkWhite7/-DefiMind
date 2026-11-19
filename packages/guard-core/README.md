@@ -457,7 +457,9 @@ and region (`gru`) as the bot (`defimind-bot`, see its README):
 - **Two listeners**, each with only its own routes registered:
   - **public**, `0.0.0.0:8080` behind Fly's TLS (`force_https`): `/v1/agent/*`, the owner's
     `/v1/owner/*` and `/owner/*` pages, the panel at `/panel/`, and `/health`. Agents call `https://defimind-guard-core.fly.dev/v1/agent/...`. The per-IP
-    limit keys on `Fly-Client-IP`, the real client, believed on this listener only.
+    limit keys on `Fly-Client-IP`, the real client, believed on this listener only and only with
+    `TRUST_FLY_CLIENT_IP=true` (set in `fly.toml`). Without it the limit keys on the connection
+    address, so a client off Fly cannot pick a fresh address per request.
   - **private**, `fly-local-6pn:8787`: `/v1/admin/*`, `/v1/bot/*` and `/health`. No Fly service
     exposes it. The bot reaches it at `http://defimind-guard-core.internal:8787`, and guard-core
     calls the bot at `http://defimind-bot.internal:8788` (`BOT_URL` in `fly.toml`).

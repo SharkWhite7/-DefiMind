@@ -173,8 +173,8 @@ function paymentDeps(options: ServerDeps, log: FastifyBaseLogger): X402Deps {
  * for the whole internet. Fly sets Fly-Client-IP to the real address. Only the public listener
  * sits behind that proxy, so only there is the header believed.
  */
-function clientIp(surface: Surface): (request: FastifyRequest) => string {
-  if (surface !== 'public') {
+function clientIp(surface: Surface, trustFly: boolean): (request: FastifyRequest) => string {
+  if (surface !== 'public' || !trustFly) {
     return (request) => request.ip
   }
   return (request) => {
@@ -191,7 +191,7 @@ async function serve(
   killTargets: KillTarget[],
   pushKey: string | undefined,
 ) {
-  const ipOf = clientIp(surface)
+  const ipOf = clientIp(surface, config.TRUST_FLY_CLIENT_IP === 'true')
   await app.register(rateLimit, {
     max: config.RATE_LIMIT_PER_IP,
     timeWindow: '1 minute',
