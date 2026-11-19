@@ -94,6 +94,12 @@ const PASSKEY_LINE =
   'a Telegram tap can only reject it.'
 
 /** With Telegram approvals off (the default), the panel is the only place a payment is approved. */
+/**
+ * With TELEGRAM_APPROVALS off the panel's passkey guards every loosening; the bot refuses them, so a
+ * stolen Telegram account cannot widen what an agent may spend.
+ */
+export const PANEL_ONLY = 'Do this in the DefiMind panel: it asks for your passkey.'
+
 export const PANEL_LINE = '🔐 <b>Approve in the DefiMind panel.</b> Here you can only reject it.'
 
 const PASSKEY_NO_LINK =

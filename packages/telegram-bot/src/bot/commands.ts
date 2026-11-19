@@ -21,6 +21,7 @@ import {
   isBuilt,
   killedText,
   ownerTransactionText,
+  PANEL_ONLY,
 } from '../domain/text.js'
 import type { Desk } from './desk.js'
 
@@ -33,6 +34,8 @@ export interface CommandDeps {
   /** The onchain kill of each chain on the signing page; none without SIGN_PAGE_URL. */
   phantomKills?: PhantomKill[]
   now?: () => Date
+  /** Loosening is the panel's: /resume is refused here. */
+  panelOnly?: boolean
 }
 
 const HTML = { parse_mode: 'HTML' } as const
@@ -41,7 +44,7 @@ const AGENT_ID = /^\S{1,64}$/
 
 export function registerCommands(
   bot: Bot,
-  { guard, desk, log, phantomKills = [], weekly, now = () => new Date() }: CommandDeps,
+  { guard, desk, log, phantomKills = [], weekly, now = () => new Date(), panelOnly }: CommandDeps,
 ) {
   const phantom = phantomKills.length > 0
   const offers = new KillOffers()
@@ -149,6 +152,10 @@ export function registerCommands(
     bot.command(command, (ctx) =>
       withAgent(ctx, command, (agentId) =>
         guarded(ctx, async () => {
+          if (!paused && panelOnly) {
+            await ctx.reply(PANEL_ONLY)
+            return
+          }
           const result = await guard.setPaused(agentId, paused)
           log.info({ agentId, paused, result, owner: ctx.from?.id }, 'pause command')
           await ctx.reply(

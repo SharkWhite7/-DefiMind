@@ -172,3 +172,17 @@ export const ownerPush = z.object({
     keys: z.object({ p256dh: base64url.min(80).max(100), auth: base64url.min(16).max(32) }),
   }),
 })
+
+const sha256Hex = z.string().regex(/^[0-9a-f]{64}$/, 'hex SHA-256')
+/** CR-013: what a gateway or the SDK reports about one tool call. Hashes only, never bodies. */
+export const executionReport = z
+  .object({
+    server: z.string().min(1).max(128),
+    tool: z.string().min(1).max(128),
+    requestHash: sha256Hex,
+    responseHash: sha256Hex,
+    outcome: z.enum(['ok', 'error', 'refused']),
+    startedAt: z.iso.datetime(),
+    endedAt: z.iso.datetime(),
+  })
+  .refine((r) => r.startedAt <= r.endedAt, { path: ['endedAt'], message: 'before startedAt' })

@@ -9,7 +9,7 @@ const BOT = 'b'.repeat(64)
 // Fly's proxy: every request reaches the public listener from this one address.
 const PROXY = '172.16.0.2'
 
-async function split(perIp = 100) {
+async function split(perIp = 100, trustFly = true) {
   const db = openDb(':memory:')
   migrateDb(db)
   const token = createAgent(db, 'agent-1')
@@ -21,6 +21,7 @@ async function split(perIp = 100) {
     LOG_LEVEL: 'fatal',
     RATE_LIMIT_PER_IP: String(perIp),
     RATE_LIMIT_PER_AGENT: '100',
+    TRUST_FLY_CLIENT_IP: trustFly ? 'true' : 'false',
   })
   const [privateApp, publicApp] = (await buildServers({ db, config }, ['private', 'public'])) as [
     Server,
@@ -85,6 +86,15 @@ describe('the public and private listeners', () => {
       codes.push((await agent(publicApp, ip)).statusCode)
     }
     expect(codes).toEqual([200, 200, 429, 200])
+  })
+
+  it('ignores Fly-Client-IP unless TRUST_FLY_CLIENT_IP is set, so a client cannot pick its own', async () => {
+    const { publicApp, agent } = await split(2, false)
+    const codes = []
+    for (const ip of ['203.0.113.1', '203.0.113.2', '203.0.113.3']) {
+      codes.push((await agent(publicApp, ip)).statusCode)
+    }
+    expect(codes).toEqual([200, 200, 429])
   })
 
   it('ignores Fly-Client-IP on the private listener, where no proxy sets it', async () => {
