@@ -59,6 +59,15 @@ for later.
 
 ---
 
+## ⏳ HUMAN-29 — Decide on a paid human audit before the panel's mainnet launch (decision)
+
+The CR-012 security review (INT-31) is done by AI reviewers. It is not an audit, and DefiMind must
+not be described as audited. Whether to pay for a human audit before the panel controls mainnet funds
+is the owner's decision: which firm, what scope, what cost. Until then, the public wording stays
+"reviewed", never "audited".
+
+---
+
 ## ⬜ HUMAN-27 — Create the Web Push key (CR-012)
 
 When the panel goes live with the infrastructure migration. On the owner's machine, create a P-256
