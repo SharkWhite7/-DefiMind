@@ -3,7 +3,7 @@ import { USDC_DECIMALS } from '@defimind/shared'
 import { formatUsd } from './money.js'
 import { chainName, escapeHtml } from './text.js'
 
-/** The three amounts an owner edits from Telegram. A raise of any of them asks for a confirm. */
+/** The three amounts an owner edits from Telegram, only ever downwards there. */
 export const LIMITS = ['perTxMax', 'dailyMax', 'approvalThreshold'] as const
 export type Limit = (typeof LIMITS)[number]
 
@@ -33,16 +33,21 @@ export const PRESETS = {
 
 export type Preset = keyof typeof PRESETS
 
-/** The limits that went up from before to after: those are the ones the owner confirms. */
-export function raises(before: Policy, after: Policy): Limit[] {
-  return LIMITS.filter((limit) => BigInt(after[limit]) > BigInt(before[limit]))
+/**
+ * The body of POST /v1/bot/policy/:id/tighten (CR-016). It can only take a domain away or go to
+ * shadow; a limit is the one field that could still go up, and guard-core refuses that.
+ */
+export type Tighten = Partial<Record<Limit, string>> & {
+  removeDomains?: string[]
+  mode?: 'shadow'
 }
 
-/** Whether a change widens what the agent may spend: a raised limit, a new domain, or going live. */
-export function loosens(before: Policy, after: Policy): boolean {
-  const added = after.allowedDomains.some((domain) => !before.allowedDomains.includes(domain))
-  const live = after.mode === 'live' && (before.mode ?? 'live') !== 'live'
-  return raises(before, after).length > 0 || added || live
+/** The limits a change would raise: the bot refuses those itself, before guard-core does. */
+export function raises(before: Policy, change: Tighten): Limit[] {
+  return LIMITS.filter((limit) => {
+    const next = change[limit]
+    return next !== undefined && BigInt(next) > BigInt(before[limit])
+  })
 }
 
 /** Lowercase DNS labels only: an allowlist entry that is not a hostname would never match a request. */
@@ -69,17 +74,9 @@ export function policyText(policy: Policy): string {
   ].join('\n')
 }
 
-export function raiseText(agentId: string, before: Policy, after: Policy, up: Limit[]): string {
-  const lines = up.map(
-    (limit) =>
-      `• ${LIMIT_NAMES[limit]}: ${formatUsd(before[limit])} → <b>${formatUsd(after[limit])}</b>`,
-  )
-  return [`<b>Raise the limits</b> of <code>${escapeHtml(agentId)}</code>?`, ...lines].join('\n')
-}
-
 export function agentsText(agents: AgentSummary[]): string {
   if (agents.length === 0) {
-    return 'No agents yet. Create one with /agent new &lt;id&gt;.'
+    return 'No agents yet. Create one in the DefiMind panel.'
   }
   return [
     `<b>Agents</b> (${agents.length})`,

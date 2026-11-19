@@ -34,8 +34,6 @@ export interface CommandDeps {
   /** The onchain kill of each chain on the signing page; none without SIGN_PAGE_URL. */
   phantomKills?: PhantomKill[]
   now?: () => Date
-  /** Loosening is the panel's: /resume is refused here. */
-  panelOnly?: boolean
 }
 
 const HTML = { parse_mode: 'HTML' } as const
@@ -44,7 +42,7 @@ const AGENT_ID = /^\S{1,64}$/
 
 export function registerCommands(
   bot: Bot,
-  { guard, desk, log, phantomKills = [], weekly, now = () => new Date(), panelOnly }: CommandDeps,
+  { guard, desk, log, phantomKills = [], weekly, now = () => new Date() }: CommandDeps,
 ) {
   const phantom = phantomKills.length > 0
   const offers = new KillOffers()
@@ -145,27 +143,18 @@ export function registerCommands(
     ),
   )
 
-  for (const [command, paused] of [
-    ['pause', true],
-    ['resume', false],
-  ] as const) {
-    bot.command(command, (ctx) =>
-      withAgent(ctx, command, (agentId) =>
-        guarded(ctx, async () => {
-          if (!paused && panelOnly) {
-            await ctx.reply(PANEL_ONLY)
-            return
-          }
-          const result = await guard.setPaused(agentId, paused)
-          log.info({ agentId, paused, result, owner: ctx.from?.id }, 'pause command')
-          await ctx.reply(
-            result === 'ok' ? pausedText(agentId, paused) : unknownAgent(agentId),
-            HTML,
-          )
-        }),
-      ),
-    )
-  }
+  bot.command('pause', (ctx) =>
+    withAgent(ctx, 'pause', (agentId) =>
+      guarded(ctx, async () => {
+        const result = await guard.pause(agentId)
+        log.info({ agentId, result, owner: ctx.from?.id }, 'pause command')
+        await ctx.reply(result === 'ok' ? pausedText(agentId) : unknownAgent(agentId), HTML)
+      }),
+    ),
+  )
+
+  // Resuming widens what an agent may do again: the panel's, with a passkey (CR-016).
+  bot.command('resume', (ctx) => ctx.reply(PANEL_ONLY))
 
   bot.command('kill', async (ctx) =>
     ctx.reply(killWarning(await chains(), phantom), {
@@ -296,9 +285,6 @@ function unknownAgent(agentId: string): string {
   return `No agent <code>${escapeHtml(agentId)}</code>.`
 }
 
-function pausedText(agentId: string, paused: boolean): string {
-  const id = `<code>${escapeHtml(agentId)}</code>`
-  return paused
-    ? `Paused ${id}. Its payments are refused until /resume ${id}.`
-    : `Resumed ${id}. Its payments go through the policy again.`
+function pausedText(agentId: string): string {
+  return `Paused <code>${escapeHtml(agentId)}</code>. Its payments are refused until you resume it in the DefiMind panel.`
 }

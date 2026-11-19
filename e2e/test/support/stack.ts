@@ -95,11 +95,7 @@ export async function stack(options: { chain?: StubChain; net?: Net; panel?: boo
   })
   const guardUrl = await guard.listen({ port: 0, host: '127.0.0.1' })
 
-  const tg = telegram(
-    httpGuardClient({ url: guardUrl, botToken: BOT_TOKEN, adminToken: ADMIN_TOKEN }),
-    now,
-    log,
-  )
+  const tg = telegram(httpGuardClient({ url: guardUrl, botToken: BOT_TOKEN }), now, log)
   late.tg = tg
 
   const mcp = createMcp({

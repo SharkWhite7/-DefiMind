@@ -1,20 +1,21 @@
 import type { AgentSummary, DoctorCheck, Policy } from '@defimind/shared'
 import { z } from 'zod'
+import type { Tighten } from '../domain/policy.js'
 import { type GuardClientOptions, requester } from './guard.js'
 
-/** What the owner runs from Telegram instead of a terminal: agents, policies and the doctor. */
-export interface AdminClient {
-  /** Undefined when the agent already exists. The token is returned once and never logged. */
-  createAgent(agentId: string): Promise<{ agentId: string; token: string } | undefined>
+/**
+ * What the owner reads and tightens from Telegram (CR-016): agents, policies and the doctor, on the
+ * bot's own routes. Nothing here can create, allow, raise, go live or resume.
+ */
+export interface ControlClient {
   listAgents(): Promise<AgentSummary[]>
   /** False for an unknown agent. */
   revokeAgent(agentId: string): Promise<boolean>
   /** Undefined for an unknown agent. */
   policy(agentId: string): Promise<Policy | undefined>
-  putPolicy(policy: Policy): Promise<Policy>
+  /** guard-core refuses a change that would loosen anything: 'loosen_in_panel'. */
+  tighten(agentId: string, change: Tighten): Promise<Policy | 'loosen_in_panel'>
   doctor(): Promise<DoctorCheck[]>
-  /** A one-time code for guard-core's passkey enrol page. Never logged. */
-  enrolCode(): Promise<{ code: string; expiresAt: string }>
 }
 
 const atomic = z.string().regex(/^(0|[1-9]\d*)$/)
@@ -37,8 +38,6 @@ export const policySchema = z.object({
   requireMandate: z.boolean().optional(),
 })
 
-const created = z.object({ agentId: id, token: z.string().min(16).max(512) })
-
 const agents = z.object({
   agents: z
     .array(z.object({ agentId: id, paused: z.boolean(), mode: z.enum(['live', 'shadow']) }))
@@ -58,27 +57,19 @@ const checks = z.object({
     .max(64),
 })
 
-const enrol = z.object({
-  code: z.string().min(8).max(256),
-  expiresAt: z.iso.datetime({ offset: true }),
-})
+const refused = z.object({ error: z.literal('loosen_in_panel') })
 
-export function httpAdminClient(options: GuardClientOptions): AdminClient {
-  const { admin, ok } = requester(options)
+export function httpControlClient(options: GuardClientOptions): ControlClient {
+  const { bot, ok } = requester(options)
   const path = (agentId: string) => encodeURIComponent(agentId)
 
   return {
-    async createAgent(agentId) {
-      const response = await admin('POST', '/v1/admin/agents', { agentId })
-      return response.status === 409 ? undefined : created.parse(await ok(response))
-    },
-
     async listAgents() {
-      return agents.parse(await ok(await admin('GET', '/v1/admin/agents'))).agents
+      return agents.parse(await ok(await bot('GET', '/v1/bot/agents'))).agents
     },
 
     async revokeAgent(agentId) {
-      const response = await admin('POST', `/v1/admin/agents/${path(agentId)}/revoke`, {})
+      const response = await bot('POST', `/v1/bot/agents/${path(agentId)}/revoke`, {})
       if (response.status === 404) {
         return false
       }
@@ -87,21 +78,23 @@ export function httpAdminClient(options: GuardClientOptions): AdminClient {
     },
 
     async policy(agentId) {
-      const response = await admin('GET', `/v1/admin/policy/${path(agentId)}`)
+      const response = await bot('GET', `/v1/bot/policy/${path(agentId)}`)
       return response.status === 404 ? undefined : policySchema.parse(await ok(response))
     },
 
-    async putPolicy({ agentId, ...body }) {
-      const response = await admin('PUT', `/v1/admin/policy/${path(agentId)}`, body)
+    async tighten(agentId, change) {
+      const response = await bot('POST', `/v1/bot/policy/${path(agentId)}/tighten`, change)
+      if (response.status === 403) {
+        const body = refused.safeParse(await response.json().catch(() => undefined))
+        if (body.success) {
+          return 'loosen_in_panel'
+        }
+      }
       return policySchema.parse(await ok(response))
     },
 
-    async enrolCode() {
-      return enrol.parse(await ok(await admin('POST', '/v1/admin/passkeys/code', {})))
-    },
-
     async doctor() {
-      return checks.parse(await ok(await admin('GET', '/v1/admin/doctor'))).checks
+      return checks.parse(await ok(await bot('GET', '/v1/bot/doctor'))).checks
     },
   }
 }

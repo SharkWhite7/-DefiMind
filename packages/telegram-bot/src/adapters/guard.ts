@@ -16,7 +16,7 @@ export type Settled = { ok: true } | Refusal
 export interface GuardClient {
   decide(intentId: string, decision: Decision, telegramUserId: number): Promise<DecisionResult>
   decideMandate(mandateId: string, decision: Decision, telegramUserId: number): Promise<Settled>
-  setPaused(agentId: string, paused: boolean): Promise<'ok' | 'not_found'>
+  pause(agentId: string): Promise<'ok' | 'not_found'>
   kill(): Promise<KillResponse>
   budget(agentId: string): Promise<BudgetView | undefined>
   /** Undefined while guard-core has no chains route (CR-006). */
@@ -34,8 +34,8 @@ export class GuardError extends Error {
 
 export interface GuardClientOptions {
   url: string
+  /** CR-016: the bot's only token. Its routes read and tighten; none of them loosens. */
   botToken: string
-  adminToken: string
   fetch?: typeof fetch
 }
 
@@ -110,15 +110,15 @@ const report = z.object({
     .max(1000),
 })
 
-/** The calls every guard-core client makes: a bearer token, JSON, and a 10-second ceiling. */
+/** Every call the bot makes: its own bearer token, JSON, and a 10-second ceiling. */
 export function requester(options: GuardClientOptions) {
   const fetchImpl = options.fetch ?? fetch
 
-  async function call(token: string, method: string, path: string, body?: unknown) {
+  async function bot(method: string, path: string, body?: unknown) {
     return fetchImpl(`${options.url}${path}`, {
       method,
       headers: {
-        authorization: `Bearer ${token}`,
+        authorization: `Bearer ${options.botToken}`,
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -127,9 +127,7 @@ export function requester(options: GuardClientOptions) {
   }
 
   return {
-    call,
-    admin: (method: string, path: string, body?: unknown) =>
-      call(options.adminToken, method, path, body),
+    bot,
     async ok(response: Response): Promise<unknown> {
       if (!response.ok) {
         throw new GuardError(response.status)
@@ -141,11 +139,11 @@ export function requester(options: GuardClientOptions) {
 
 export function httpGuardClient(options: GuardClientOptions): GuardClient {
   const fetchImpl = options.fetch ?? fetch
-  const { call, admin, ok } = requester(options)
+  const { bot, ok } = requester(options)
 
   return {
     async decide(intentId, decision, telegramUserId) {
-      const response = await call(options.botToken, 'POST', '/v1/bot/decision', {
+      const response = await bot('POST', '/v1/bot/decision', {
         intentId,
         decision,
         telegramUserId: String(telegramUserId),
@@ -160,8 +158,7 @@ export function httpGuardClient(options: GuardClientOptions): GuardClient {
     },
 
     async decideMandate(mandateId, decision, telegramUserId) {
-      const response = await call(
-        options.botToken,
+      const response = await bot(
         'POST',
         `/v1/bot/mandates/${encodeURIComponent(mandateId)}/decision`,
         { decision, telegramUserId: String(telegramUserId) },
@@ -180,10 +177,8 @@ export function httpGuardClient(options: GuardClientOptions): GuardClient {
       return { ok: true }
     },
 
-    async setPaused(agentId, paused) {
-      const response = await admin('POST', paused ? '/v1/admin/pause' : '/v1/admin/resume', {
-        agentId,
-      })
+    async pause(agentId) {
+      const response = await bot('POST', '/v1/bot/pause', { agentId })
       if (response.status === 404) {
         return 'not_found'
       }
@@ -192,11 +187,11 @@ export function httpGuardClient(options: GuardClientOptions): GuardClient {
     },
 
     async kill() {
-      return killResult.parse(await ok(await admin('POST', '/v1/admin/kill', {})))
+      return killResult.parse(await ok(await bot('POST', '/v1/bot/kill', {})))
     },
 
     async budget(agentId) {
-      const response = await admin('GET', `/v1/admin/budget/${encodeURIComponent(agentId)}`)
+      const response = await bot('GET', `/v1/bot/budget/${encodeURIComponent(agentId)}`)
       // Until CR-004 lands the route itself is missing, and Fastify's 404 for that has a different
       // body: only guard-core's own answer means the agent does not exist.
       if (response.status === 404 && notFound.safeParse(await response.json()).success) {
@@ -206,7 +201,7 @@ export function httpGuardClient(options: GuardClientOptions): GuardClient {
     },
 
     async chains() {
-      const response = await admin('GET', '/v1/admin/chains')
+      const response = await bot('GET', '/v1/bot/chains')
       if (response.status === 404) {
         return undefined
       }
@@ -215,7 +210,7 @@ export function httpGuardClient(options: GuardClientOptions): GuardClient {
 
     async report(from, to) {
       const query = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() })
-      const response = await admin('GET', `/v1/admin/report?${query}`)
+      const response = await bot('GET', `/v1/bot/report?${query}`)
       if (response.status === 404) {
         return undefined
       }

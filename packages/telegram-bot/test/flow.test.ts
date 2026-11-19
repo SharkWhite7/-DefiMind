@@ -351,7 +351,7 @@ describe('breaker alerts', () => {
     expect(posted.map((call) => call.payload['chat_id'])).toEqual([OWNER.id, OTHER_OWNER.id])
     expect(posted[0]?.payload['text']).toBe(
       '<b>Circuit breaker tripped</b> for <code>research-agent</code>: paused. ' +
-        '/resume <code>research-agent</code> when you have looked.\n' +
+        'Resume it in the DefiMind panel when you have looked.\n' +
         'guard-core says: <i>11 payments in one minute &lt;b&gt;</i>',
     )
   })

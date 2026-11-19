@@ -6,7 +6,6 @@ const env = {
   OWNER_TELEGRAM_IDS: '1001, 1002',
   GUARD_URL: 'http://localhost:8787',
   GUARD_BOT_TOKEN: 'b'.repeat(32),
-  GUARD_ADMIN_TOKEN: 'c'.repeat(32),
   BOT_WEBHOOK_SECRET: 'd'.repeat(32),
 }
 
@@ -17,6 +16,11 @@ const killPage = {
 }
 
 describe('loadConfig', () => {
+  it('needs no admin token, and keeps one that is set only so main can warn', () => {
+    expect(loadConfig(env).GUARD_ADMIN_TOKEN).toBeUndefined()
+    expect(loadConfig({ ...env, GUARD_ADMIN_TOKEN: 'x' }).GUARD_ADMIN_TOKEN).toBe('x')
+  })
+
   it('parses owners and the threshold', () => {
     const config = loadConfig(env)
     expect(config.OWNER_TELEGRAM_IDS).toEqual(new Set([1001, 1002]))
