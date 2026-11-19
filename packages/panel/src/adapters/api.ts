@@ -156,6 +156,11 @@ export function ownerApi(passkey: Authenticator, fetchImpl: typeof fetch = fetch
         `/v1/owner/executions?${new URLSearchParams({ from: from.toISOString(), to: to.toISOString() })}`,
       ),
     integrity: () => get(s.integrity, '/v1/owner/executions/integrity'),
+    receipts: (from: Date, to: Date) =>
+      get(
+        s.paymentReceipts,
+        `/v1/owner/receipts?${new URLSearchParams({ from: from.toISOString(), to: to.toISOString() })}`,
+      ),
     proof: (seq: number) => get(s.proof, `/v1/owner/executions/${seq}/proof`),
     passkeys: () => get(s.passkeys, '/v1/owner/passkeys'),
     kill: () => post(s.kill, '/v1/owner/kill'),

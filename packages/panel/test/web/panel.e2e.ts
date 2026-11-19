@@ -192,7 +192,7 @@ describe.each([390, 1280])('the executions screen at %i px', (width) => {
     await page.getByText('Anchored up to #1 on Solana devnet').waitFor()
     await page.getByText(/^Relayed: reported by the gateway\. DefiMind vouches/).waitFor()
     await page.getByText('#1 github · create_issue').waitFor()
-    await page.getByText('#2 Payment').waitFor()
+    await page.getByText('#2 Payment $1.75 USDC on Base Sepolia').waitFor()
     await expect.poll(() => page.getByText('Proof once anchored.').count()).toBe(1)
 
     const download = page.waitForEvent('download')

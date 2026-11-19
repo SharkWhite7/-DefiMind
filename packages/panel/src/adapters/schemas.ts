@@ -168,6 +168,7 @@ export const receipt = z.looseObject({
   startedAt: isoTime,
   endedAt: isoTime,
   hash: hex(64),
+  paymentReceipt: hex(64).optional(),
 })
 
 export const anchor = z.looseObject({
@@ -180,6 +181,9 @@ export const anchor = z.looseObject({
 })
 
 export const executions = z.object({ receipts: z.array(receipt).max(10_000) })
+
+/** CR-010 receipts, kept raw: their hash is matched against what each payment execution names. */
+export const paymentReceipts = z.object({ receipts: z.array(z.unknown()).max(10_000) })
 
 export const integrity = z.object({
   lastSeq: z.number().int().nonnegative(),

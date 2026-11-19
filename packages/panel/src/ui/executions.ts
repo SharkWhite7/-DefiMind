@@ -1,6 +1,8 @@
 import { ApiError } from '../adapters/api.js'
+import { byHash, type Paid } from '../adapters/receipts.js'
 import type { IntegrityView, ReceiptView } from '../adapters/schemas.js'
 import { chainName } from '../domain/chains.js'
+import { amountText } from '../domain/money.js'
 import type { Context, Screen } from './context.js'
 import { button, card, el, when } from './dom.js'
 
@@ -60,8 +62,25 @@ function save(name: string, data: unknown) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-function entry(ctx: Context, receipt: ReceiptView, anchoredTo: number) {
-  const what = receipt.kind === 'payment' ? 'Payment' : `${receipt.server} · ${receipt.tool}`
+/** A payment with its amount when its receipt is in the window; otherwise just "Payment". */
+function title(receipt: ReceiptView, payments: Map<string, Paid>): string {
+  if (receipt.kind !== 'payment') {
+    return `${receipt.server} · ${receipt.tool}`
+  }
+  const intent =
+    receipt.paymentReceipt === undefined ? undefined : payments.get(receipt.paymentReceipt)
+  return intent === undefined
+    ? 'Payment'
+    : `Payment ${amountText(intent)} on ${chainName(intent.chain)}`
+}
+
+function entry(
+  ctx: Context,
+  receipt: ReceiptView,
+  anchoredTo: number,
+  payments: Map<string, Paid>,
+) {
+  const what = title(receipt, payments)
   return el(
     'div',
     { class: 'item' },
@@ -86,14 +105,16 @@ function entry(ctx: Context, receipt: ReceiptView, anchoredTo: number) {
 }
 
 export async function executions(ctx: Context, now = new Date()): Screen {
-  const [state, { receipts }] = await Promise.all([
+  const from = new Date(now.getTime() - 7 * DAY)
+  const [state, { receipts }, paid] = await Promise.all([
     ctx.api.integrity().catch((error: unknown) => {
       if (error instanceof ApiError && error.status === 404) {
         return undefined
       }
       throw error
     }),
-    ctx.api.executions(new Date(now.getTime() - 7 * DAY), now),
+    ctx.api.executions(from, now),
+    ctx.api.receipts(from, now).then(({ receipts: raw }) => byHash(raw)),
   ])
   const newest = receipts.slice(-SHOWN).reverse()
   const anchoredTo = state?.lastAnchor?.toSeq ?? 0
@@ -105,7 +126,7 @@ export async function executions(ctx: Context, now = new Date()): Screen {
       el('p', { class: 'muted' }, EXECUTED),
       el('p', { class: 'muted' }, RELAYED),
       newest.length === 0 && el('p', {}, 'Nothing recorded in these 7 days.'),
-      ...newest.map((receipt) => entry(ctx, receipt, anchoredTo)),
+      ...newest.map((receipt) => entry(ctx, receipt, anchoredTo, paid)),
       receipts.length > SHOWN &&
         el('p', { class: 'muted' }, `The newest ${SHOWN} of ${receipts.length}.`),
     ),
