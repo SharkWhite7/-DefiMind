@@ -30,6 +30,7 @@ import { ownerPanelRoutes } from './owner-panel.js'
 import { DEFAULT_PANEL_DIR, panelRoutes } from './panel.js'
 import type { PushService } from '../adapters/push.js'
 import { pusher } from '../service/push.js'
+import { INTEGRITY_EVERY_MS, integrityMonitor } from '../service/integrity.js'
 import { ownerSessionRoutes } from './owner-session.js'
 
 declare module 'fastify' {
@@ -94,6 +95,9 @@ export async function buildServers(
   )
   const [first] = apps as [Server, ...Server[]]
   const deps = paymentDeps(options, first.log)
+  if (deps.receiptKey !== undefined) {
+    deps.integrity = integrityMonitor(deps, deps.receiptKey)
+  }
   for (const [i, surface] of surfaces.entries()) {
     await serve(
       apps[i] as Server,
@@ -105,6 +109,13 @@ export async function buildServers(
     )
   }
 
+  if (deps.integrity !== undefined) {
+    const { integrity } = deps
+    integrity.check()
+    const daily = setInterval(() => integrity.check(), INTEGRITY_EVERY_MS)
+    daily.unref()
+    first.addHook('onClose', async () => clearInterval(daily))
+  }
   if (options.sweepMs !== undefined) {
     const timer = setInterval(() => {
       const expired = sweep(deps)
@@ -162,8 +173,8 @@ function paymentDeps(options: ServerDeps, log: FastifyBaseLogger): X402Deps {
  * for the whole internet. Fly sets Fly-Client-IP to the real address. Only the public listener
  * sits behind that proxy, so only there is the header believed.
  */
-function clientIp(surface: Surface): (request: FastifyRequest) => string {
-  if (surface !== 'public') {
+function clientIp(surface: Surface, trustFly: boolean): (request: FastifyRequest) => string {
+  if (surface !== 'public' || !trustFly) {
     return (request) => request.ip
   }
   return (request) => {
@@ -180,7 +191,7 @@ async function serve(
   killTargets: KillTarget[],
   pushKey: string | undefined,
 ) {
-  const ipOf = clientIp(surface)
+  const ipOf = clientIp(surface, config.TRUST_FLY_CLIENT_IP === 'true')
   await app.register(rateLimit, {
     max: config.RATE_LIMIT_PER_IP,
     timeWindow: '1 minute',

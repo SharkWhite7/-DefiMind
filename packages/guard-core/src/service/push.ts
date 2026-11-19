@@ -8,7 +8,15 @@ import type { AlertBody } from './events.js'
 
 /** What a push says (SPEC, CR-012). Never a recipient or a URL: the panel shows the rest. */
 export interface PushPayload {
-  kind: 'approval' | 'mandate' | 'executed' | 'attack' | 'breaker' | 'passkey_enrolled' | 'kill'
+  kind:
+    | 'approval'
+    | 'mandate'
+    | 'executed'
+    | 'attack'
+    | 'breaker'
+    | 'passkey_enrolled'
+    | 'kill'
+    | 'chain_broken'
   agentId?: string
   chain?: string
   amount?: string
@@ -103,8 +111,8 @@ export function pusher(deps: PushDeps) {
     alert(event: AlertBody) {
       if (event.kind === 'breaker_tripped') {
         send({ kind: 'breaker', agentId: event.agentId })
-      } else if (event.kind === 'passkey_enrolled') {
-        send({ kind: 'passkey_enrolled' })
+      } else {
+        send({ kind: event.kind })
       }
     },
   }

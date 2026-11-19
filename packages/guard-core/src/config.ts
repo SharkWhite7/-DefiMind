@@ -91,6 +91,13 @@ export const configSchema = z
     GUARD_STUB_CHAINS: z.enum(['true', 'false']).default('false'),
     EXPIRY_SWEEP_MS: z.coerce.number().int().positive().default(30_000),
 
+    /**
+     * Whether the public listener may read the client's address from Fly-Client-IP. Only behind a
+     * proxy that sets it and drops the client's own (Fly, or the Caddy in deploy/): anywhere else a
+     * client picks a fresh one per request and is never limited.
+     */
+    TRUST_FLY_CLIENT_IP: z.enum(['true', 'false']).default('false'),
+
     /** Requests per minute. Per IP on every route, and per agent token on the agent routes. */
     RATE_LIMIT_PER_IP: z.coerce.number().int().positive().default(120),
     RATE_LIMIT_PER_AGENT: z.coerce.number().int().positive().default(60),

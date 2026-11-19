@@ -1,4 +1,5 @@
-import type { AlertEvent, PayIntent } from '@defimind/shared'
+import type { PayIntent } from '@defimind/shared'
+import type { GuardAlert } from '../adapters/bot.js'
 import type { PaymentDeps } from './payments.js'
 
 // About 21 seconds in all: enough to ride out a bot restart, short enough that the alert still
@@ -21,8 +22,8 @@ export function notify(deps: Deps, intent: PayIntent): void {
 }
 
 /** An alert as the caller builds it; the time is stamped per attempt. */
-export type AlertBody = AlertEvent extends infer A
-  ? A extends AlertEvent
+export type AlertBody = GuardAlert extends infer A
+  ? A extends GuardAlert
     ? Omit<A, 'sentAt'>
     : never
   : never
@@ -35,7 +36,7 @@ export function alert(deps: Deps, event: AlertBody): void {
   deps.push?.alert(event)
   void deliver(
     deps,
-    () => deps.bot.alert({ ...event, sentAt: deps.now().toISOString() } as AlertEvent),
+    () => deps.bot.alert({ ...event, sentAt: deps.now().toISOString() } as GuardAlert),
     'agentId' in event ? { kind: event.kind, agentId: event.agentId } : { kind: event.kind },
   )
 }

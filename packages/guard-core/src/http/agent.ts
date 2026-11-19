@@ -6,12 +6,14 @@ import { UpstreamError } from '../adapters/upstream.js'
 import { budget } from '../service/budget.js'
 import { transfer } from '../service/transfer.js'
 import { paidFetch, type X402Deps } from '../service/x402.js'
+import { appendExecution } from '../service/executions.js'
 import { HttpError } from './errors.js'
 import { windowLimiter } from './limiter.js'
 import { openMandate } from '../service/mandates.js'
 import { mandateReply } from './mandates.js'
 import {
   agentIdParam,
+  executionReport,
   intentIdParam,
   mandateRequest,
   transferRequest,
@@ -95,6 +97,24 @@ export function agentRoutes(
         throw new HttpError(403, 'forbidden')
       }
       return mandateReply(reply, await openMandate(deps, body, false))
+    })
+
+    // CR-013. The agent comes from the token, so one agent cannot write into another's record.
+    app.post('/executions', async (request) => {
+      const report = executionReport.parse(request.body)
+      const { agentId } = request
+      if (agentId === undefined) {
+        throw new HttpError(401, 'unauthorized')
+      }
+      if (deps.receiptKey === undefined) {
+        throw new HttpError(409, 'receipts_not_configured')
+      }
+      return appendExecution(
+        db,
+        deps.receiptKey,
+        { ...report, agentId, kind: 'tool_call', assurance: 'relayed' },
+        deps.now(),
+      )
     })
 
     // Same rule as the intent itself: another agent's receipt is reported as missing.
