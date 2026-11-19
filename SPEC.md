@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.11 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.12 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -230,6 +230,19 @@ POST /v1/bot/decision       { intentId, decision: "approve" | "reject", telegram
 POST /v1/bot/mandates/:id/decision { decision: "approve" | "reject", telegramUserId } -> Mandate (CR-010)
   409 { error: "already_decided" } or 410 { error: "expired" }, as for intents. A pending mandate
   expires after the same 10 minutes as a pending intent.
+Bot routes that only tighten or read (CR-016). The bot holds BOT_TOKEN only, never the admin token;
+every write is audited with via: "bot".
+POST /v1/bot/pause { agentId }; POST /v1/bot/kill {} -> the same body as POST /v1/admin/kill
+POST /v1/bot/agents/:id/revoke -> { agentId, revoked: true }
+POST /v1/bot/policy/:agentId/tighten { removeDomains?, removeRecipients?, mode?: "shadow",
+  perTxMax?, dailyMax?, approvalThreshold? } -> Policy
+  Each limit given must be at or below the current one. Anything loosened() would count is refused
+  with 403 { error: "loosen_in_panel" }.
+GET  /v1/bot/agents, /v1/bot/policy/:agentId, /v1/bot/budget/:agentId, /v1/bot/chains,
+GET  /v1/bot/report?from&to, /v1/bot/doctor   the same bodies as the admin reads
+The bot has no route that creates agents, adds to an allowlist, raises a limit, goes live, resumes or
+issues an enrolment code: those are the panel's, with a passkey, or the machine's, with the admin
+token. A bot started with GUARD_ADMIN_TOKEN set logs a warning and does not use it.
 POST /v1/admin/pause        { agentId } ; POST /v1/admin/resume { agentId }
 POST /v1/admin/kill         {} -> pauses all agents AND prepares, for every chain, the owner tx that
                                   sets the allowance to 0 and removes the delegate
@@ -399,6 +412,8 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.12 (2026-11-19): CR-016, approved by the owner. The bot loses the admin token: tightening-only
+  and read-only /v1/bot/* routes under BOT_TOKEN, audited via "bot".
 - v0.11 (2026-11-19): CR-015, approved by the owner. Three more policy changes need the step-up
   (unpausing, a raised maxPaymentsPerMinute, a raised priceIncreaseMaxPct), and the step-up error
   codes: 403 step_up_required, 401 passkey_not_verified.
