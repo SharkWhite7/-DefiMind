@@ -876,3 +876,38 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   - panel: mirror the three fields in `domain/policy.ts`, and send only a 401 `no_session` to
     the login screen;
   - SPEC v0.11.
+
+### CR-016 — The bot loses the admin token: tightening-only bot routes
+
+- **From:** integrator, from the CR-012 security review (`docs/security/cr-012-review.md`, H1)
+- **Date:** 2026-11-19
+- **Status:** proposed
+- **Why:**
+  - The bot holds `ADMIN_TOKEN`, so its commands can loosen any policy without a passkey.
+  - The bot-side fix for H1 stops a stolen Telegram account, but not a compromised bot server:
+    with the admin token, that server can still create agents, allow recipients and raise limits.
+  - CR-012's promise is that the owner's passkey stands behind every widening. It holds only if
+    the bot cannot widen anything at all.
+- **What:**
+  1. The bot no longer gets `ADMIN_TOKEN`. It authenticates every call with `BOT_TOKEN`.
+  2. New bot routes, which can only tighten, each audited with `via: "bot"`:
+     - `POST /v1/bot/pause { agentId }`;
+     - `POST /v1/bot/kill {}`, with the same body as the admin kill;
+     - `POST /v1/bot/agents/:id/revoke`;
+     - `POST /v1/bot/policy/:agentId/tighten { removeDomains?, removeRecipients?, mode?: "shadow" }`.
+       It refuses anything that would loosen, judged by the same `loosened()` that guard-core
+       already uses for the panel.
+  3. The bot's reads move to `/v1/bot/*` under `BOT_TOKEN`, with the same bodies as the admin
+     reads: status, report, budget, chains, doctor and agents.
+  4. With `TELEGRAM_APPROVALS=true`, the existing bot decision routes keep working. The bot never
+     needs to create agents, add to allowlists, raise limits, go live, resume or issue enrolment
+     codes. Those happen in the panel, or on the machine with the admin token.
+- **Blast radius:**
+  - guard-core: the bot routes;
+  - telegram-bot: its adapter moves from the admin client to the bot client, and the loosening
+    commands are removed;
+  - create-defimind: the wizard stops giving the bot the admin token;
+  - e2e;
+  - SPEC v0.11 (or v0.12 if CR-015 lands first).
+- **Rollout:** with the infrastructure migration. A deployment that still gives the bot
+  `ADMIN_TOKEN` keeps working, but `doctor` warns about it.
