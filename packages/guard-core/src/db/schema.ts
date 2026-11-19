@@ -313,3 +313,13 @@ export const executions = sqliteTable(
   },
   (t) => [index('executions_agent_issued').on(t.agentId, t.issuedAt)],
 )
+
+/** CR-013: a Merkle root over receipts fromSeq..toSeq, as published in one transaction. */
+export const anchors = sqliteTable('anchors', {
+  fromSeq: integer('from_seq').primaryKey(),
+  toSeq: integer('to_seq').notNull().unique(),
+  root: text('root').notNull(),
+  chain: text('chain').notNull(),
+  txId: text('tx_id').notNull(),
+  anchoredAt: text('anchored_at').notNull(),
+})

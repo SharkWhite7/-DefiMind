@@ -17,7 +17,6 @@ import type { Db } from '../db/client.js'
 import { usdcFor } from '../chains.js'
 import { parseBearer, tokenMatches } from '../domain/auth.js'
 import { serializeError } from '../domain/redact.js'
-import { sweep } from '../service/sweep.js'
 import type { PasskeySetup } from '../service/passkeys.js'
 import { publicKeyHex } from '../service/receipts.js'
 import { serial } from '../service/serial.js'
@@ -30,7 +29,9 @@ import { ownerPanelRoutes } from './owner-panel.js'
 import { DEFAULT_PANEL_DIR, panelRoutes } from './panel.js'
 import type { PushService } from '../adapters/push.js'
 import { pusher } from '../service/push.js'
-import { INTEGRITY_EVERY_MS, integrityMonitor } from '../service/integrity.js'
+import { integrityMonitor } from '../service/integrity.js'
+import type { AnchorPublisher } from '../service/anchor.js'
+import { startTimers } from './timers.js'
 import { ownerSessionRoutes } from './owner-session.js'
 
 declare module 'fastify' {
@@ -52,6 +53,8 @@ export interface ServerDeps {
   receiptKey?: KeyObject
   /** Web Push to the owner's panel, with the VAPID public key the panel subscribes with. */
   push?: { service: PushService; publicKey: string }
+  /** Publishes receipt anchors (CR-013); anchoring is off without it. */
+  anchorPublisher?: AnchorPublisher
   /** The chains the owner kill links to the signing page for, with SIGN_PAGE_URL (CR-014). */
   killTargets?: KillTarget[]
 }
@@ -109,22 +112,7 @@ export async function buildServers(
     )
   }
 
-  if (deps.integrity !== undefined) {
-    const { integrity } = deps
-    integrity.check()
-    const daily = setInterval(() => integrity.check(), INTEGRITY_EVERY_MS)
-    daily.unref()
-    first.addHook('onClose', async () => clearInterval(daily))
-  }
-  if (options.sweepMs !== undefined) {
-    const timer = setInterval(() => {
-      const expired = sweep(deps)
-      if (expired > 0) {
-        first.log.info({ expired }, 'expired pending intents')
-      }
-    }, options.sweepMs)
-    first.addHook('onClose', async () => clearInterval(timer))
-  }
+  startTimers(first, deps, options)
   return apps as [Server, ...Server[]]
 }
 

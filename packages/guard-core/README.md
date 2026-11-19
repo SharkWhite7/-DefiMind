@@ -239,8 +239,20 @@ With the receipt key (`RECEIPT_SIGNING_KEY_FILE`), guard-core keeps one hash cha
   for the first) and `hash`, the SHA-256 of the canonical JSON of every other field. `signature`
   is Ed25519 over the same bytes, with the key `GET /v1/receipts/key` serves. The last link is read
   and the next written in one synchronous transaction, so two appends at once cannot fork the chain.
+- **Anchoring.** Given an anchor publisher (`AnchorPublisher`; the Solana Memo one comes from
+  onchain), a job runs every minute. It anchors once an hour has passed since the last anchor, or as
+  soon as 1,000 receipts wait, whichever comes first, and never with no new receipt. It takes at
+  most 1,000 receipts per anchor.
+  - The tree is RFC 6962 style: a leaf is `SHA-256(0x00 || hash)` and a node is
+    `SHA-256(0x01 || left || right)`, so a node can never pass for a leaf. An odd node is promoted
+    unchanged.
+  - The memo is `defimind:anchor:v1:<fromSeq>-<toSeq>:<rootHex>`, published in one transaction.
+  - The anchor `{ fromSeq, toSeq, root, chain, txId, anchoredAt }` is stored in `anchors`. A
+    failed publication stores nothing and is tried again on the next tick.
 - guard-core re-checks the whole chain at start-up and once a day: every `seq`, every `prevHash`,
-  every hash and signature. A deleted, inserted or edited row breaks one of them. A break is
+  every hash and signature. A deleted, inserted or edited row breaks one of them. Against the
+  anchors too: deleting the newest receipts leaves a valid shorter chain, so a chain that ends
+  before an anchor's `toSeq`, or an anchored range whose root no longer matches, is broken there. A break is
   logged, sent to the bot as `{ kind: "chain_broken", detail: "seq <n>" }` and pushed to the
   panel, once per break.
 

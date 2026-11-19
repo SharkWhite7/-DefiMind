@@ -1,4 +1,4 @@
-import type { ExecutionReceipt } from '@defimind/shared'
+import type { Anchor, ExecutionReceipt } from '@defimind/shared'
 import { createHash, sign, verify, type KeyObject } from 'node:crypto'
 import type { Db } from '../db/client.js'
 import { executionsFrom, insertExecution, lastExecution } from '../db/executions.js'
@@ -60,8 +60,9 @@ export function appendExecution(db: Db, key: KeyObject, entry: Entry, now: Date)
 export interface Integrity {
   lastSeq: number
   lastHash: string
-  /** The first seq whose link, hash or signature does not hold. */
+  /** The first seq whose link, hash or signature does not hold, or that an anchor no longer covers. */
   brokenAt?: number
+  lastAnchor?: Anchor
 }
 
 /** Whether one receipt is what was signed: its own hash and the key's signature over it. */
