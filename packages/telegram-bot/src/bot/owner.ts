@@ -5,7 +5,7 @@ import type { GuardClient } from '../adapters/guard.js'
 import { Confirms } from '../domain/confirms.js'
 import { pages } from '../domain/pages.js'
 import { agentsText, doctorBlocks } from '../domain/policy.js'
-import { escapeHtml, utcTime } from '../domain/text.js'
+import { escapeHtml, PANEL_ONLY, utcTime } from '../domain/text.js'
 import type { Desk } from './desk.js'
 import { args, code, guarded, HTML, type Press, validAgent } from './owner-kit.js'
 import { registerPolicies } from './policies.js'
@@ -18,6 +18,8 @@ export interface OwnerDeps {
   desk: Desk
   log: Logger
   now: () => Date
+  /** The panel owns every loosening and the first passkey: the bot refuses them. */
+  panelOnly?: boolean
 }
 
 /** The token message is deleted this long after it was sent. */
@@ -28,13 +30,18 @@ const ENROL_TTL_MS = 10 * 60_000
 
 const SETUP = 'pnpm --filter @defimind/mcp-server run setup claude-code'
 
+const ENROL_ON_MACHINE =
+  'Enrol your passkey from the guard-core machine: run ' +
+  '<code>pnpm --filter @defimind/guard-core passkey-code</code> there and open the link it prints. ' +
+  'From Telegram, whoever holds this account could become the panel owner.'
+
 /**
  * The owner's daily commands, so nobody needs a terminal: agents, policies, mode and the doctor.
  * Every button carries only a random id; what it does stays here, and works once.
  */
 export function registerOwner(
   bot: Bot,
-  { admin, guard, desk, log, now, guardPublicUrl }: OwnerDeps,
+  { admin, guard, desk, log, now, guardPublicUrl, panelOnly = false }: OwnerDeps,
 ) {
   const confirms = new Confirms<Press>()
   /** Messages holding a secret, and when to delete them. */
@@ -90,6 +97,9 @@ export function registerOwner(
         reply_markup: keyboard,
       })
     }
+    if (panelOnly) {
+      return ctx.reply(PANEL_ONLY)
+    }
     return guarded(ctx, log, async () => {
       const created = await admin.createAgent(agentId)
       if (created === undefined) {
@@ -128,6 +138,9 @@ export function registerOwner(
   bot.command('passkey', (ctx) => {
     if (args(ctx)[0] !== 'enrol') {
       return ctx.reply('Usage: /passkey enrol')
+    }
+    if (panelOnly) {
+      return ctx.reply(ENROL_ON_MACHINE, HTML)
     }
     if (guardPublicUrl === undefined) {
       return ctx.reply(
@@ -168,7 +181,16 @@ export function registerOwner(
     }),
   )
 
-  const policies = registerPolicies(bot, { admin, guard, desk, log, now, button, cancel })
+  const policies = registerPolicies(bot, {
+    admin,
+    guard,
+    desk,
+    log,
+    now,
+    button,
+    cancel,
+    panelOnly,
+  })
 
   /** Runs on the sweep timer. */
   async function sweep() {

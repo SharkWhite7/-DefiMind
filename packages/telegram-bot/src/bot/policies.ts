@@ -6,6 +6,7 @@ import type { GuardClient, ShadowTotal } from '../adapters/guard.js'
 import { formatUsd } from '../domain/money.js'
 import {
   hostname,
+  loosens,
   LIMIT_NAMES,
   LIMITS,
   type Limit,
@@ -15,7 +16,7 @@ import {
   raises,
   raiseText,
 } from '../domain/policy.js'
-import { utcTime } from '../domain/text.js'
+import { PANEL_ONLY, utcTime } from '../domain/text.js'
 import type { Desk } from './desk.js'
 import { args, code, guarded, HTML, type Press, validAgent } from './owner-kit.js'
 
@@ -27,6 +28,8 @@ export interface PolicyDeps {
   now: () => Date
   button: (run: Press, ttlMs?: number) => string
   cancel: InlineKeyboard
+  /** Loosening is the panel's: the bot only tightens. */
+  panelOnly: boolean
 }
 
 type Change = Partial<Pick<Policy, Limit | 'mode' | 'allowedDomains'>>
@@ -37,7 +40,10 @@ const OFFER_TTL_MS = 7 * 86_400_000
 export const GRADUATION_MS = 3 * 86_400_000
 const GRADUATION_CHECK_MS = 5 * 60_000
 
-export function registerPolicies(bot: Bot, { admin, guard, desk, log, now, button }: PolicyDeps) {
+export function registerPolicies(
+  bot: Bot,
+  { admin, guard, desk, log, now, button, panelOnly }: PolicyDeps,
+) {
   /** The prompts waiting for the owner's reply, keyed by chat and prompt message. */
   const edits = new Map<string, { agentId: string; limit: Limit }>()
 
@@ -76,6 +82,10 @@ export function registerPolicies(bot: Bot, { admin, guard, desk, log, now, butto
       return
     }
     const after = { ...before, ...next }
+    if (panelOnly && loosens(before, after)) {
+      await ctx.reply(PANEL_ONLY)
+      return
+    }
     const up = raises(before, after)
     if (up.length > 0 && !confirmed) {
       const keyboard = new InlineKeyboard()
@@ -135,6 +145,9 @@ export function registerPolicies(bot: Bot, { admin, guard, desk, log, now, butto
           HTML,
         )
       }
+      if (add && panelOnly) {
+        return ctx.reply(PANEL_ONLY)
+      }
       return guarded(ctx, log, async () => {
         const policy = await admin.policy(agentId)
         if (policy === undefined) {
@@ -166,6 +179,10 @@ export function registerPolicies(bot: Bot, { admin, guard, desk, log, now, butto
   }
 
   async function offerLive(ctx: Context, agentId: string) {
+    if (panelOnly) {
+      await ctx.reply(PANEL_ONLY)
+      return
+    }
     const keyboard = new InlineKeyboard()
       .text(
         'Go live',
@@ -206,9 +223,14 @@ export function registerPolicies(bot: Bot, { admin, guard, desk, log, now, butto
         continue
       }
       offered.add(agentId)
-      const text =
+      const spent =
         `Your agent ${code(agentId)} would have spent ${formatUsd(shadow.total)} ` +
-        `in ${payments(shadow.count)}. Go live?`
+        `in ${payments(shadow.count)}.`
+      if (panelOnly) {
+        await desk.announce(`${spent} Go live in the DefiMind panel.`)
+        continue
+      }
+      const text = `${spent} Go live?`
       const keyboard = new InlineKeyboard().text(
         'Go live…',
         // An offer the owner may only read the next day: it stays usable longer than a confirm.

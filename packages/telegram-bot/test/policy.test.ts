@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { httpAdminClient } from '../src/adapters/admin.js'
 import { CONFIRM_TTL_MS, Confirms } from '../src/domain/confirms.js'
-import { hostname, parseDollars, raises } from '../src/domain/policy.js'
+import { hostname, loosens, parseDollars, raises } from '../src/domain/policy.js'
 import { NOW, policy } from './support.js'
 
 describe('parseDollars', () => {
@@ -138,5 +138,23 @@ describe('httpAdminClient', () => {
     const { admin } = client(json(200, { checks }), json(500, {}))
     expect(await admin.doctor()).toEqual(checks)
     await expect(admin.doctor()).rejects.toThrow()
+  })
+})
+
+describe('loosens', () => {
+  it('is a raised limit, a new domain or going live, and nothing else', () => {
+    const before = policy({ mode: 'shadow' })
+    expect(loosens(before, policy({ mode: 'shadow', dailyMax: '10000001' }))).toBe(true)
+    expect(loosens(before, policy({ mode: 'shadow', allowedDomains: ['a.example.com'] }))).toBe(
+      true,
+    )
+    expect(loosens(before, policy({ mode: 'live' }))).toBe(true)
+    expect(loosens(before, policy({ mode: 'shadow', perTxMax: '1', allowedDomains: [] }))).toBe(
+      false,
+    )
+    // Without a mode the agent is live already: saying so again widens nothing.
+    const unset = policy()
+    delete unset.mode
+    expect(loosens(unset, policy({ mode: 'live' }))).toBe(false)
   })
 })
