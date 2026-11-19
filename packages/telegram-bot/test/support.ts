@@ -7,7 +7,7 @@ import { vi } from 'vitest'
 import type { AdminClient } from '../src/adapters/admin.js'
 import type { GuardClient } from '../src/adapters/guard.js'
 import { createBot } from '../src/bot/index.js'
-import type { PhantomKill } from '../src/domain/phantom.js'
+import type { PhantomKill } from '@defimind/shared'
 import type { ReportSchedule } from '../src/domain/report.js'
 
 export const OWNER = { id: 1001, is_bot: false, first_name: 'Ana', username: 'ana' }

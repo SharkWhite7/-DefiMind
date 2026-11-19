@@ -13,7 +13,7 @@ import {
 } from '../domain/chains.js'
 import { type KillOffer, KillOffers } from '../domain/kill-offers.js'
 import { statusText } from '../domain/notices.js'
-import type { PhantomKill } from '../domain/phantom.js'
+import type { PhantomKill } from '@defimind/shared'
 import { REPORT_DAYS, type ReportSchedule, reportPages, weeklyDue } from '../domain/report.js'
 import {
   budgetText,

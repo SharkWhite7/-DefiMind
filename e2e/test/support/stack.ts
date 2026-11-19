@@ -79,6 +79,8 @@ export async function stack(options: { chain?: StubChain; net?: Net } = {}) {
       BOT_URL: botUrl,
       BOT_WEBHOOK_SECRET: WEBHOOK_SECRET,
       LOG_LEVEL: 'fatal',
+      // These flows approve through the bot, which the panel replaced by default (CR-012).
+      TELEGRAM_APPROVALS: 'true',
     }),
     chains: new Map([[chain.chain, chain]]),
     now,
