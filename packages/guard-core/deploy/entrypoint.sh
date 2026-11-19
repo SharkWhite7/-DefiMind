@@ -46,8 +46,13 @@ if [ -n "${VAPID_PRIVATE_KEY:-}" ]; then
   chown "$uid:$gid" "$dir/vapid.pem"
   export VAPID_PRIVATE_KEY_FILE="$dir/vapid.pem"
 fi
+if [ -n "${ANCHOR_KEYPAIR_JSON:-}" ]; then
+  printf '%s\n' "$ANCHOR_KEYPAIR_JSON" >"$dir/anchor.json"
+  chown "$uid:$gid" "$dir/anchor.json"
+  export ANCHOR_KEY_FILE="$dir/anchor.json"
+fi
 unset SOLANA_HOT_WALLET_KEYPAIR_JSON BASE_HOT_WALLET_KEY ROBINHOOD_HOT_WALLET_KEY RECEIPT_SIGNING_KEY \
-  VAPID_PRIVATE_KEY
+  VAPID_PRIVATE_KEY ANCHOR_KEYPAIR_JSON
 
 # Fly mounts the database volume owned by root.
 if [ -d "$data" ]; then

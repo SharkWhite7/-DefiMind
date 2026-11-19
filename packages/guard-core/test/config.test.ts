@@ -31,3 +31,33 @@ describe('the passkey origin', () => {
     expect(withOrigin(origin)).toThrow()
   })
 })
+
+describe('anchoring', () => {
+  const anchor = {
+    ANCHOR_CHAIN: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+    ANCHOR_RPC_URL: 'https://api.devnet.solana.com',
+    ANCHOR_KEY_FILE: '/run/defimind/anchor.json',
+  }
+
+  it('takes the three settings with a receipt key', () => {
+    expect(() =>
+      loadConfig({ ...base, ...anchor, RECEIPT_SIGNING_KEY_FILE: '/run/defimind/receipt.pem' }),
+    ).not.toThrow()
+  })
+
+  it('refuses part of them, or anchoring without a receipt key', () => {
+    expect(() => loadConfig({ ...base, ANCHOR_CHAIN: anchor.ANCHOR_CHAIN })).toThrow()
+    expect(() => loadConfig({ ...base, ...anchor })).toThrow()
+  })
+
+  it('refuses a chain that is not a Solana cluster', () => {
+    expect(() =>
+      loadConfig({
+        ...base,
+        ...anchor,
+        ANCHOR_CHAIN: 'eip155:8453',
+        RECEIPT_SIGNING_KEY_FILE: '/run/defimind/receipt.pem',
+      }),
+    ).toThrow()
+  })
+})
