@@ -20,7 +20,6 @@ function envs(): Envs {
       GUARD_URL: 'http://localhost:8787',
       BOT_WEBHOOK_SECRET: webhook,
       GUARD_BOT_TOKEN: botToken,
-      GUARD_ADMIN_TOKEN: adminToken,
     },
     mcp: {
       GUARD_URL: 'http://127.0.0.1:8787',
@@ -44,11 +43,17 @@ describe('checkEnvs', () => {
     const e = envs()
     e.bot.BOT_WEBHOOK_SECRET = 'x'.repeat(64)
     e.bot.GUARD_BOT_TOKEN = undefined
-    e.guard.ADMIN_TOKEN = 'y'.repeat(64)
     expect(checkEnvs(e).errors).toEqual([
       'BOT_WEBHOOK_SECRET differs between guard-core and telegram-bot',
       'guard-core BOT_TOKEN and telegram-bot GUARD_BOT_TOKEN differ',
-      'guard-core ADMIN_TOKEN and telegram-bot GUARD_ADMIN_TOKEN differ',
+    ])
+  })
+
+  it('refuses the admin token in the bot env, even when it matches', () => {
+    const e = envs()
+    e.bot.GUARD_ADMIN_TOKEN = adminToken
+    expect(checkEnvs(e).errors).toEqual([
+      'telegram-bot GUARD_ADMIN_TOKEN is set: the bot never uses it, remove it',
     ])
   })
 

@@ -334,8 +334,8 @@ secret pattern reaches either build context.
 - **Secrets**, as Fly secrets, never in the repo, `fly.toml` or an image:
   - guard-core: `ADMIN_TOKEN`, `BOT_TOKEN`, `BOT_WEBHOOK_SECRET`, `SOLANA_RPC_URL`,
     `SOLANA_HOT_WALLET_KEYPAIR_JSON` (and `BASE_HOT_WALLET_KEY` once Base launches);
-  - bot: `TELEGRAM_BOT_TOKEN`, `GUARD_BOT_TOKEN`, `GUARD_ADMIN_TOKEN`, `BOT_WEBHOOK_SECRET`,
-    `OWNER_TELEGRAM_IDS`;
+  - bot: `TELEGRAM_BOT_TOKEN`, `GUARD_BOT_TOKEN`, `BOT_WEBHOOK_SECRET`, `OWNER_TELEGRAM_IDS`. Never
+    `GUARD_ADMIN_TOKEN`: the bot ignores it (CR-016), so on the bot it is only exposure;
   - each agent's host: `AGENT_TOKEN`.
 
 ## 4. Incident runbook

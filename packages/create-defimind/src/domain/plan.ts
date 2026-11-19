@@ -124,7 +124,6 @@ function botSecrets(setup: Setup): Entry[] {
     ['TELEGRAM_BOT_TOKEN', secret(setup, SECRETS.telegram)],
     ['OWNER_TELEGRAM_IDS', { value: setup.answers.ownerIds }],
     ['GUARD_BOT_TOKEN', secret(setup, SECRETS.bot)],
-    ['GUARD_ADMIN_TOKEN', secret(setup, SECRETS.admin)],
     [SECRETS.webhook, secret(setup, SECRETS.webhook)],
     ...forFamily(setup, 'solana', (network) => [
       ['SOLANA_CHAIN', { value: NETWORKS[network].chain }],

@@ -71,9 +71,9 @@ describe('flyTasks', () => {
     })
   })
 
-  it("gives the bot guard-core's tokens under its own names and the public hot wallet", () => {
+  it("gives the bot guard-core's bot token, never the admin one, and the public hot wallet", () => {
     const bot = env(tasks[4]!)
-    expect(bot['GUARD_ADMIN_TOKEN']).toEqual({ secret: 'ADMIN_TOKEN', from: expect.any(String) })
+    expect(bot).not.toHaveProperty('GUARD_ADMIN_TOKEN')
     expect(bot['GUARD_BOT_TOKEN']).toEqual({ secret: 'BOT_TOKEN', from: expect.any(String) })
     expect(bot['OWNER_TELEGRAM_IDS']).toEqual({ value: '111,222' })
     expect(bot['SOLANA_HOT_WALLET_PUBKEY']).toEqual({ value: SOL_HOT })
