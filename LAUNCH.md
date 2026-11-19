@@ -88,7 +88,7 @@ Details and two findings are in docs/security-review.md. The pilot found that th
 older than `main`. **Before any live run, redeploy every app whose package changed and check the
 image in `fly status`.** Since then, `.github/workflows/deploy.yml` deploys guard-core and the bot
 after CI passes on `main`, once the owner has added their deploy tokens (HUMAN-22). If a chain's Phantom kill button is missing, use the manual kill link:
-`https://defimind-onchain.vercel.app/?action=kill&cluster=robinhood&safe=<Safe>&issued=$(date +%s)`,
+`https://agentguard-onchain.vercel.app/?action=kill&cluster=robinhood&safe=<Safe>&issued=$(date +%s)`,
 opened within 15 minutes, from `/kill` → Confirm first.
 
 **One owner wallet for both chains (owner decision, 2026-11-09).** The same new Phantom wallet, with
@@ -329,7 +329,7 @@ secret pattern reaches either build context.
 - **mcp-server** is not deployed by us. It runs next to each agent, on stdio, with
   `GUARD_URL=https://defimind-guard-core.fly.dev` (https is required for a remote guard-core,
   MCP-12), and the agent token only in its environment.
-- **The signing page** is its own Vercel project, `defimind-onchain`, deployed from `main` only
+- **The signing page** is its own Vercel project, `agentguard-onchain` (the name it was created under), deployed from `main` only
   (ADR 003).
 - **Secrets**, as Fly secrets, never in the repo, `fly.toml` or an image:
   - guard-core: `ADMIN_TOKEN`, `BOT_TOKEN`, `BOT_WEBHOOK_SECRET`, `SOLANA_RPC_URL`,
@@ -375,7 +375,7 @@ agent stayed unpaused until `/kill` was confirmed. BOT-13 makes old buttons expi
    and it is good for 15 minutes:
 
    ```bash
-   issued=$(date +%s) && m=$(grep '^SQUADS_MULTISIG=' packages/guard-core/.env | cut -d= -f2-) && h=$(grep '^SOLANA_HOT_WALLET_PUBKEY=' packages/telegram-bot/.env | cut -d= -f2-) && echo "https://defimind-onchain.vercel.app/?action=kill&cluster=mainnet-beta&multisig=$m&hot=$h&issued=$issued"
+   issued=$(date +%s) && m=$(grep '^SQUADS_MULTISIG=' packages/guard-core/.env | cut -d= -f2-) && h=$(grep '^SOLANA_HOT_WALLET_PUBKEY=' packages/telegram-bot/.env | cut -d= -f2-) && s=$(grep '^SIGN_PAGE_URL=' packages/telegram-bot/.env | cut -d= -f2-) && echo "$s/?action=kill&cluster=mainnet-beta&multisig=$m&hot=$h&issued=$issued"
    ```
 
    Open it in a browser with Phantom, or on a phone inside Phantom through
