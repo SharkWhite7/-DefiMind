@@ -12,6 +12,14 @@ too (`403 approve_in_panel`), so set `TELEGRAM_APPROVALS` the same in both. `tru
 Telegram **Approve** buttons for deployments that want them; `PASSKEY_ABOVE` then still sends larger
 payments to the passkey page.
 
+In that default mode the bot also refuses everything that widens what an agent may spend, with "Do
+this in the DefiMind panel": `/agent new`, `/allow`, `/mode live`, `/resume`, and a `/policy` preset
+or edit that raises a limit. Those need the panel's passkey, so a stolen Telegram account cannot
+create an agent, allow its own domain and drain it. `/deny`, `/mode shadow`, `/pause`, `/kill`,
+`/agent revoke` and lowering a limit still work. `/passkey enrol` is refused too: the first passkey
+is enrolled from the guard-core machine with `pnpm --filter @defimind/guard-core passkey-code`, or
+whoever held the Telegram account first could become the panel owner.
+
 - **Contract:** [`/SPEC.md`](../../SPEC.md) — webhook and `/v1/bot/decision`. The parts not in the
   SPEC yet are proposed in CR-004 in [`/CHANGES_REQUESTED.md`](../../CHANGES_REQUESTED.md).
 

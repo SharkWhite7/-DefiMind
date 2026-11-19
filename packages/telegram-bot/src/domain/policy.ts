@@ -38,6 +38,13 @@ export function raises(before: Policy, after: Policy): Limit[] {
   return LIMITS.filter((limit) => BigInt(after[limit]) > BigInt(before[limit]))
 }
 
+/** Whether a change widens what the agent may spend: a raised limit, a new domain, or going live. */
+export function loosens(before: Policy, after: Policy): boolean {
+  const added = after.allowedDomains.some((domain) => !before.allowedDomains.includes(domain))
+  const live = after.mode === 'live' && (before.mode ?? 'live') !== 'live'
+  return raises(before, after).length > 0 || added || live
+}
+
 /** Lowercase DNS labels only: an allowlist entry that is not a hostname would never match a request. */
 export function hostname(text: string): string | undefined {
   const host = text.trim().toLowerCase()
