@@ -16,10 +16,11 @@ services:
       # The private listener (admin and bot routes) is on the compose network only.
       HOST: 0.0.0.0
       PORT: '8787'
-      # The public listener serves the agent routes. It believes Fly-Client-IP for its per-IP limit,
-      # so it must never face the internet directly: Caddy overwrites that header.
+      # The public listener serves the agent and owner routes. It believes Fly-Client-IP for its
+      # per-IP limit, so it must never face the internet directly: Caddy overwrites that header.
       PUBLIC_HOST: 0.0.0.0
       PUBLIC_PORT: '8080'
+      TRUST_FLY_CLIENT_IP: 'true'
       DATABASE_URL: file:/data/guard.db
       BOT_URL: http://bot:8788
     # The entrypoint writes the hot keys here; already tmpfs, so it needs no mount privilege.

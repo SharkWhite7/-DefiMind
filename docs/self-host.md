@@ -173,8 +173,14 @@ network. The agent routes listen on `127.0.0.1:8080` only.
 3. For agents on other machines, point a DNS name at the server and add Caddy, which gets the
    certificate itself:
    `DOMAIN=guard.example.com docker compose --env-file ~/.defimind/compose.env --profile tls up -d --build`.
-   Caddy serves only `/v1/agent/*` and `/health`. Never publish port 8080 directly: guard-core's
-   per-IP limit trusts the client-IP header that Caddy sets.
+   Caddy serves only the public routes: the agents' (`/v1/agent/*`, `/health`), the owner panel
+   (`/panel/`, `/owner/*`, `/v1/owner/*`) and `/v1/receipts/key`. Never publish port 8080 directly:
+   guard-core's per-IP limit trusts the client-IP header that Caddy sets (`TRUST_FLY_CLIENT_IP`).
+4. For the owner panel, a passkey is bound to that same address. Add
+   `PASSKEY_RP_ID=guard.example.com` and `PASSKEY_ORIGIN=https://guard.example.com` to
+   `compose.env`, restart, then run
+   `docker compose exec guard-core node --import tsx src/scripts/passkey-code.ts` and open
+   the link it prints on the device that will hold your passkey.
 
 Any other host works if it builds from the repository root and gives guard-core:
 

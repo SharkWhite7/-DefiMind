@@ -128,6 +128,8 @@ export interface ProofBundle {
 export type AlertEvent =
   | { kind: 'breaker_tripped'; agentId: string; detail: string; sentAt: string }
   | { kind: 'passkey_enrolled'; detail: string; sentAt: string }
+  /** CR-013: the execution receipt chain failed its integrity check. */
+  | { kind: 'chain_broken'; detail: string; sentAt: string }
 
 export type IntentStatus =
   | 'approved'

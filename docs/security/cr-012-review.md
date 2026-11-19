@@ -135,9 +135,15 @@ the bot.
 - **Telegram.** With `TELEGRAM_APPROVALS=false`, `/v1/bot/decision` and the mandate decision refuse
   approve with 403 `approve_in_panel`. e2e covers it (INT-30).
 
+## Status
+
+| Finding | Fixed in | Note                                                                                                          |
+| ------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| H1      | #20      | With `TELEGRAM_APPROVALS=false` the bot refuses every loosening command. Server-side scoping waits on CR-016. |
+| M1      | #20      | `/passkey enrol` points to `passkey-code` on the machine.                                                     |
+| L1      | #19, #21 | `TRUST_FLY_CLIENT_IP`, set in `fly.toml` and in the self-host compose behind Caddy.                           |
+
 ## Before launch
 
-1. H1 and M1 fixed in the bot, with tests. They block the panel's launch.
-2. CR-016, the bot without the admin token, proposed and decided by the owner.
-3. L1 fixed in guard-core.
-4. The owner decides whether a paid third-party audit comes before the panel's mainnet launch.
+1. CR-016, the bot without the admin token, decided by the owner.
+2. The owner decides whether a paid third-party audit comes before the panel's mainnet launch.
