@@ -37,8 +37,9 @@ pnpm --filter @defimind/telegram-bot test
    entry, anything that is not a positive whole number, or an id too large to hold exactly stops the
    bot at startup. Each owner must send `/start` to the bot once, or Telegram will not let it
    message them.
-3. `BOT_WEBHOOK_SECRET` must equal guard-core's. `GUARD_BOT_TOKEN` and `GUARD_ADMIN_TOKEN` are
-   guard-core's `BOT_TOKEN` and `ADMIN_TOKEN`.
+3. `BOT_WEBHOOK_SECRET` must equal guard-core's. `GUARD_BOT_TOKEN` is guard-core's `BOT_TOKEN`, the
+   bot's only token (CR-016). Do not give the bot `GUARD_ADMIN_TOKEN`: it ignores it and logs a
+   warning at startup.
 
 ## Hooks guard-core calls
 
@@ -139,22 +140,22 @@ Only ids in `OWNER_TELEGRAM_IDS` reach any handler. Everyone else gets no reply 
 
 ## Commands
 
-| Command               | Does                                                                                                                                                                                                                                                                          |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/status`             | Whether guard-core is reachable, the approvals waiting (as many as fit in one message, then "…and N more"), the pending task budgets, and each chain guard-core runs with its onchain spend against the cap (needs `GET /v1/admin/chains`, CR-006; until then "not reported") |
-| `/budget <agentId>`   | Spent today, daily and per-payment max, hot wallet per chain, paused. Needs `GET /v1/admin/budget/:agentId` (CR-004)                                                                                                                                                          |
-| `/pause <agentId>`    | `POST /v1/admin/pause`                                                                                                                                                                                                                                                        |
-| `/resume <agentId>`   | Refused: resume it in the panel, with a passkey                                                                                                                                                                                                                               |
-| `/kill`               | Asks to confirm, naming the chains when guard-core reports them (CR-006), then `POST /v1/admin/kill`: says how many agents were paused and sends one message per chain with the owner transaction to sign. If there are none, says the allowances are still live              |
-| `/report`             | The last 7 days from `GET /v1/admin/report` (CR-010): per agent, spend and payment count, refusals by code, and the top 5 domains by spend. Paged to fit Telegram's 4096 characters; an agent is never split across two messages                                              |
-| `/agent new <id>`     | Refused: create agents in the panel, with a passkey                                                                                                                                                                                                                           |
-| `/agent list`         | Every agent with its mode and whether it is paused                                                                                                                                                                                                                            |
-| `/agent revoke <id>`  | Asks to confirm, then revokes: the agent's token stops working at its next request                                                                                                                                                                                            |
-| `/policy <id>`        | The policy in dollars, with **Careful** ($1 per payment, $5 a day, approval at $0.50) and **Standard** ($5, $20, $1) presets and an edit button per limit, answered by reply in dollars. A preset or edit that would raise a limit is refused: raise limits in the panel      |
-| `/deny <id> <domain>` | Removes an x402 domain, a plain hostname such as `api.example.com`, lowercased. `/allow` is refused: add domains in the panel                                                                                                                                                 |
-| `/mode <id> shadow`   | Back to shadow mode at once. `/mode <id> live` is refused: go live in the panel                                                                                                                                                                                               |
-| `/doctor`             | `GET /v1/admin/doctor`: one line per check with ✅ ⚠️ ❌, and the fix under each warning or failure                                                                                                                                                                           |
-| `/passkey`            | Points to `pnpm --filter @defimind/guard-core passkey-code` on the machine; the bot never asks for an enrol code                                                                                                                                                              |
+| Command               | Does                                                                                                                                                                                                                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/status`             | Whether guard-core is reachable, the approvals waiting (as many as fit in one message, then "…and N more"), the pending task budgets, and each chain guard-core runs with its onchain spend against the cap (needs `GET /v1/bot/chains`, CR-006; until then "not reported") |
+| `/budget <agentId>`   | Spent today, daily and per-payment max, hot wallet per chain, paused. `GET /v1/bot/budget/:agentId`                                                                                                                                                                         |
+| `/pause <agentId>`    | `POST /v1/bot/pause`                                                                                                                                                                                                                                                        |
+| `/resume <agentId>`   | Refused: resume it in the panel, with a passkey                                                                                                                                                                                                                             |
+| `/kill`               | Asks to confirm, naming the chains when guard-core reports them (CR-006), then `POST /v1/bot/kill`: says how many agents were paused and sends one message per chain with the owner transaction to sign. If there are none, says the allowances are still live              |
+| `/report`             | The last 7 days from `GET /v1/bot/report`: per agent, spend and payment count, refusals by code, and the top 5 domains by spend. Paged to fit Telegram's 4096 characters; an agent is never split across two messages                                                       |
+| `/agent new <id>`     | Refused: create agents in the panel, with a passkey                                                                                                                                                                                                                         |
+| `/agent list`         | Every agent with its mode and whether it is paused                                                                                                                                                                                                                          |
+| `/agent revoke <id>`  | Asks to confirm, then revokes: the agent's token stops working at its next request                                                                                                                                                                                          |
+| `/policy <id>`        | The policy in dollars, with **Careful** ($1 per payment, $5 a day, approval at $0.50) and **Standard** ($5, $20, $1) presets and an edit button per limit, answered by reply in dollars. A preset or edit that would raise a limit is refused: raise limits in the panel    |
+| `/deny <id> <domain>` | Removes an x402 domain, a plain hostname such as `api.example.com`, lowercased. `/allow` is refused: add domains in the panel                                                                                                                                               |
+| `/mode <id> shadow`   | Back to shadow mode at once. `/mode <id> live` is refused: go live in the panel                                                                                                                                                                                             |
+| `/doctor`             | `GET /v1/bot/doctor`: one line per check with ✅ ⚠️ ❌, and the fix under each warning or failure                                                                                                                                                                           |
+| `/passkey`            | Points to `pnpm --filter @defimind/guard-core passkey-code` on the machine; the bot never asks for an enrol code                                                                                                                                                            |
 
 ## Onchain kill in Phantom
 
@@ -193,7 +194,7 @@ row carry the same `issued` and expire and retire together.
   posted), and the signing page refuses a link older than 15 minutes. So a button the bot forgot
   about on a restart still stops working on time, even though its message is not edited.
 - **No button for a limit that is already gone.** Before posting the result, the bot reads
-  `GET /v1/admin/chains`. A chain reported as `status: 'none'` gets the line "<chain>: no onchain
+  `GET /v1/bot/chains`. A chain reported as `status: 'none'` gets the line "<chain>: no onchain
   limit (already removed)" and no button, on a confirmed kill and on a failed one. A chain whose
   allowance could not be read (`null`) keeps its button, as does every chain when guard-core does not
   report them.
@@ -207,12 +208,10 @@ row carry the same `issued` and expire and retire together.
 
 ## Owner commands
 
-The owner runs the deployment from Telegram (CR-011): every command above talks to guard-core's admin
-API with `GUARD_ADMIN_TOKEN`, and only owners get an answer, as for every other command.
+Every command above talks to guard-core's `/v1/bot/*` routes with `GUARD_BOT_TOKEN` (CR-016). Those
+routes only read and tighten: none of them creates an agent, allows, raises, goes live, resumes or
+issues an enrol code, so even the bot's token cannot loosen anything. Only owners get an answer.
 
-- **Tokens.** An agent's token is shown once, in a message of its own that the bot deletes after about
-  a minute. It is never logged; if that message cannot be sent, the log says so without the error,
-  which would carry the text, and the owner is told to revoke the agent and create it again.
 - **Buttons.** A confirm button carries only a random id; what it does stays in the bot and works
   once, within 10 minutes. After a restart old buttons answer "expired".
 - **Amounts.** Owners type dollars (`2.50`, `$2.50`); the bot converts them to atomic units in bigint and
@@ -282,7 +281,7 @@ fly apps create defimind-bot --org <your-fly-org>
 
 # 3. Secrets: read from the bot's .env and piped straight in, never typed or printed.
 #    Fill packages/telegram-bot/.env first (see Run above). HOST, PORT and GUARD_URL come from fly.toml.
-cd ~/DefiMind && grep -E '^(TELEGRAM_BOT_TOKEN|OWNER_TELEGRAM_IDS|GUARD_BOT_TOKEN|GUARD_ADMIN_TOKEN|BOT_WEBHOOK_SECRET|NOTIFY_ABOVE_AMOUNT|SOLANA_CHAIN|SIGN_PAGE_URL|SQUADS_MULTISIG|SOLANA_HOT_WALLET_PUBKEY|ROBINHOOD_CHAIN|ROBINHOOD_SAFE_ADDRESS|REPORT_WEEKDAY|REPORT_HOUR_UTC|GUARD_PUBLIC_URL|TELEGRAM_APPROVALS)=.' packages/telegram-bot/.env | fly secrets import --app defimind-bot --stage
+cd ~/DefiMind && grep -E '^(TELEGRAM_BOT_TOKEN|OWNER_TELEGRAM_IDS|GUARD_BOT_TOKEN|BOT_WEBHOOK_SECRET|NOTIFY_ABOVE_AMOUNT|SOLANA_CHAIN|SIGN_PAGE_URL|SQUADS_MULTISIG|SOLANA_HOT_WALLET_PUBKEY|ROBINHOOD_CHAIN|ROBINHOOD_SAFE_ADDRESS|REPORT_WEEKDAY|REPORT_HOUR_UTC|GUARD_PUBLIC_URL|TELEGRAM_APPROVALS)=.' packages/telegram-bot/.env | fly secrets import --app defimind-bot --stage
 
 # 4. Deploy one machine. The test refuses to run unless the root .dockerignore applies and excludes
 #    .env files. A Dockerfile.dockerignore next to the Dockerfile would replace it, not add to it.

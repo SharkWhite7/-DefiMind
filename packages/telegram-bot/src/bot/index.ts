@@ -1,6 +1,6 @@
 import { Bot, type BotConfig, type Context } from 'grammy'
 import type { Logger } from 'pino'
-import type { AdminClient } from '../adapters/admin.js'
+import type { ControlClient } from '../adapters/control.js'
 import type { GuardClient } from '../adapters/guard.js'
 import type { PhantomKill } from '@defimind/shared'
 import type { ReportSchedule } from '../domain/report.js'
@@ -13,7 +13,7 @@ export interface BotDeps {
   owners: ReadonlySet<number>
   guard: GuardClient
   /** Agents, policies and the doctor; left out, the bot has no owner commands for them. */
-  admin?: AdminClient
+  control?: ControlClient
   notifyAbove: bigint
   log: Logger
   now?: () => Date
@@ -37,7 +37,7 @@ export function createBot({
   token,
   owners,
   guard,
-  admin,
+  control,
   notifyAbove,
   log,
   now,
@@ -92,10 +92,10 @@ export function createBot({
 
   const commands = registerCommands(bot, { guard, desk, log, phantomKills, weekly, now })
   const owner =
-    admin === undefined
+    control === undefined
       ? { sweep: async () => {} }
       : registerOwner(bot, {
-          admin,
+          control,
           guard,
           desk,
           log,

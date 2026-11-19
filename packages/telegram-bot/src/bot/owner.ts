@@ -1,6 +1,6 @@
 import { type Bot, InlineKeyboard } from 'grammy'
 import type { Logger } from 'pino'
-import type { AdminClient } from '../adapters/admin.js'
+import type { ControlClient } from '../adapters/control.js'
 import type { GuardClient } from '../adapters/guard.js'
 import { Confirms } from '../domain/confirms.js'
 import { pages } from '../domain/pages.js'
@@ -11,7 +11,7 @@ import { args, code, guarded, HTML, type Press, validAgent } from './owner-kit.j
 import { registerPolicies } from './policies.js'
 
 export interface OwnerDeps {
-  admin: AdminClient
+  control: ControlClient
   guard: GuardClient
   desk: Desk
   log: Logger
@@ -31,7 +31,7 @@ const ENROL_ON_MACHINE =
  * agent and everything else that widens what one may spend is the panel's, behind a passkey.
  * Every button carries only a random id; what it does stays here, and works once.
  */
-export function registerOwner(bot: Bot, { admin, guard, desk, log, now }: OwnerDeps) {
+export function registerOwner(bot: Bot, { control, guard, desk, log, now }: OwnerDeps) {
   const confirms = new Confirms<Press>()
 
   const button = (run: Press, ttlMs?: number) => `own:${confirms.add(run, now(), ttlMs)}`
@@ -56,7 +56,7 @@ export function registerOwner(bot: Bot, { admin, guard, desk, log, now }: OwnerD
     const [action, agentId] = args(ctx)
     if (action === 'list') {
       return guarded(ctx, log, async () => {
-        await ctx.reply(agentsText(await admin.listAgents()), HTML)
+        await ctx.reply(agentsText(await control.listAgents()), HTML)
       })
     }
     if (action === 'new') {
@@ -69,7 +69,7 @@ export function registerOwner(bot: Bot, { admin, guard, desk, log, now }: OwnerD
       .text(
         'Revoke',
         button(async (press) => {
-          const done = await admin.revokeAgent(agentId)
+          const done = await control.revokeAgent(agentId)
           log.warn({ agentId, owner: press.from.id, done }, 'agent revoked')
           await press.editMessageText(
             done
@@ -90,14 +90,14 @@ export function registerOwner(bot: Bot, { admin, guard, desk, log, now }: OwnerD
 
   bot.command('doctor', (ctx) =>
     guarded(ctx, log, async () => {
-      const blocks = doctorBlocks(await admin.doctor())
+      const blocks = doctorBlocks(await control.doctor())
       for (const page of pages('<b>Doctor</b>', blocks)) {
         await ctx.reply(page, HTML)
       }
     }),
   )
 
-  const policies = registerPolicies(bot, { admin, guard, desk, log, now, button })
+  const policies = registerPolicies(bot, { control, guard, desk, log, now, button })
 
   /** Runs on the sweep timer. */
   return { sweep: () => policies.offerGraduation() }

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   buttonData,
   command,
-  fakeAdmin,
+  fakeControl,
   fakeGuard,
   NOW,
   OTHER_OWNER,
@@ -39,22 +39,22 @@ describe('/agent', () => {
   })
 
   it('revokes only from the confirm button, and only once', async () => {
-    const { bot, admin, calls } = setup()
+    const { bot, control, calls } = setup()
     await bot.handleUpdate(command(OWNER, '/agent revoke research-agent'))
-    expect(admin.revokeAgent).not.toHaveBeenCalled()
+    expect(control.revokeAgent).not.toHaveBeenCalled()
     const data = buttonData(last(calls), 'Revoke')
     await bot.handleUpdate(press(OWNER, data))
     await bot.handleUpdate(press(OTHER_OWNER, data))
-    expect(admin.revokeAgent).toHaveBeenCalledTimes(1)
+    expect(control.revokeAgent).toHaveBeenCalledTimes(1)
     expect(text(sent(calls, 'editMessageText')[0])).toContain('Revoked <code>research-agent</code>')
     expect(sent(calls, 'answerCallbackQuery').at(-1)?.payload['text']).toContain('expired')
   })
 
   it('does nothing when Cancel is pressed', async () => {
-    const { bot, admin, calls } = setup()
+    const { bot, control, calls } = setup()
     await bot.handleUpdate(command(OWNER, '/agent revoke research-agent'))
     await bot.handleUpdate(press(OWNER, buttonData(last(calls), 'Cancel')))
-    expect(admin.revokeAgent).not.toHaveBeenCalled()
+    expect(control.revokeAgent).not.toHaveBeenCalled()
     expect(text(sent(calls, 'editMessageText')[0])).toBe('Cancelled. Nothing changed.')
   })
 })
@@ -72,17 +72,19 @@ describe('/policy', () => {
   })
 
   it('applies a preset that only lowers limits at once', async () => {
-    const { bot, admin, calls } = setup()
+    const { bot, control, calls } = setup()
     await bot.handleUpdate(command(OWNER, '/policy research-agent'))
     await bot.handleUpdate(press(OWNER, buttonData(last(calls), 'Careful')))
-    expect(admin.putPolicy).toHaveBeenCalledWith(
-      policy({ perTxMax: '1000000', dailyMax: '5000000', approvalThreshold: '500000' }),
-    )
+    expect(control.tighten).toHaveBeenCalledWith('research-agent', {
+      perTxMax: '1000000',
+      dailyMax: '5000000',
+      approvalThreshold: '500000',
+    })
     expect(text(last(calls))).toMatch(/^Saved\.\n<b>Policy<\/b>/)
   })
 
   it('edits one field from a reply in dollars, with bigint units', async () => {
-    const { bot, admin, calls } = setup()
+    const { bot, control, calls } = setup()
     await bot.handleUpdate(command(OWNER, '/policy research-agent'))
     await bot.handleUpdate(press(OWNER, buttonData(last(calls), 'Edit per payment max')))
     const prompt = last(calls)
@@ -94,11 +96,11 @@ describe('/policy', () => {
     await bot.handleUpdate(say(OWNER, '-1', prompt?.messageId))
     expect(text(last(calls))).toContain('Send an amount in dollars')
     await bot.handleUpdate(say(OWNER, '$0.75', prompt?.messageId))
-    expect(admin.putPolicy).toHaveBeenCalledWith(policy({ perTxMax: '750000' }))
+    expect(control.tighten).toHaveBeenCalledWith('research-agent', { perTxMax: '750000' })
 
     // The prompt is answered: a later reply to it is an ordinary message.
     await bot.handleUpdate(say(OWNER, '9', prompt?.messageId))
-    expect(admin.putPolicy).toHaveBeenCalledTimes(1)
+    expect(control.tighten).toHaveBeenCalledTimes(1)
   })
 
   it('answers for an unknown agent', async () => {
@@ -110,28 +112,30 @@ describe('/policy', () => {
 
 describe('/deny', () => {
   it('removes a domain, lowercased', async () => {
-    const { bot, admin } = setup()
+    const { bot, control } = setup()
     await bot.handleUpdate(command(OWNER, '/deny research-agent API.example.com'))
-    expect(admin.putPolicy).toHaveBeenLastCalledWith(policy({ allowedDomains: [] }))
+    expect(control.tighten).toHaveBeenLastCalledWith('research-agent', {
+      removeDomains: ['api.example.com'],
+    })
+    expect((await control.policy('research-agent'))?.allowedDomains).toEqual([])
   })
 
   it('refuses what is not a hostname', async () => {
-    const { bot, admin, calls } = setup()
+    const { bot, control, calls } = setup()
     for (const bad of ['https://api.example.com', 'localhost', '-x.example.com', 'a..b']) {
       await bot.handleUpdate(command(OWNER, `/deny research-agent ${bad}`))
     }
-    expect(admin.putPolicy).not.toHaveBeenCalled()
+    expect(control.tighten).not.toHaveBeenCalled()
     expect(text(last(calls))).toContain('Usage: /deny')
   })
 })
 
 describe('/mode', () => {
   it('goes to shadow at once', async () => {
-    const admin = fakeAdmin()
-    await admin.putPolicy(policy({ mode: 'live' }))
-    const { bot } = setup({ admin })
+    const control = fakeControl(policy({ mode: 'live' }))
+    const { bot } = setup({ control })
     await bot.handleUpdate(command(OWNER, '/mode research-agent shadow'))
-    expect(admin.putPolicy).toHaveBeenLastCalledWith(policy({ mode: 'shadow' }))
+    expect(control.tighten).toHaveBeenLastCalledWith('research-agent', { mode: 'shadow' })
   })
 })
 
@@ -147,7 +151,7 @@ describe('/doctor', () => {
       },
       { id: 'bot', status: 'fail' as const, message: 'Bot unreachable', fix: 'Check BOT_URL' },
     ])
-    const { bot, calls } = setup({ admin: fakeAdmin({ doctor }) })
+    const { bot, calls } = setup({ control: fakeControl(policy(), { doctor }) })
     await bot.handleUpdate(command(OWNER, '/doctor'))
     expect(text(last(calls))).toBe(
       [
@@ -163,7 +167,7 @@ describe('/doctor', () => {
 
   it('says guard-core did not answer', async () => {
     const doctor = vi.fn().mockRejectedValue(new Error('down'))
-    const { bot, calls } = setup({ admin: fakeAdmin({ doctor }) })
+    const { bot, calls } = setup({ control: fakeControl(policy(), { doctor }) })
     await bot.handleUpdate(command(OWNER, '/doctor'))
     expect(text(last(calls))).toBe('guard-core did not answer. Nothing changed: try again.')
   })
@@ -179,7 +183,7 @@ describe('shadow graduation', () => {
   it('tells the owners once, three days after the first shadowed payment, to go live in the panel', async () => {
     let now = new Date(NOW.getTime() + 3 * 86_400_000 - 1)
     const budget = shadowSince(NOW)
-    const { owner, admin, calls } = setup({ now: () => now, guard: fakeGuard({ budget }) })
+    const { owner, control, calls } = setup({ now: () => now, guard: fakeGuard({ budget }) })
     await owner.sweep()
     expect(sent(calls, 'sendMessage')).toHaveLength(0)
 
@@ -198,7 +202,7 @@ describe('shadow graduation', () => {
         'Go live in the DefiMind panel.',
     )
     expect(offers[0]?.payload['reply_markup']).toBeUndefined()
-    expect(admin.putPolicy).not.toHaveBeenCalled()
+    expect(control.tighten).not.toHaveBeenCalled()
   })
 
   it('skips an agent that is live or has no shadow total', async () => {
@@ -210,7 +214,7 @@ describe('shadow graduation', () => {
     const later = new Date(NOW.getTime() + 30 * 86_400_000)
     const { owner, calls } = setup({
       now: () => later,
-      admin: fakeAdmin({ listAgents }),
+      control: fakeControl(policy(), { listAgents }),
       guard: fakeGuard({ budget }),
     })
     await owner.sweep()
@@ -222,11 +226,11 @@ describe('shadow graduation', () => {
 
 describe('/passkey', () => {
   it('points to the machine and asks guard-core for nothing', async () => {
-    const { bot, admin, calls } = setup({ guardPublicUrl: 'https://guard.example' })
+    const { bot, control, calls } = setup({ guardPublicUrl: 'https://guard.example' })
     await bot.handleUpdate(command(OWNER, '/passkey enrol'))
     expect(text(last(calls))).toContain(
       '<code>pnpm --filter @defimind/guard-core passkey-code</code>',
     )
-    expect(Object.values(admin).every((fn) => vi.mocked(fn).mock.calls.length === 0)).toBe(true)
+    expect(Object.values(control).every((fn) => vi.mocked(fn).mock.calls.length === 0)).toBe(true)
   })
 })

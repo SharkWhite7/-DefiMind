@@ -1,15 +1,20 @@
 import type { AgentSummary, DoctorCheck, Policy } from '@defimind/shared'
 import { z } from 'zod'
+import type { Tighten } from '../domain/policy.js'
 import { type GuardClientOptions, requester } from './guard.js'
 
-/** What the owner reads and tightens from Telegram: agents, policies and the doctor. */
-export interface AdminClient {
+/**
+ * What the owner reads and tightens from Telegram (CR-016): agents, policies and the doctor, on the
+ * bot's own routes. Nothing here can create, allow, raise, go live or resume.
+ */
+export interface ControlClient {
   listAgents(): Promise<AgentSummary[]>
   /** False for an unknown agent. */
   revokeAgent(agentId: string): Promise<boolean>
   /** Undefined for an unknown agent. */
   policy(agentId: string): Promise<Policy | undefined>
-  putPolicy(policy: Policy): Promise<Policy>
+  /** guard-core refuses a change that would loosen anything: 'loosen_in_panel'. */
+  tighten(agentId: string, change: Tighten): Promise<Policy | 'loosen_in_panel'>
   doctor(): Promise<DoctorCheck[]>
 }
 
@@ -52,17 +57,19 @@ const checks = z.object({
     .max(64),
 })
 
-export function httpAdminClient(options: GuardClientOptions): AdminClient {
-  const { admin, ok } = requester(options)
+const refused = z.object({ error: z.literal('loosen_in_panel') })
+
+export function httpControlClient(options: GuardClientOptions): ControlClient {
+  const { bot, ok } = requester(options)
   const path = (agentId: string) => encodeURIComponent(agentId)
 
   return {
     async listAgents() {
-      return agents.parse(await ok(await admin('GET', '/v1/admin/agents'))).agents
+      return agents.parse(await ok(await bot('GET', '/v1/bot/agents'))).agents
     },
 
     async revokeAgent(agentId) {
-      const response = await admin('POST', `/v1/admin/agents/${path(agentId)}/revoke`, {})
+      const response = await bot('POST', `/v1/bot/agents/${path(agentId)}/revoke`, {})
       if (response.status === 404) {
         return false
       }
@@ -71,17 +78,23 @@ export function httpAdminClient(options: GuardClientOptions): AdminClient {
     },
 
     async policy(agentId) {
-      const response = await admin('GET', `/v1/admin/policy/${path(agentId)}`)
+      const response = await bot('GET', `/v1/bot/policy/${path(agentId)}`)
       return response.status === 404 ? undefined : policySchema.parse(await ok(response))
     },
 
-    async putPolicy({ agentId, ...body }) {
-      const response = await admin('PUT', `/v1/admin/policy/${path(agentId)}`, body)
+    async tighten(agentId, change) {
+      const response = await bot('POST', `/v1/bot/policy/${path(agentId)}/tighten`, change)
+      if (response.status === 403) {
+        const body = refused.safeParse(await response.json().catch(() => undefined))
+        if (body.success) {
+          return 'loosen_in_panel'
+        }
+      }
       return policySchema.parse(await ok(response))
     },
 
     async doctor() {
-      return checks.parse(await ok(await admin('GET', '/v1/admin/doctor'))).checks
+      return checks.parse(await ok(await bot('GET', '/v1/bot/doctor'))).checks
     },
   }
 }

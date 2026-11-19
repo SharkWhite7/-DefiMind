@@ -1,7 +1,6 @@
-import type { Policy } from '@defimind/shared'
 import { type Bot, type Context, InlineKeyboard } from 'grammy'
 import type { Logger } from 'pino'
-import type { AdminClient } from '../adapters/admin.js'
+import type { ControlClient } from '../adapters/control.js'
 import type { GuardClient } from '../adapters/guard.js'
 import { formatUsd } from '../domain/money.js'
 import {
@@ -9,25 +8,24 @@ import {
   LIMIT_NAMES,
   LIMITS,
   type Limit,
-  loosens,
   parseDollars,
   policyText,
   PRESETS,
+  raises,
+  type Tighten,
 } from '../domain/policy.js'
 import { PANEL_ONLY } from '../domain/text.js'
 import type { Desk } from './desk.js'
 import { args, code, guarded, HTML, type Press, validAgent } from './owner-kit.js'
 
 export interface PolicyDeps {
-  admin: AdminClient
+  control: ControlClient
   guard: GuardClient
   desk: Desk
   log: Logger
   now: () => Date
   button: (run: Press, ttlMs?: number) => string
 }
-
-type Change = Partial<Pick<Policy, Limit | 'mode' | 'allowedDomains'>>
 
 /** How long an agent runs in shadow mode before the bot points the owner to the panel to go live. */
 export const GRADUATION_MS = 3 * 86_400_000
@@ -37,7 +35,7 @@ const GRADUATION_CHECK_MS = 5 * 60_000
  * The policy from Telegram, tightening only (CR-016): lower a limit, drop a domain, go back to
  * shadow. Anything that widens what the agent may spend is the panel's, behind a passkey.
  */
-export function registerPolicies(bot: Bot, { admin, guard, desk, log, now, button }: PolicyDeps) {
+export function registerPolicies(bot: Bot, { control, guard, desk, log, now, button }: PolicyDeps) {
   /** The prompts waiting for the owner's reply, keyed by chat and prompt message. */
   const edits = new Map<string, { agentId: string; limit: Limit }>()
 
@@ -65,20 +63,23 @@ export function registerPolicies(bot: Bot, { admin, guard, desk, log, now, butto
     return keyboard
   }
 
-  /** Reads the policy and writes the change back, unless it would loosen anything. */
-  async function change(ctx: Context, agentId: string, next: Change) {
-    const before = await admin.policy(agentId)
+  /**
+   * Sends only the change. A raised limit is refused here first, so the owner hears why at once;
+   * guard-core refuses it again, as it would anything else that loosens.
+   */
+  async function change(ctx: Context, agentId: string, next: Tighten) {
+    const before = await control.policy(agentId)
     if (before === undefined) {
       await ctx.reply(`No agent ${code(agentId)}.`, HTML)
       return
     }
-    const after = { ...before, ...next }
-    if (loosens(before, after)) {
+    const saved =
+      raises(before, next).length > 0 ? 'loosen_in_panel' : await control.tighten(agentId, next)
+    if (saved === 'loosen_in_panel') {
       await ctx.reply(PANEL_ONLY)
       return
     }
-    const saved = await admin.putPolicy(after)
-    log.info({ agentId, owner: ctx.from?.id, change: Object.keys(next) }, 'policy changed')
+    log.info({ agentId, owner: ctx.from?.id, change: Object.keys(next) }, 'policy tightened')
     await ctx.reply(`Saved.\n${policyText(saved)}`, HTML)
   }
 
@@ -88,7 +89,7 @@ export function registerPolicies(bot: Bot, { admin, guard, desk, log, now, butto
       return ctx.reply('Usage: /policy &lt;agentId&gt;', HTML)
     }
     return guarded(ctx, log, async () => {
-      const policy = await admin.policy(agentId)
+      const policy = await control.policy(agentId)
       await ctx.reply(policy === undefined ? `No agent ${code(agentId)}.` : policyText(policy), {
         ...HTML,
         ...(policy === undefined ? {} : { reply_markup: policyKeyboard(agentId) }),
@@ -120,16 +121,7 @@ export function registerPolicies(bot: Bot, { admin, guard, desk, log, now, butto
     if (!validAgent(agentId) || host === undefined) {
       return ctx.reply('Usage: /deny &lt;agentId&gt; &lt;domain&gt;, like api.example.com', HTML)
     }
-    return guarded(ctx, log, async () => {
-      const policy = await admin.policy(agentId)
-      if (policy === undefined) {
-        await ctx.reply(`No agent ${code(agentId)}.`, HTML)
-        return
-      }
-      await change(ctx, agentId, {
-        allowedDomains: policy.allowedDomains.filter((d) => d !== host),
-      })
-    })
+    return guarded(ctx, log, () => change(ctx, agentId, { removeDomains: [host] }))
   })
 
   bot.command('mode', (ctx) => {
@@ -156,7 +148,7 @@ export function registerPolicies(bot: Bot, { admin, guard, desk, log, now, butto
       return
     }
     checked = now().getTime()
-    for (const { agentId, mode } of await admin.listAgents()) {
+    for (const { agentId, mode } of await control.listAgents()) {
       if (mode !== 'shadow' || offered.has(agentId)) {
         continue
       }

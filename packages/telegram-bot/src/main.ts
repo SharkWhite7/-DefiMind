@@ -1,5 +1,5 @@
 import { pino } from 'pino'
-import { httpAdminClient } from './adapters/admin.js'
+import { httpControlClient } from './adapters/control.js'
 import { httpGuardClient } from './adapters/guard.js'
 import { createBot } from './bot/index.js'
 import { loadConfig } from './config.js'
@@ -18,13 +18,13 @@ if (config.GUARD_PUBLIC_URL === undefined) {
   log.warn('GUARD_PUBLIC_URL is not set: a payment that needs a passkey can only be rejected here')
 }
 
-const guardOptions = {
-  url: config.GUARD_URL,
-  botToken: config.GUARD_BOT_TOKEN,
-  adminToken: config.GUARD_ADMIN_TOKEN,
+if (config.GUARD_ADMIN_TOKEN !== undefined) {
+  log.warn('GUARD_ADMIN_TOKEN is set and ignored: the bot only uses GUARD_BOT_TOKEN. Remove it')
 }
+
+const guardOptions = { url: config.GUARD_URL, botToken: config.GUARD_BOT_TOKEN }
 const guard = httpGuardClient(guardOptions)
-const admin = httpAdminClient(guardOptions)
+const control = httpControlClient(guardOptions)
 
 const { SIGN_PAGE_URL, SQUADS_MULTISIG, SOLANA_HOT_WALLET_PUBKEY, ROBINHOOD_SAFE_ADDRESS } = config
 // loadConfig refuses a half-configured chain, so a chain is either complete here or left out.
@@ -44,7 +44,7 @@ const { bot, desk, commands, owner } = createBot({
   token: config.TELEGRAM_BOT_TOKEN,
   owners: config.OWNER_TELEGRAM_IDS,
   guard,
-  admin,
+  control,
   notifyAbove: config.NOTIFY_ABOVE_AMOUNT,
   log,
   phantomKills,

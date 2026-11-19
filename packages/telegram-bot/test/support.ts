@@ -4,7 +4,8 @@ import type { Bot } from 'grammy'
 import type { Update, UserFromGetMe } from 'grammy/types'
 import { type Logger, pino } from 'pino'
 import { vi } from 'vitest'
-import type { AdminClient } from '../src/adapters/admin.js'
+import type { ControlClient } from '../src/adapters/control.js'
+import type { Tighten } from '../src/domain/policy.js'
 import type { GuardClient } from '../src/adapters/guard.js'
 import { createBot } from '../src/bot/index.js'
 import type { PhantomKill } from '@defimind/shared'
@@ -159,17 +160,29 @@ export function policy(overrides: Partial<Policy> = {}): Policy {
   }
 }
 
-export function fakeAdmin(overrides: Partial<AdminClient> = {}): AdminClient {
-  let stored = policy()
+/**
+ * guard-core's bot routes over one stored policy: tighten applies the change as guard-core does,
+ * so a test can read the policy back.
+ */
+export function fakeControl(
+  initial: Policy = policy(),
+  overrides: Partial<ControlClient> = {},
+): ControlClient {
+  let stored = initial
   return {
     listAgents: vi.fn(async () => [
       { agentId: 'research-agent', paused: false, mode: 'shadow' as const },
     ]),
     revokeAgent: vi.fn(async () => true),
     policy: vi.fn(async (agentId: string) => (agentId === stored.agentId ? stored : undefined)),
-    putPolicy: vi.fn(async (next: Policy) => {
-      stored = next
-      return next
+    tighten: vi.fn(async (_agentId: string, change: Tighten) => {
+      const { removeDomains = [], ...rest } = change
+      stored = {
+        ...stored,
+        ...rest,
+        allowedDomains: stored.allowedDomains.filter((d) => !removeDomains.includes(d)),
+      }
+      return stored
     }),
     doctor: vi.fn(async () => []),
     ...overrides,
@@ -215,17 +228,17 @@ export function setup(
     guardPublicUrl?: string
     /** The tests of Telegram approvals turn them on; the panel tests leave them off. */
     telegramApprovals?: boolean
-    admin?: AdminClient
+    control?: ControlClient
     log?: Logger
   } = {},
 ) {
   const guard = options.guard ?? fakeGuard()
-  const admin = options.admin ?? fakeAdmin()
+  const control = options.control ?? fakeControl()
   const { bot, desk, commands, owner } = createBot({
     token: '42:test-token',
     owners: new Set([OWNER.id, OTHER_OWNER.id]),
     guard,
-    admin,
+    control,
     notifyAbove: 1_000_000n,
     log: options.log ?? silent,
     now: options.now ?? (() => NOW),
@@ -236,7 +249,7 @@ export function setup(
     telegramApprovals: options.telegramApprovals,
   })
   const calls = mockTelegram(bot, options.fail)
-  return { bot, desk, commands, owner, guard, admin, calls }
+  return { bot, desk, commands, owner, guard, control, calls }
 }
 
 let updateId = 1
