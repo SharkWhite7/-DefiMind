@@ -112,7 +112,13 @@ N='BOT_TOKEN|BOT_WEBHOOK_SECRET|SOLANA_CHAIN|SOLANA_RPC_URL|SQUADS_MULTISIG|SOLA
 fly ssh console --app agentguard-guard-core -C env | tr -d '\r' | grep -cE "^($N)="
 ```
 
-Check: it prints how many of the ten names the old app has: `10` when it runs Solana and Robinhood.
+Check: it prints `10`, when the old app runs Solana and Robinhood.
+
+- The entrypoint hides the two hot keys from node only. They are still in the machine's
+  environment, so the count includes them.
+- If it prints `8`, the two hot-key lines are missing: stop. Do not fall back to the local key
+  files without a digest check.
+
 Then copy them, and add the fresh admin token:
 
 ```bash
@@ -197,10 +203,12 @@ Check:
 - The values are copied from the running `agentguard-bot`, the same way as B2. The list of names
   leaves `GUARD_ADMIN_TOKEN` out.
 - `GUARD_PUBLIC_URL` is set to the new address.
+- `TELEGRAM_APPROVALS` is not copied, so the new bot runs on its default, `false`, like guard-core
+  in B4. An old `true` would show Approve buttons that guard-core then refuses.
 - Do not deploy the bot yet: two bots on one Telegram token make Telegram refuse both.
 
 ```bash
-B='TELEGRAM_BOT_TOKEN|OWNER_TELEGRAM_IDS|GUARD_BOT_TOKEN|BOT_WEBHOOK_SECRET|NOTIFY_ABOVE_AMOUNT|SOLANA_CHAIN|SIGN_PAGE_URL|SQUADS_MULTISIG|SOLANA_HOT_WALLET_PUBKEY|ROBINHOOD_CHAIN|ROBINHOOD_SAFE_ADDRESS|REPORT_WEEKDAY|REPORT_HOUR_UTC|TELEGRAM_APPROVALS'
+B='TELEGRAM_BOT_TOKEN|OWNER_TELEGRAM_IDS|GUARD_BOT_TOKEN|BOT_WEBHOOK_SECRET|NOTIFY_ABOVE_AMOUNT|SOLANA_CHAIN|SIGN_PAGE_URL|SQUADS_MULTISIG|SOLANA_HOT_WALLET_PUBKEY|ROBINHOOD_CHAIN|ROBINHOOD_SAFE_ADDRESS|REPORT_WEEKDAY|REPORT_HOUR_UTC'
 fly ssh console --app agentguard-bot -C env | tr -d '\r' | grep -E "^($B)=" | fly secrets import --app defimind-bot --stage
 fly secrets set --app defimind-bot --stage GUARD_PUBLIC_URL=https://defimind-guard-core.fly.dev
 fly secrets list --app defimind-bot
