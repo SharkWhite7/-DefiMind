@@ -38,6 +38,7 @@ describe('owner panel routes', () => {
     ['POST', `/v1/owner/intents/${crypto.randomUUID()}/decision`],
     ['POST', `/v1/owner/mandates/${crypto.randomUUID()}/decision`],
     ['GET', '/v1/owner/report'],
+    ['GET', '/v1/owner/receipts'],
     ['GET', '/v1/owner/doctor'],
     ['GET', '/v1/owner/budget/agent-1'],
     ['GET', '/v1/owner/agents'],
@@ -100,6 +101,8 @@ describe('owner panel routes', () => {
     expect(done.json().status).toBe('executed')
     const receipt = await h.agent('GET', `/v1/agent/intents/${one}/receipt`)
     expect(receipt.json().approvedBy).toBe('passkey')
+    const listed = (await owner.call('GET', '/v1/owner/receipts')).json().receipts
+    expect(listed).toEqual([receipt.json()])
   })
 
   it('refuses a step-up made for another action with the same body', async () => {
@@ -193,6 +196,7 @@ describe('owner panel routes', () => {
     expect(kill.pausedAgents).toBe(1)
     expect(kill.ownerTransactions[0].chain).toBe(CHAIN)
     expect((await owner.call('GET', '/v1/owner/report')).json().agents[0].agentId).toBe('agent-1')
+    expect((await owner.call('GET', '/v1/owner/receipts')).json()).toEqual({ receipts: [] })
     expect((await owner.call('GET', '/v1/owner/budget/agent-1')).statusCode).toBe(200)
     expect((await owner.call('GET', '/v1/owner/doctor')).json().checks.length).toBeGreaterThan(0)
     expect((await owner.call('GET', '/v1/owner/agents')).json().agents).toHaveLength(1)

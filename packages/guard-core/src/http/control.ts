@@ -3,6 +3,7 @@ import type { FastifyBaseLogger } from 'fastify'
 import { createAgent, listAgents, revokeAgent } from '../db/agents.js'
 import { clearWindow } from '../db/breaker.js'
 import { listPasskeys } from '../db/passkeys.js'
+import { receiptsBetween } from '../db/receipts.js'
 import * as repo from '../db/repo.js'
 import { summarise } from '../domain/report.js'
 import { budget } from '../service/budget.js'
@@ -71,6 +72,11 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel') {
           }
         }),
       )
+    },
+
+    receipts(query: unknown) {
+      const { from, to } = this.period(query)
+      return { receipts: receiptsBetween(db, from, to) }
     },
 
     agents: () => ({ agents: listAgents(db) }),

@@ -358,7 +358,7 @@ cannot drift. The audit says which one a change came through (`via: "admin" | "p
   (CR-014). On Solana the target is `SQUADS_MULTISIG` with the hot wallet's public key, read from
   its own keypair file. On Robinhood Chain it is `ROBINHOOD_SAFE_ADDRESS`. The admin kill never
   carries links.
-- Session only: `GET /v1/owner/report`, `/doctor`, `/budget/:agentId`, `/agents`,
+- Session only: `GET /v1/owner/report`, `/receipts` (as `GET /v1/admin/receipts`), `/doctor`, `/budget/:agentId`, `/agents`,
   `/policy/:agentId`, `/passkeys`; `POST /v1/owner/agents/:id/revoke`, `/pause` and `/kill`.
 
 can be approved only with a passkey

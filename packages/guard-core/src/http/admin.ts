@@ -1,7 +1,6 @@
 import type { RegistrationResponseJSON } from '@simplewebauthn/server'
 import type { FastifyInstance } from 'fastify'
 import { revokeMandate } from '../db/mandates.js'
-import { receiptsBetween } from '../db/receipts.js'
 import * as repo from '../db/repo.js'
 import { openMandate } from '../service/mandates.js'
 import { enrol, enrolmentOptions, issueEnrolCode } from '../service/passkeys.js'
@@ -114,10 +113,7 @@ export function adminRoutes(
 
     app.get('/report', async (request) => control.report(request.query))
 
-    app.get('/receipts', async (request) => {
-      const { from, to } = control.period(request.query)
-      return { receipts: receiptsBetween(db, from, to) }
-    })
+    app.get('/receipts', async (request) => control.receipts(request.query))
 
     app.put('/policy/:agentId', async (request) => {
       const { agentId } = agentIdParam.parse(request.params)

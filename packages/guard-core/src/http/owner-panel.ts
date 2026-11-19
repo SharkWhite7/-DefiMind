@@ -94,6 +94,8 @@ export function ownerPanelRoutes(
     })
 
     app.get('/v1/owner/report', async (request) => control.report(request.query))
+    // CR-012 mirror: the panel matches a payment's execution entry to its receipt by hash.
+    app.get('/v1/owner/receipts', async (request) => control.receipts(request.query))
     app.get('/v1/owner/doctor', async () => control.doctor({ ...setup, fetch: deps.fetch }))
     app.get('/v1/owner/budget/:agentId', async (request) =>
       control.budget(agentIdParam.parse(request.params).agentId),
