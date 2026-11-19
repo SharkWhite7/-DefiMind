@@ -528,8 +528,8 @@ Owner commands, run in bash on your own machine from `~/DefiMind`, after the bot
 fly apps create defimind-guard-core --org <your-fly-org>
 fly volumes create guard_data --app defimind-guard-core --region gru --size 1
 
-# 2. Settings, read from guard-core's .env. The three tokens must equal the bot's GUARD_ADMIN_TOKEN,
-#    GUARD_BOT_TOKEN and BOT_WEBHOOK_SECRET, as they already do for the local runs. SOLANA_CHAIN
+# 2. Settings, read from guard-core's .env. BOT_TOKEN and BOT_WEBHOOK_SECRET must equal the bot's
+#    GUARD_BOT_TOKEN and BOT_WEBHOOK_SECRET; ADMIN_TOKEN is guard-core's alone (CR-016). SOLANA_CHAIN
 #    must be in the .env for mainnet: without it guard-core runs on devnet.
 cd ~/DefiMind && grep -E '^(ADMIN_TOKEN|BOT_TOKEN|BOT_WEBHOOK_SECRET|SOLANA_CHAIN|SOLANA_RPC_URL|SQUADS_MULTISIG|ROBINHOOD_CHAIN|ROBINHOOD_RPC_URL|ROBINHOOD_SAFE_ADDRESS)=.' packages/guard-core/.env | fly secrets import --app defimind-guard-core --stage
 

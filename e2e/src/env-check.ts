@@ -59,11 +59,10 @@ export function checkEnvs({ guard, bot, mcp }: Envs): Report {
     bot.GUARD_BOT_TOKEN,
     'guard-core BOT_TOKEN and telegram-bot GUARD_BOT_TOKEN differ',
   )
-  same(
-    guard.ADMIN_TOKEN,
-    bot.GUARD_ADMIN_TOKEN,
-    'guard-core ADMIN_TOKEN and telegram-bot GUARD_ADMIN_TOKEN differ',
-  )
+  // CR-016: the bot ignores the admin token, so a copy of it on the bot's side is only exposure.
+  if (bot.GUARD_ADMIN_TOKEN) {
+    errors.push('telegram-bot GUARD_ADMIN_TOKEN is set: the bot never uses it, remove it')
+  }
   if (guard.ADMIN_TOKEN && guard.ADMIN_TOKEN === guard.BOT_TOKEN) {
     errors.push(
       'guard-core ADMIN_TOKEN and BOT_TOKEN are the same token: the roles must not share one',
