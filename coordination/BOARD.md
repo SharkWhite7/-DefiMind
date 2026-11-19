@@ -135,8 +135,8 @@ tells us what the second adapter has to satisfy.
 | MCP-21 | mcp   | review | GC-31          | CR-010 phase 2: `start_task`, `mandateId`                                                                                                                                                                                          |
 | MCP-22 | mcp   | review | GC-32          | CR-010 phase 3: `check_intent` notes a signed receipt by intent id once a payment is executed                                                                                                                                      |
 | MCP-23 | mcp   | review | CR-011         | `setup <client>`: prints the command or JSON block; token from a hidden prompt, saved 0600, configs name it via `AGENT_TOKEN_FILE`; `--check` calls get_budget                                                                     |
-| MCP-30 | mcp   | todo   | GC-50          | CR-013: gateway mode in mcp-server, with outbox and fail closed                                                                                                                                                                    |
-| MCP-31 | mcp   | todo   | GC-52          | CR-013: `packages/sdk`: `withReceipt` and the `defimind-verify` CLI                                                                                                                                                                |
+| MCP-30 | mcp   | doing  | GC-50          | Gateway mode: downstream MCP servers from a file, tools as `<server>__<tool>`, each call reported to `POST /v1/agent/executions`; fails closed with a local outbox; `GATEWAY_KEEP_BODIES` off by default                           |
+| MCP-31 | mcp   | review | GC-52          | `packages/sdk`: `withReceipt(server, tool, fn)` and `defimind-verify` (signature, hash, Merkle path and position, the anchor memo and its signer, seq gaps and prevHash links); trusts no DefiMind server                          |
 
 ## Session 4 — bot (`packages/telegram-bot`, branch `feat/bot`)
 
