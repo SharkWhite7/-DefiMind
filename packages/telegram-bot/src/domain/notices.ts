@@ -4,7 +4,7 @@ import { amountText, chainName, escapeHtml, utcTime } from './text.js'
 export function breakerText(agentId: string, detail: string): string {
   const id = `<code>${escapeHtml(agentId)}</code>`
   return [
-    `<b>Circuit breaker tripped</b> for ${id}: paused. /resume ${id} when you have looked.`,
+    `<b>Circuit breaker tripped</b> for ${id}: paused. Resume it in the DefiMind panel when you have looked.`,
     ...(detail === '' ? [] : [`guard-core says: <i>${escapeHtml(detail)}</i>`]),
   ].join('\n')
 }

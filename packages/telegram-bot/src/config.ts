@@ -52,7 +52,8 @@ export const configSchema = z
 
     GUARD_URL: z.url(),
     GUARD_BOT_TOKEN: secret,
-    GUARD_ADMIN_TOKEN: secret,
+    // CR-016: read only to warn. The bot never uses the admin token.
+    GUARD_ADMIN_TOKEN: z.string().optional(),
     BOT_WEBHOOK_SECRET: secret,
 
     HOOK_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(300),

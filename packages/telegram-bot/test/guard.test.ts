@@ -3,7 +3,6 @@ import { GuardError, httpGuardClient } from '../src/adapters/guard.js'
 import { INTENT_ID, intent, MANDATE_ID, mandateRequest } from './support.js'
 
 const BOT = 'b'.repeat(32)
-const ADMIN = 'c'.repeat(32)
 
 function client(...responses: Response[]) {
   const fetch = vi.fn<typeof globalThis.fetch>()
@@ -12,7 +11,7 @@ function client(...responses: Response[]) {
   }
   return {
     fetch,
-    guard: httpGuardClient({ url: 'http://guard', botToken: BOT, adminToken: ADMIN, fetch }),
+    guard: httpGuardClient({ url: 'http://guard', botToken: BOT, fetch }),
   }
 }
 
@@ -86,16 +85,16 @@ describe('httpGuardClient', () => {
     await expect(guard.decide(INTENT_ID, 'reject', 1)).rejects.toBeInstanceOf(GuardError)
   })
 
-  it('pauses and resumes with the admin token', async () => {
+  it('pauses with the bot token and reads 404 as unknown', async () => {
     const { fetch, guard } = client(
       json(200, { agentId: 'a1', paused: true }),
       json(404, { error: 'not_found' }),
     )
-    expect(await guard.setPaused('a1', true)).toBe('ok')
-    expect(await guard.setPaused('a2', false)).toBe('not_found')
-    expect(sentTo(fetch).url).toBe('http://guard/v1/admin/pause')
-    expect(sentTo(fetch).headers.get('authorization')).toBe(`Bearer ${ADMIN}`)
-    expect(fetch.mock.calls[1]?.[0]).toBe('http://guard/v1/admin/resume')
+    expect(await guard.pause('a1')).toBe('ok')
+    expect(await guard.pause('a2')).toBe('not_found')
+    expect(sentTo(fetch).url).toBe('http://guard/v1/bot/pause')
+    expect(sentTo(fetch).headers.get('authorization')).toBe(`Bearer ${BOT}`)
+    expect(fetch.mock.calls[1]?.[0]).toBe('http://guard/v1/bot/pause')
   })
 
   it('reads the kill result', async () => {
@@ -121,15 +120,15 @@ describe('httpGuardClient', () => {
     const { fetch, guard } = client(
       json(200, view),
       json(404, { error: 'not_found' }),
-      json(404, { message: 'Route GET:/v1/admin/budget/a1 not found', statusCode: 404 }),
+      json(404, { message: 'Route GET:/v1/bot/budget/a1 not found', statusCode: 404 }),
     )
     expect(await guard.budget('a/1')).toEqual(view)
-    expect(sentTo(fetch).url).toBe('http://guard/v1/admin/budget/a%2F1')
+    expect(sentTo(fetch).url).toBe('http://guard/v1/bot/budget/a%2F1')
     expect(await guard.budget('a1')).toBeUndefined()
     await expect(guard.budget('a1')).rejects.toBeInstanceOf(GuardError)
   })
 
-  it('asks for the report with the admin token and the period, and treats no route as none', async () => {
+  it('asks for the report with the bot token and the period, and treats no route as none', async () => {
     const agents = [
       {
         agentId: 'a1',
@@ -149,9 +148,9 @@ describe('httpGuardClient', () => {
     expect(await guard.report(from, to)).toEqual(agents)
     const { url, headers } = sentTo(fetch)
     expect(url).toBe(
-      'http://guard/v1/admin/report?from=2026-11-02T12%3A00%3A00.000Z&to=2026-11-09T12%3A00%3A00.000Z',
+      'http://guard/v1/bot/report?from=2026-11-02T12%3A00%3A00.000Z&to=2026-11-09T12%3A00%3A00.000Z',
     )
-    expect(headers.get('authorization')).toBe(`Bearer ${ADMIN}`)
+    expect(headers.get('authorization')).toBe(`Bearer ${BOT}`)
     expect(await guard.report(from, to)).toBeUndefined()
     await expect(guard.report(from, to)).rejects.toThrow()
   })
@@ -163,8 +162,8 @@ describe('httpGuardClient', () => {
       json(404, { message: 'Route not found' }),
     )
     expect(await guard.chains()).toEqual(chains)
-    expect(sentTo(fetch).url).toBe('http://guard/v1/admin/chains')
-    expect(sentTo(fetch).headers.get('authorization')).toBe(`Bearer ${ADMIN}`)
+    expect(sentTo(fetch).url).toBe('http://guard/v1/bot/chains')
+    expect(sentTo(fetch).headers.get('authorization')).toBe(`Bearer ${BOT}`)
     expect(await guard.chains()).toBeUndefined()
   })
 

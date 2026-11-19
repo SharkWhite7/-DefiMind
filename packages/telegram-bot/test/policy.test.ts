@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { httpAdminClient } from '../src/adapters/admin.js'
+import { httpControlClient } from '../src/adapters/control.js'
 import { CONFIRM_TTL_MS, Confirms } from '../src/domain/confirms.js'
-import { hostname, loosens, parseDollars, raises } from '../src/domain/policy.js'
+import { hostname, parseDollars, raises } from '../src/domain/policy.js'
 import { NOW, policy } from './support.js'
 
 describe('parseDollars', () => {
@@ -32,8 +32,8 @@ describe('hostname', () => {
 describe('raises', () => {
   it('names only the limits that went up', () => {
     const before = policy()
-    expect(raises(before, policy({ perTxMax: '2000001', dailyMax: '1' }))).toEqual(['perTxMax'])
-    expect(raises(before, before)).toEqual([])
+    expect(raises(before, { perTxMax: '2000001', dailyMax: '1' })).toEqual(['perTxMax'])
+    expect(raises(before, { removeDomains: ['api.example.com'], mode: 'shadow' })).toEqual([])
   })
 })
 
@@ -56,20 +56,14 @@ describe('Confirms', () => {
   })
 })
 
-describe('httpAdminClient', () => {
+describe('httpControlClient', () => {
   const json = (status: number, body: unknown) => Response.json(body, { status })
   function client(...responses: Response[]) {
     const fetch = vi.fn<typeof globalThis.fetch>()
     for (const response of responses) {
       fetch.mockResolvedValueOnce(response)
     }
-    const admin = httpAdminClient({
-      url: 'http://guard',
-      botToken: 'b',
-      adminToken: 'ADMIN',
-      fetch,
-    })
-    return { fetch, admin }
+    return { fetch, control: httpControlClient({ url: 'http://guard', botToken: 'BOT', fetch }) }
   }
   const sent = (fetch: ReturnType<typeof client>['fetch'], i = 0) => {
     const [url, init] = fetch.mock.calls[i] ?? []
@@ -81,80 +75,49 @@ describe('httpAdminClient', () => {
     }
   }
 
-  it('creates an agent with the admin token, and reads 409 as exists', async () => {
-    const { fetch, admin } = client(
-      json(200, { agentId: 'a/1', token: 't'.repeat(32) }),
-      json(409, { error: 'exists' }),
-    )
-    expect(await admin.createAgent('a/1')).toEqual({ agentId: 'a/1', token: 't'.repeat(32) })
-    expect(sent(fetch)).toEqual({
-      url: 'http://guard/v1/admin/agents',
-      method: 'POST',
-      body: JSON.stringify({ agentId: 'a/1' }),
-      auth: 'Bearer ADMIN',
-    })
-    expect(await admin.createAgent('a/1')).toBeUndefined()
-  })
-
-  it('lists, revokes and reads 404 as unknown', async () => {
-    const { fetch, admin } = client(
+  it('lists, revokes and reads 404 as unknown, on the bot routes with the bot token', async () => {
+    const { fetch, control } = client(
       json(200, { agents: [{ agentId: 'a', paused: false, mode: 'live' }] }),
       json(200, { agentId: 'a/1', revoked: true }),
       json(404, { error: 'not_found' }),
     )
-    expect(await admin.listAgents()).toEqual([{ agentId: 'a', paused: false, mode: 'live' }])
-    expect(await admin.revokeAgent('a/1')).toBe(true)
-    expect(sent(fetch, 1).url).toBe('http://guard/v1/admin/agents/a%2F1/revoke')
-    expect(await admin.revokeAgent('a')).toBe(false)
+    expect(await control.listAgents()).toEqual([{ agentId: 'a', paused: false, mode: 'live' }])
+    expect(sent(fetch)).toMatchObject({ url: 'http://guard/v1/bot/agents', auth: 'Bearer BOT' })
+    expect(await control.revokeAgent('a/1')).toBe(true)
+    expect(sent(fetch, 1).url).toBe('http://guard/v1/bot/agents/a%2F1/revoke')
+    expect(await control.revokeAgent('a')).toBe(false)
   })
 
-  it('reads and writes the whole policy, the agent id in the path only', async () => {
+  it('reads the policy and sends only the change to tighten it', async () => {
     const current = policy()
-    const { fetch, admin } = client(json(200, current), json(404, {}), json(200, current))
-    expect(await admin.policy('research-agent')).toEqual(current)
-    expect(await admin.policy('ghost')).toBeUndefined()
-    await admin.putPolicy(current)
-    const { agentId: _id, ...body } = current
+    const { fetch, control } = client(json(200, current), json(404, {}), json(200, current))
+    expect(await control.policy('research-agent')).toEqual(current)
+    expect(sent(fetch).url).toBe('http://guard/v1/bot/policy/research-agent')
+    expect(await control.policy('ghost')).toBeUndefined()
+    const change = { removeDomains: ['api.example.com'], perTxMax: '1' }
+    expect(await control.tighten('research-agent', change)).toEqual(current)
     expect(sent(fetch, 2)).toMatchObject({
-      url: 'http://guard/v1/admin/policy/research-agent',
-      method: 'PUT',
-      body: JSON.stringify(body),
+      url: 'http://guard/v1/bot/policy/research-agent/tighten',
+      method: 'POST',
+      body: JSON.stringify(change),
+      auth: 'Bearer BOT',
     })
   })
 
-  it('asks for a passkey enrol code with the admin token', async () => {
-    const body = { code: 'c'.repeat(16), expiresAt: NOW.toISOString() }
-    const { fetch, admin } = client(json(200, body))
-    expect(await admin.enrolCode()).toEqual(body)
-    expect(sent(fetch)).toMatchObject({
-      url: 'http://guard/v1/admin/passkeys/code',
-      method: 'POST',
-      auth: 'Bearer ADMIN',
-    })
+  it('reads a refused loosening as such, and any other 403 as an error', async () => {
+    const { control } = client(
+      json(403, { error: 'loosen_in_panel' }),
+      json(403, { error: 'unauthorized' }),
+    )
+    expect(await control.tighten('a', { perTxMax: '9' })).toBe('loosen_in_panel')
+    await expect(control.tighten('a', { perTxMax: '9' })).rejects.toThrow()
   })
 
   it('reads the doctor checks, and throws on an error', async () => {
     const checks = [{ id: 'db', status: 'ok', message: 'Database writable' }]
-    const { admin } = client(json(200, { checks }), json(500, {}))
-    expect(await admin.doctor()).toEqual(checks)
-    await expect(admin.doctor()).rejects.toThrow()
-  })
-})
-
-describe('loosens', () => {
-  it('is a raised limit, a new domain or going live, and nothing else', () => {
-    const before = policy({ mode: 'shadow' })
-    expect(loosens(before, policy({ mode: 'shadow', dailyMax: '10000001' }))).toBe(true)
-    expect(loosens(before, policy({ mode: 'shadow', allowedDomains: ['a.example.com'] }))).toBe(
-      true,
-    )
-    expect(loosens(before, policy({ mode: 'live' }))).toBe(true)
-    expect(loosens(before, policy({ mode: 'shadow', perTxMax: '1', allowedDomains: [] }))).toBe(
-      false,
-    )
-    // Without a mode the agent is live already: saying so again widens nothing.
-    const unset = policy()
-    delete unset.mode
-    expect(loosens(unset, policy({ mode: 'live' }))).toBe(false)
+    const { fetch, control } = client(json(200, { checks }), json(500, {}))
+    expect(await control.doctor()).toEqual(checks)
+    expect(sent(fetch).url).toBe('http://guard/v1/bot/doctor')
+    await expect(control.doctor()).rejects.toThrow()
   })
 })
