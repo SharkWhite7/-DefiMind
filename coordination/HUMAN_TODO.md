@@ -59,6 +59,24 @@ for later.
 
 ---
 
+## ⬜ HUMAN-27 — Create the Web Push key (CR-012)
+
+When the panel goes live with the infrastructure migration. On the guard-core machine, create a P-256
+private key, keep it where the hot keys are kept (the entrypoint loads it into tmpfs), and point
+guard-core at it with `VAPID_PRIVATE_KEY_FILE`. Set `VAPID_SUBJECT` to a `mailto:` address the owner
+reads. It is a signing key: never commit it, paste it in chat or send it to a session. The manager
+sends the exact commands then.
+
+---
+
+## ⬜ HUMAN-28 — Set the signing page address on guard-core (CR-014)
+
+When the panel goes live. Set `SIGN_PAGE_URL` on guard-core to the signing page's address, the same
+value the bot uses. Without it, the panel's Stop screen shows raw transactions instead of the
+one-tap Phantom links. A public URL, not a secret.
+
+---
+
 ## ⬜ HUMAN-26 — Publish the packages to npm
 
 Later. `create-defimind` and `@defimind/mcp-server` go to npm so users can install with one
