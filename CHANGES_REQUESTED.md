@@ -882,7 +882,10 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
 
 - **From:** integrator, from the CR-012 security review (`docs/security/cr-012-review.md`, H1)
 - **Date:** 2026-11-19
-- **Status:** proposed
+- **Status:** approved by the owner on 2026-11-19 ("aprovado o cr016"). Applied as SPEC v0.12. Lowering
+  a limit is allowed on the tighten route, which CR-012's step-up rule already treats as
+  tightening. Instead of a doctor check, a bot started with the admin token warns at startup,
+  because guard-core cannot see the bot's environment.
 - **Why:**
   - The bot holds `ADMIN_TOKEN`, so its commands can loosen any policy without a passkey.
   - The bot-side fix for H1 stops a stolen Telegram account, but not a compromised bot server:
