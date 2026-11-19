@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { CHAINS } from '@defimind/shared'
 import { z } from 'zod'
 import { isLoopback } from './domain/loopback.js'
@@ -41,6 +43,18 @@ export const configSchema = z
       .transform((value) => value === 'true'),
     /** Requests per minute per client address. */
     MCP_HTTP_RATE_LIMIT: z.coerce.number().int().min(1).max(100_000).default(60),
+    /** Gateway mode: a JSON file listing downstream MCP servers (CR-013). */
+    GATEWAY_FILE: z.string().min(1).optional(),
+    /** Where the gateway keeps its outbox and, if asked, the bodies. */
+    GATEWAY_STATE_DIR: z
+      .string()
+      .min(1)
+      .default(join(homedir(), '.defimind', 'mcp')),
+    /** Off by default: DefiMind only needs hashes, and content is the operator's to keep. */
+    GATEWAY_KEEP_BODIES: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     LOG_LEVEL: z
       .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
       .default('info'),
