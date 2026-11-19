@@ -57,6 +57,8 @@ export async function guardCore(dist: string) {
     killed: false,
     /** guard-core's answer to an assertion it cannot verify, for the next decision. */
     refuseNextPasskey: false,
+    /** CR-013: the first receipt that no longer holds, as guard-core's integrity check reports it. */
+    brokenAt: undefined as number | undefined,
     policy: {
       agentId: 'research-bot',
       chains: [chain],
@@ -71,6 +73,47 @@ export async function guardCore(dist: string) {
     } as Record<string, unknown>,
   }
   let origin = ''
+
+  // Two receipts, the first anchored: a relayed tool call and a payment guard-core made itself.
+  const receipt = (seq: number, extra: Record<string, unknown>) => ({
+    type: 'defimind.execution.v1',
+    seq,
+    prevHash: (seq === 1 ? '0' : 'a').repeat(64),
+    agentId: 'research-bot',
+    requestHash: 'c'.repeat(64),
+    responseHash: 'd'.repeat(64),
+    startedAt: later,
+    endedAt: later,
+    issuedAt: later,
+    hash: String(seq).repeat(64),
+    signature: 'e'.repeat(128),
+    ...extra,
+  })
+  const receipts = [
+    receipt(1, {
+      kind: 'tool_call',
+      server: 'github',
+      tool: 'create_issue',
+      outcome: 'ok',
+      assurance: 'relayed',
+    }),
+    receipt(2, {
+      kind: 'payment',
+      server: 'defimind',
+      tool: 'paid_fetch',
+      outcome: 'refused',
+      assurance: 'executed',
+      paymentReceipt: 'f'.repeat(64),
+    }),
+  ]
+  const executionAnchor = {
+    fromSeq: 1,
+    toSeq: 1,
+    root: '1'.repeat(64),
+    chain: CHAINS.solanaDevnet,
+    txId: '5'.repeat(88),
+    anchoredAt: later,
+  }
 
   const overview = () => ({
     chains: [
@@ -235,6 +278,28 @@ export async function guardCore(dist: string) {
         paused: false,
       })
     }
+    if (path === '/v1/owner/executions') {
+      return send(200, { receipts })
+    }
+    if (path === '/v1/owner/executions/integrity') {
+      return send(200, {
+        lastSeq: receipts.length,
+        lastHash: receipts.at(-1)?.hash,
+        ...(state.brokenAt === undefined ? {} : { brokenAt: state.brokenAt }),
+        lastAnchor: executionAnchor,
+      })
+    }
+    const proof = /^\/v1\/owner\/executions\/(\d+)\/proof$/.exec(path)
+    if (proof) {
+      const receipt = receipts[Number(proof[1]) - 1]
+      return receipt && receipt.seq <= executionAnchor.toSeq
+        ? send(200, {
+            receipt,
+            siblings: [{ side: 'right', hash: 'b'.repeat(64) }],
+            anchor: executionAnchor,
+          })
+        : send(404, { error: 'not_found' })
+    }
     if (path === '/v1/owner/kill') {
       state.killed = true
       return send(200, {
@@ -311,6 +376,7 @@ export async function guardCore(dist: string) {
   return {
     origin,
     state,
+    receipts,
     intentId,
     mandateId,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),

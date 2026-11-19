@@ -9,6 +9,7 @@ import { el } from './ui/dom.js'
 import { kill } from './ui/kill.js'
 import { enrol, login } from './ui/login.js'
 import { overview } from './ui/overview.js'
+import { executions } from './ui/executions.js'
 import { doctor, report } from './ui/report.js'
 import { settings } from './ui/settings.js'
 
@@ -81,6 +82,8 @@ function screen(route: Route): Screen {
       return report(ctx)
     case 'doctor':
       return doctor(ctx)
+    case 'executions':
+      return executions(ctx)
     case 'settings':
     case 'passkeys':
       return settings(ctx)

@@ -150,6 +150,50 @@ export const kill = z.object({
 })
 
 export const agents = z.object({ agents: z.array(agentSummary).max(1000) })
+const hex = (length: number) => z.string().regex(new RegExp(`^[0-9a-f]{${length}}$`))
+const seq = z.number().int().positive()
+
+/**
+ * CR-013. Loose objects: a proof bundle is downloaded as guard-core sent it, and a field this panel
+ * does not know yet still counts in the receipt's hash.
+ */
+export const receipt = z.looseObject({
+  seq,
+  agentId,
+  kind: z.enum(['tool_call', 'payment']),
+  server: text(128),
+  tool: text(128),
+  outcome: z.enum(['ok', 'error', 'refused']),
+  assurance: z.enum(['executed', 'relayed']),
+  startedAt: isoTime,
+  endedAt: isoTime,
+  hash: hex(64),
+})
+
+export const anchor = z.looseObject({
+  fromSeq: seq,
+  toSeq: seq,
+  root: hex(64),
+  chain: text(64),
+  txId: text(128),
+  anchoredAt: isoTime,
+})
+
+export const executions = z.object({ receipts: z.array(receipt).max(10_000) })
+
+export const integrity = z.object({
+  lastSeq: z.number().int().nonnegative(),
+  lastHash: text(64),
+  brokenAt: seq.optional(),
+  lastAnchor: anchor.optional(),
+})
+
+export const proof = z.looseObject({
+  receipt,
+  siblings: z.array(z.object({ side: z.enum(['left', 'right']), hash: hex(64) })).max(64),
+  anchor,
+})
+
 export const created = z.object({ agentId, token: z.string().min(16).max(512) })
 export const session = z.object({ expiresAt: isoTime })
 export const pushKey = z.object({ publicKey: z.string().regex(/^[A-Za-z0-9_-]+$/) })
@@ -163,3 +207,5 @@ export type AgentView = z.infer<typeof agentSummary>
 export type PolicyView = z.infer<typeof policy>
 export type BudgetView = z.infer<typeof budget>
 export type KillView = z.infer<typeof kill>
+export type ReceiptView = z.infer<typeof receipt>
+export type IntegrityView = z.infer<typeof integrity>

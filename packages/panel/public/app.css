@@ -318,3 +318,30 @@ pre {
   color: var(--cyan);
   font-weight: 600;
 }
+
+.badge.ok {
+  background: rgb(61 220 151 / 15%);
+  color: var(--ok);
+}
+
+.badge-line {
+  font-weight: 600;
+}
+
+.badge-line.ok {
+  color: var(--ok);
+}
+
+.badge-line.stop {
+  color: var(--stop);
+}
+
+/* Transaction ids and hashes are one long word: break them anywhere rather than widen the page. */
+p code {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.item button {
+  align-self: flex-start;
+}

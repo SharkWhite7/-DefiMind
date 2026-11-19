@@ -65,6 +65,7 @@ describe('routes', () => {
     { name: 'agent', id: 'bot/1' },
     { name: 'report' },
     { name: 'doctor' },
+    { name: 'executions' },
     { name: 'passkeys' },
     { name: 'settings' },
     { name: 'kill' },
