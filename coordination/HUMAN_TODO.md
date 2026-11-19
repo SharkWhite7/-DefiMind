@@ -39,10 +39,10 @@ verified:
    Others have done this for their domains; the outcome is unknown. It is public and shows the owner's
    GitHub account.
 
-   Title: `Manual review request: defimind-onchain.vercel.app ("This dApp could be malicious")`
+   Title: `Manual review request: agentguard-onchain.vercel.app ("This dApp could be malicious")`
 
    ```text
-   Phantom shows "This dApp could be malicious" on defimind-onchain.vercel.app when it asks to sign
+   Phantom shows "This dApp could be malicious" on agentguard-onchain.vercel.app when it asks to sign
    a Squads v4 multisigCreateV2 transaction, partly signed by a one-time create key. Adding a
    spending limit and the kill (removing it) on the same page are not flagged.
 
@@ -71,9 +71,9 @@ is the owner's decision: which firm, what scope, what cost. Until then, the publ
 ## ⏳ HUMAN-31 — Run the infrastructure migration
 
 CR-012, CR-013 and CR-016 are complete in code, so the move of the live deployment to this repository
-can start. The integrator writes the runbook and guides each step; HUMAN-27, HUMAN-28 and HUMAN-30
+can start. The runbook is [`docs/migration.md`](../docs/migration.md) (Parts A to F, with a rollback); the manager walks the owner through it one step at a time, and the integrator helps when a check fails; HUMAN-27, HUMAN-28 and HUMAN-30
 happen during it. One rule from CR-016: the new bot app gets `BOT_TOKEN` only, never
-`GUARD_ADMIN_TOKEN`.
+`GUARD_ADMIN_TOKEN`. The signing page stays at `agentguard-onchain.vercel.app`; the migration creates no new domain.
 
 ---
 
@@ -149,7 +149,7 @@ Only if simulation needs a second provider. Not needed so far.
 | HUMAN-11 | First live run on Solana devnet: three payments, 3.5 USDC                       | 2026-11-04 | INT-3, INT-4                                                         |
 | HUMAN-12 | Safe on Base Sepolia                                                            | 2026-11-05 | `0x1df91C7e227370F138Ae546f3D2fa2Fde8a48C2D`                         |
 | HUMAN-13 | First live run on Base Sepolia, from an empty hot wallet                        | 2026-11-05 | INT-6, PR #63                                                        |
-| HUMAN-14 | Phantom signing page hosted                                                     | 2026-11-06 | `https://defimind-onchain.vercel.app`                                |
+| HUMAN-14 | Phantom signing page hosted                                                     | 2026-11-06 | `https://agentguard-onchain.vercel.app`                              |
 | HUMAN-15 | Devnet rehearsal with Phantom as owner: create, add limit, kill                 | 2026-11-07 | ADR 003                                                              |
 | HUMAN-16 | Base hot wallet key moved to a file                                             | 2026-11-07 | PR #81                                                               |
 | HUMAN-18 | Robinhood Chain USDG addresses confirmed against Paxos                          | 2026-11-07 | allowlist-only token rule                                            |
