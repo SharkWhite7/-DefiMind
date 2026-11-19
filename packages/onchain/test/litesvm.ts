@@ -15,6 +15,7 @@ import { FailedTransactionMetadata, web3Account, type Svm } from './svm.js'
  */
 export function liteConnection(svm: Svm, rpcEndpoint = 'http://127.0.0.1:0'): Connection {
   const statuses = new Map<string, { err: unknown }>()
+  const landed = new Map<string, VersionedTransaction>()
 
   const account = (address: PublicKey): AccountInfo<Buffer> | null => svm.getAccount(address)
 
@@ -27,6 +28,7 @@ export function liteConnection(svm: Svm, rpcEndpoint = 'http://127.0.0.1:0'): Co
     // signature and the second would be refused as already processed.
     svm.expireBlockhash()
     statuses.set(signature, { err })
+    if (tx instanceof VersionedTransaction) landed.set(signature, tx)
     if (err !== null) {
       // A cluster's preflight refuses the same way, with the logs naming the rule.
       throw new Error(`simulation failed: ${result.toString()}`)
@@ -47,6 +49,10 @@ export function liteConnection(svm: Svm, rpcEndpoint = 'http://127.0.0.1:0'): Co
       Number(svm.minimumBalanceForRentExemption(BigInt(size))),
     sendTransaction: async (tx: Transaction | VersionedTransaction) => submit(tx),
     sendRawTransaction: async (raw: Uint8Array) => submit(VersionedTransaction.deserialize(raw)),
+    getTransaction: async (signature: string) => {
+      const tx = landed.get(signature)
+      return tx ? { transaction: tx, meta: { err: statuses.get(signature)!.err } } : null
+    },
     getSignatureStatuses: async (signatures: string[]) => ({
       value: signatures.map((signature) => {
         const status = statuses.get(signature)

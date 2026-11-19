@@ -110,6 +110,25 @@ payments need. guard-core's doctor warns below it.
 - **EVM:** four calls at 250,000 gas each, at the current max fee per gas. On Robinhood Chain the
   gas a transaction uses includes its L1 data cost, so this is well above an L1 draw's.
 
+### Anchors (CR-013)
+
+`createSvmAnchor({ chain, rpcUrl, secretKey })` returns `{ chain, publish(memo) }`. `publish`
+sends one transaction holding one SPL Memo v2 instruction. The anchor key signs it and pays the
+fee, and `publish` returns the signature once the transaction is confirmed. The key is
+`ANCHOR_KEY_FILE`: a keypair of its own that holds only fees, never the hot wallet. Each anchor
+costs one 5,000-lamport fee. The memo is `defimind:anchor:v1:<fromSeq>-<toSeq>:<rootHex>`, which
+guard-core builds; this package does not parse it.
+
+The anchor key is passed to the Memo program as a signer account. Memo v2 fails unless that key
+signed, so the memo is tied to the key on chain as well as by the fee payer.
+
+`readMemo(rpcUrl, txId)` gives the memo of a confirmed transaction, for `defimind-verify`.
+`memoOf(connection, txId)` also gives the signer. Both give `undefined` in three cases:
+
+- the transaction is missing;
+- the transaction failed;
+- the transaction carries no memo, or more than one.
+
 ### Solana adapter
 
 `createSvmAdapter({ chain, rpcUrl, hotWalletSecretKey, multisig, mint })` returns a `ChainAdapter`

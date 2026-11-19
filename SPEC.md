@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.10 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.11 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -271,6 +271,9 @@ CSP default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data
 worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'.
 Owner routes need the session cookie; every state-changing one also needs X-DefiMind-Request: 1 and
 Origin == PASSKEY_ORIGIN. 401 { error: "no_session" }, 403 { error: "bad_origin" | "step_up_required" }.
+Step-up (CR-015): no assertion gives 403 step_up_required; one that fails verification, is for another
+action or body, or was already used gives 401 passkey_not_verified. Only a 401 no_session ends the
+panel's session.
 POST /v1/owner/session/options -> WebAuthn authentication options (single use, 2 minutes)
 POST /v1/owner/session { assertion } -> { expiresAt }   sets dm_session: HttpOnly, Secure,
   SameSite=Strict, Path=/v1/owner; 30 minutes idle, 12 hours in all; stored as its SHA-256
@@ -288,7 +291,8 @@ GET  /v1/owner/agents; POST /v1/owner/agents { agentId, assertion } -> { agentId
 POST /v1/owner/agents/:id/revoke
 GET  /v1/owner/policy/:agentId; PUT /v1/owner/policy/:agentId { policy, assertion? }
   assertion required when the PUT raises perTxMax, dailyMax or approvalThreshold, adds to chains,
-  tokens, allowedRecipients or allowedDomains, sets mode "live", or sets requireMandate false
+  tokens, allowedRecipients or allowedDomains, sets mode "live", sets requireMandate false, or (CR-015)
+  sets paused from true to false, or raises maxPaymentsPerMinute or priceIncreaseMaxPct
 POST /v1/owner/pause { agentId }; POST /v1/owner/resume { agentId, assertion }
 POST /v1/owner/kill {} -> the same body as POST /v1/admin/kill, plus on each ownerTransactions entry
   link?: string (Phantom universal link) and pageLink?: string (the signing page itself), built with
@@ -391,6 +395,9 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.11 (2026-11-19): CR-015, approved by the owner. Three more policy changes need the step-up
+  (unpausing, a raised maxPaymentsPerMinute, a raised priceIncreaseMaxPct), and the step-up error
+  codes: 403 step_up_required, 401 passkey_not_verified.
 - v0.10 (2026-11-18): CR-014, approved by the owner. GET /v1/owner/push/key for the VAPID public
   key; optional link and pageLink on the owner kill's ownerTransactions; the Phantom kill-link
   builders move from the bot to @defimind/shared.
