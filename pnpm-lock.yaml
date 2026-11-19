@@ -229,6 +229,19 @@ importers:
         specifier: ^6.33.5
         version: 6.33.5
 
+  packages/sdk:
+    dependencies:
+      '@defimind/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+    devDependencies:
+      tsx:
+        specifier: ^4.23.15
+        version: 4.23.15
+
   packages/shared: {}
 
   packages/telegram-bot:
