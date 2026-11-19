@@ -406,6 +406,20 @@ describe('breaker alerts', () => {
         'machine.\nguard-core says: <i>id abc</i>',
     )
   })
+
+  it('tells every owner the execution record broke, and to open the panel', async () => {
+    const { calls, deliver } = await harness()
+    const broken = { kind: 'chain_broken', detail: 'seq 42 <b>', sentAt: NOW.toISOString() }
+    expect((await deliver('/hooks/alert', broken)).statusCode).toBe(200)
+    expect((await deliver('/hooks/alert', broken)).statusCode).toBe(409)
+    const posted = sent(calls, 'sendMessage')
+    expect(posted.map((call) => call.payload['chat_id'])).toEqual([OWNER.id, OTHER_OWNER.id])
+    expect(posted[0]?.payload['text']).toBe(
+      '<b>The execution record failed its integrity check.</b> A receipt was changed or removed ' +
+        'after it was written. Open the DefiMind panel to see where.\n' +
+        'guard-core says: <i>seq 42 &lt;b&gt;</i>',
+    )
+  })
 })
 
 describe('shadow mode events', () => {
