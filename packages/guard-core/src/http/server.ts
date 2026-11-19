@@ -260,7 +260,12 @@ async function serve(
     app.register(
       async (bot) => {
         bot.addHook('preHandler', requireToken(config.BOT_TOKEN))
-        await bot.register(botRoutes(deps, config.TELEGRAM_APPROVALS === 'true'))
+        await bot.register(
+          botRoutes(deps, config.TELEGRAM_APPROVALS === 'true', {
+            botUrl: config.BOT_URL,
+            databaseUrl: config.DATABASE_URL,
+          }),
+        )
       },
       { prefix: '/v1/bot' },
     )

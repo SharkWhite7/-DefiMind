@@ -193,3 +193,15 @@ export const executionsQuery = z.object({
   to: z.iso.datetime().optional(),
 })
 export const seqParam = z.object({ seq: z.coerce.number().int().positive() })
+
+/** CR-016: the only policy change the bot may make. `mode` can only go to shadow. */
+export const policyTighten = z
+  .object({
+    removeDomains: z.array(z.string().min(1).max(253)).max(256).optional(),
+    removeRecipients: z.array(address).max(256).optional(),
+    mode: z.literal('shadow').optional(),
+    perTxMax: atomicAmount.optional(),
+    dailyMax: atomicAmount.optional(),
+    approvalThreshold: atomicAmount.optional(),
+  })
+  .strict()
