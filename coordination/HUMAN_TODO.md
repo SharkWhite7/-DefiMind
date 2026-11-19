@@ -61,11 +61,11 @@ for later.
 
 ## ⬜ HUMAN-27 — Create the Web Push key (CR-012)
 
-When the panel goes live with the infrastructure migration. On the guard-core machine, create a P-256
-private key, keep it where the hot keys are kept (the entrypoint loads it into tmpfs), and point
-guard-core at it with `VAPID_PRIVATE_KEY_FILE`. Set `VAPID_SUBJECT` to a `mailto:` address the owner
-reads. It is a signing key: never commit it, paste it in chat or send it to a session. The manager
-sends the exact commands then.
+When the panel goes live with the infrastructure migration. On the owner's machine, create a P-256
+private key (PEM) straight into a file, then set two Fly secrets on guard-core: `VAPID_PRIVATE_KEY`,
+holding the PEM read from that file, and `VAPID_SUBJECT`, a `mailto:` address the owner reads. The
+entrypoint writes the key into tmpfs and points guard-core at it (PR #15). It is a signing key: never
+commit it, paste it in chat or send it to a session. The manager sends the exact commands then.
 
 ---
 
