@@ -855,7 +855,8 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
 
 - **From:** integrator, for guard-core (PR #11)
 - **Date:** 2026-11-18
-- **Status:** proposed
+- **Status:** approved by the owner on 2026-11-19 ("cr015 aprovado"). Applied as SPEC v0.11. Already
+  implemented in guard-core (#11) and the panel (#12).
 - **Why:** SPEC v0.10 lists the policy changes that need a passkey. Three changes it leaves out
   widen what an agent may do just as much:
   - Unpausing through `PUT /v1/owner/policy` would be a resume without the resume's passkey.
@@ -908,6 +909,6 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     commands are removed;
   - create-defimind: the wizard stops giving the bot the admin token;
   - e2e;
-  - SPEC v0.11 (or v0.12 if CR-015 lands first).
+  - SPEC v0.12.
 - **Rollout:** with the infrastructure migration. A deployment that still gives the bot
   `ADMIN_TOKEN` keeps working, but `doctor` warns about it.
