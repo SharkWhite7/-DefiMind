@@ -12,7 +12,6 @@ import { startMockGuard, type MockGuard } from '../examples/mock-guard/server.js
 import { connectDownstream } from '../src/adapters/downstream.js'
 import { fileOutbox } from '../src/adapters/outbox.js'
 import { createServer } from '../src/server.js'
-import { PAUSED } from '../src/tools/gateway.js'
 import { fakeGuard } from './support.js'
 
 const log = pino({ level: 'silent' })
@@ -57,8 +56,10 @@ describe('gateway against a fake guard-core over HTTP', () => {
 
     await add('one')
     down = true
-    expect((await add('two')).content.at(-1)?.text).toMatch(/could not record this call yet/)
-    expect((await add('three')).content[0]?.text).toBe(PAUSED)
+    expect((await add('two')).content.at(-1)?.text).toMatch(
+      /^Receipts paused: guard-core refused \(503 unavailable\); retrying\./,
+    )
+    expect((await add('three')).content[0]?.text).toMatch(/No new tool call is forwarded/)
     down = false
     expect((await add('four')).content[0]?.text).toBe('added four')
 

@@ -19,8 +19,11 @@ const report = z.strictObject({
 export interface Outbox {
   size(): number
   add(report: ExecutionReport): void
-  /** Sends the oldest first and stops at the first that fails, so the chain keeps their order. */
-  drain(send: (report: ExecutionReport) => Promise<unknown>): Promise<void>
+  /**
+   * Sends the oldest first and stops at the first that fails, so the chain keeps their order.
+   * Resolves to that failure, or undefined once the outbox is empty.
+   */
+  drain(send: (report: ExecutionReport) => Promise<unknown>): Promise<unknown>
 }
 
 export function fileOutbox(path: string): Outbox {
@@ -33,7 +36,7 @@ export function fileOutbox(path: string): Outbox {
     })
     renameSync(temp, path)
   }
-  let draining: Promise<void> | undefined
+  let draining: Promise<unknown> | undefined
   return {
     size: () => pending.length,
     add(item) {
@@ -48,8 +51,10 @@ export function fileOutbox(path: string): Outbox {
             pending.shift()
             save()
           }
-        } catch {
+          return undefined
+        } catch (error) {
           // Still pending; the next call or the next retry tries again.
+          return error
         } finally {
           draining = undefined
         }

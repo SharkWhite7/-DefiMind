@@ -382,7 +382,11 @@ startedAt, endedAt }`. The hashes are the SHA-256 of the canonical JSON of the a
 
 - When guard-core does not record a call, the agent still gets that call's result, with a note. The
   report waits in `<GATEWAY_STATE_DIR>/<AGENT_ID>.outbox.jsonl`.
-- No new call is forwarded until the outbox is empty. The agent is told calls are paused.
+- No new call is forwarded until the outbox is empty. The agent is told calls are paused, and why,
+  from guard-core's status and error code only. For example: `Receipts paused: guard-core refused
+(401 unauthorized); the operator must act.` A 4xx (a revoked token, a refused report) waits for
+  the operator. An outage or a 5xx is retried. The log line carries the same `httpStatus` and
+  `code`, never a body.
 - The outbox is retried on every call and every 30 seconds, oldest first, so the chain keeps the
   order of the calls.
 - It survives a restart. A damaged outbox stops the start rather than lose calls.

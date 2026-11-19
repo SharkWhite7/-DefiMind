@@ -1,8 +1,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ExecutionReport, Recorder } from '@defimind/sdk'
-import { hashOf } from '@defimind/sdk'
+import { type ExecutionReport, type Recorder, RecordError, hashOf } from '@defimind/sdk'
 import type { ExecutionReceipt } from '@defimind/shared'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
@@ -15,7 +14,7 @@ import { connectDownstream, transportFor } from '../src/adapters/downstream.js'
 import { fileOutbox } from '../src/adapters/outbox.js'
 import { gatewayName, serversFile } from '../src/domain/gateway.js'
 import { createServer } from '../src/server.js'
-import { type GatewayDeps, PAUSED } from '../src/tools/gateway.js'
+import { type GatewayDeps, paused } from '../src/tools/gateway.js'
 import { fakeGuard } from './support.js'
 
 const log = pino({ level: 'silent' })
@@ -57,7 +56,7 @@ function recorder() {
   const record: Recorder = {
     record: async (report) => {
       if (down) {
-        throw new Error('guard-core down')
+        throw new RecordError('refused', 401, 'unauthorized')
       }
       reports.push(report)
       return { seq: reports.length, hash: 'a'.repeat(64) } as ExecutionReceipt
@@ -138,12 +137,14 @@ describe('gateway', () => {
     rec.setDown(true)
     const first = await call('issues__create_issue', { title: 'one' })
     expect(first.content[0]?.text).toBe('opened: one')
-    expect(first.content.at(-1)?.text).toMatch(/could not record this call yet/)
+    expect(first.content.at(-1)?.text).toMatch(
+      /^Receipts paused: guard-core refused \(401 unauthorized\); the operator must act\. This call ran/,
+    )
     expect(outbox.size()).toBe(1)
 
     const second = await call('issues__create_issue', { title: 'two' })
     expect(second.isError).toBe(true)
-    expect(second.content[0]?.text).toBe(PAUSED)
+    expect(second.content[0]?.text).toBe(paused(new RecordError('refused', 401, 'unauthorized')))
     expect(calls).toHaveLength(1)
 
     rec.setDown(false)
@@ -167,6 +168,49 @@ describe('gateway', () => {
         result: { content: [{ type: 'text', text: 'opened: bug' }] },
       }),
     ])
+  })
+})
+
+describe('pause notes', () => {
+  it('say who must act, from the status and code alone', () => {
+    expect(paused(new RecordError('x', 503, 'unavailable'))).toMatch(
+      /^Receipts paused: guard-core refused \(503 unavailable\); retrying\. No new tool call/,
+    )
+    expect(paused(new RecordError('x'))).toMatch(
+      /^Receipts paused: guard-core could not be reached; retrying\./,
+    )
+    expect(paused(new Error('odd'))).toMatch(/^Receipts paused: guard-core did not record the call/)
+  })
+})
+
+describe('pause log', () => {
+  it('logs the status and code of a refused report, and not the body', async () => {
+    const lines: string[] = []
+    const logged = pino({ level: 'info' }, { write: (line: string) => lines.push(line) })
+    const rec = recorder()
+    rec.setDown(true)
+    const { downstream } = await fakeDownstream()
+    const server = createServer({
+      guard: fakeGuard({}),
+      log: logged,
+      defaultChain: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+      gateway: {
+        downstreams: [downstream],
+        recorder: rec.record,
+        outbox: fileOutbox(join(mkdtempSync(join(tmpdir(), 'defimind-log-')), 'o.jsonl')),
+        log: logged,
+      },
+    })
+    const [clientSide, serverSide] = InMemoryTransport.createLinkedPair()
+    await server.connect(serverSide)
+    const client = new Client({ name: 'agent', version: '0.0.0' })
+    await client.connect(clientSide)
+    await client.callTool({ name: 'issues__create_issue', arguments: { title: 'private title' } })
+    const entry = lines
+      .map((line) => JSON.parse(line) as Record<string, unknown>)
+      .find((item) => item['msg'] === 'receipts paused: call not recorded, kept in outbox')
+    expect(entry).toMatchObject({ httpStatus: 401, code: 'unauthorized', server: 'issues' })
+    expect(lines.join('')).not.toContain('private title')
   })
 })
 

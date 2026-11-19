@@ -1,4 +1,4 @@
-import { type Recorder, hashOf } from '@defimind/sdk'
+import { type Recorder, RecordError, hashOf } from '@defimind/sdk'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult, Tool } from '@modelcontextprotocol/sdk/types.js'
 import type { Logger } from 'pino'
@@ -18,13 +18,32 @@ export interface GatewayDeps {
   now?: () => Date
 }
 
-export const PAUSED =
-  'DefiMind has not yet recorded an earlier tool call, so no new call is forwarded until it does. ' +
-  'Nothing was sent. Tell the user that tool calls are paused, and try again in a minute.'
+/**
+ * Status and error code only: enough to tell a revoked token (a 4xx, which waits for the operator)
+ * from an outage (retried), and never guard-core's body.
+ */
+export function pauseNote(error: unknown): string {
+  if (!(error instanceof RecordError)) {
+    return 'Receipts paused: guard-core did not record the call; retrying.'
+  }
+  const status = error.httpStatus ?? 0
+  const act = status >= 400 && status < 500 ? 'the operator must act' : 'retrying'
+  return `Receipts paused: ${error.reason}; ${act}.`
+}
 
-const UNRECORDED =
-  'DefiMind could not record this call yet. It ran, and its result is above; the receipt waits ' +
-  'and further tool calls are paused until DefiMind records it.'
+export function paused(error: unknown): string {
+  return (
+    `${pauseNote(error)} No new tool call is forwarded until DefiMind records the earlier ones, ` +
+    'so nothing was sent. Tell the user that tool calls are paused.'
+  )
+}
+
+function unrecorded(error: unknown): string {
+  return (
+    `${pauseNote(error)} This call ran and its result is above, but it has no receipt yet. ` +
+    'Further tool calls are paused until DefiMind records it.'
+  )
+}
 
 /** Registers every downstream tool as <server>__<tool>; returns how many were exposed. */
 export function registerGateway(server: McpServer, deps: GatewayDeps): number {
@@ -77,9 +96,9 @@ async function forward(
 ): Promise<CallToolResult> {
   const { recorder, outbox, log, now = () => new Date() } = deps
   if (outbox.size() > 0) {
-    await outbox.drain((report) => recorder.record(report))
+    const error = await outbox.drain((report) => recorder.record(report))
     if (outbox.size() > 0) {
-      return failure(PAUSED)
+      return failure(paused(error))
     }
   }
   const startedAt = now().toISOString()
@@ -108,9 +127,17 @@ async function forward(
       _meta: { ...result._meta, 'defimind/receipt': { seq: receipt.seq, hash: receipt.hash } },
     }
   } catch (error) {
-    log.error({ server: downstream.name, tool, err: error }, 'call not recorded, kept in outbox')
+    const { httpStatus, code } =
+      error instanceof RecordError ? error : { httpStatus: undefined, code: undefined }
+    log.error(
+      { server: downstream.name, tool, httpStatus, code },
+      'receipts paused: call not recorded, kept in outbox',
+    )
     outbox.add(report)
     deps.keepBody?.(body)
-    return { ...result, content: [...result.content, { type: 'text', text: UNRECORDED }] }
+    return {
+      ...result,
+      content: [...result.content, { type: 'text', text: unrecorded(error) }],
+    }
   }
 }
