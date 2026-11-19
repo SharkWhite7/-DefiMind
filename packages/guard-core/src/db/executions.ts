@@ -1,5 +1,5 @@
 import type { ExecutionReceipt } from '@defimind/shared'
-import { and, asc, desc, eq, gte, lt } from 'drizzle-orm'
+import { and, asc, desc, eq, gte, lte } from 'drizzle-orm'
 import type { Db } from './client.js'
 import { executions } from './schema.js'
 
@@ -44,7 +44,7 @@ export function executionsBetween(
 ): ExecutionReceipt[] {
   const window = and(
     gte(executions.issuedAt, from.toISOString()),
-    lt(executions.issuedAt, to.toISOString()),
+    lte(executions.issuedAt, to.toISOString()),
     agentId === undefined ? undefined : eq(executions.agentId, agentId),
   )
   return db
@@ -54,4 +54,9 @@ export function executionsBetween(
     .orderBy(asc(executions.seq))
     .all()
     .map(toReceipt)
+}
+
+export function executionAt(db: Db, seq: number): ExecutionReceipt | undefined {
+  const row = db.select().from(executions).where(eq(executions.seq, seq)).get()
+  return row === undefined ? undefined : toReceipt(row)
 }

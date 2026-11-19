@@ -7,6 +7,7 @@ import { openMandate } from '../service/mandates.js'
 import { enrol, enrolmentOptions, issueEnrolCode } from '../service/passkeys.js'
 import type { PaymentDeps } from '../service/payments.js'
 import { controls } from './control.js'
+import { adminExecutions } from './executions.js'
 import { HttpError } from './errors.js'
 import { mandateReply } from './mandates.js'
 import { enrolledNotice, refusal } from './owner.js'
@@ -131,5 +132,7 @@ export function adminRoutes(
     )
 
     app.post('/kill', async (request) => control.kill(request.log))
+
+    await app.register(adminExecutions(deps))
   }
 }

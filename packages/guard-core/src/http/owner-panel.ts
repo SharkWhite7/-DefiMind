@@ -11,6 +11,7 @@ import { type OwnerAction, stepUpChallenge, verifyStepUp } from '../service/step
 import type { X402Deps } from '../service/x402.js'
 import { controls } from './control.js'
 import { decideIntent, decideMandateFor } from './decisions.js'
+import { ownerExecutions } from './executions.js'
 import { HttpError } from './errors.js'
 import {
   agentIdParam,
@@ -59,6 +60,8 @@ export function ownerPanelRoutes(
   }
 
   return async (app: FastifyInstance) => {
+    await app.register(ownerExecutions(deps))
+
     app.post('/v1/owner/challenge', async (request) => {
       const { action, body } = ownerChallenge.parse(request.body)
       return stepUpChallenge(db, rp, action, body ?? null, now())

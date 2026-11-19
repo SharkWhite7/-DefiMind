@@ -1,4 +1,5 @@
-import { readReceiptKeyFile } from './adapters/keypair.js'
+import { createSvmAnchor } from '@defimind/onchain'
+import { readKeypairFile, readReceiptKeyFile } from './adapters/keypair.js'
 import { readVapidKeyFile, webPushService } from './adapters/push.js'
 import { buildChains } from './chains.js'
 import { loadConfig } from './config.js'
@@ -32,6 +33,18 @@ const vapid =
     ? undefined
     : await readVapidKeyFile(config.VAPID_PRIVATE_KEY_FILE, config.VAPID_SUBJECT)
 
+// The anchor key is its own keypair: one that holds fees only, so a leak of it moves no funds.
+const anchorPublisher =
+  config.ANCHOR_CHAIN === undefined ||
+  config.ANCHOR_RPC_URL === undefined ||
+  config.ANCHOR_KEY_FILE === undefined
+    ? undefined
+    : createSvmAnchor({
+        chain: config.ANCHOR_CHAIN,
+        rpcUrl: config.ANCHOR_RPC_URL,
+        secretKey: await readKeypairFile(config.ANCHOR_KEY_FILE),
+      })
+
 const targets = config.SIGN_PAGE_URL === undefined ? [] : await killTargets(config)
 
 const split = config.PUBLIC_PORT !== undefined
@@ -42,6 +55,7 @@ const [app, publicApp] = await buildServers(
     chains,
     sweepMs: config.EXPIRY_SWEEP_MS,
     killTargets: targets,
+    ...(anchorPublisher === undefined ? {} : { anchorPublisher }),
     ...(vapid === undefined
       ? {}
       : { push: { service: webPushService(vapid), publicKey: vapid.publicKey } }),
