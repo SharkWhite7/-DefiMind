@@ -5,9 +5,9 @@ payment is checked against a policy, simulated, and then auto-approved, sent to 
 for approval, or rejected.
 
 Funds stay in a vault the owner alone controls: a **Squads multisig** on Solana, a **Safe** on EVM
-chains. An audited onchain spend limit lets the guard's hot wallet draw at most a daily cap from it:
-the Squads Spending Limit on Solana, the Safe Allowance Module on EVM chains. There is no custom
-contract. The agent never holds a key: guard-core signs, and only after the checks pass. The owner
+chains. An onchain spend limit lets the guard's hot wallet draw at most a daily cap from it: the
+Squads Spending Limit on Solana, the Safe Allowance Module on EVM chains, both third-party code
+audited by their own makers. There is no custom contract. The agent never holds a key: guard-core signs, and only after the checks pass. The owner
 approves and kills from Telegram, and signs vault changes in Phantom.
 
 ```
