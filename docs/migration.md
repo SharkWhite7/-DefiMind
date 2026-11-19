@@ -18,7 +18,7 @@ time, in this order.
 - What a step prints is safe to show: public keys, addresses, names, health answers.
 - If a step's check fails, stop there and send the integrator the step number and what it printed.
 
-The only values read off the screen are the agent ids, in E1.
+The only values copied off the screen are the agent lines, in E1.
 
 ## Part A: prepare (nothing live changes)
 
@@ -127,8 +127,26 @@ cd ~/DefiMind && key="$(grep '^ROBINHOOD_HOT_WALLET_KEY_FILE=' packages/guard-co
 - the Web Push contact;
 - anchoring on devnet first.
 
+guard-core links to the signing page the bot already uses, the live one in the bot's `.env`. First
+print that address, which is public:
+
 ```bash
-fly secrets set --app defimind-guard-core --stage PASSKEY_RP_ID=defimind-guard-core.fly.dev PASSKEY_ORIGIN=https://defimind-guard-core.fly.dev TELEGRAM_APPROVALS=false SIGN_PAGE_URL=https://defimind-onchain.vercel.app VAPID_SUBJECT=https://github.com/SharkWhite7/-DefiMind ANCHOR_CHAIN=solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1 ANCHOR_RPC_URL=https://api.devnet.solana.com
+cd ~/DefiMind && grep '^SIGN_PAGE_URL=' packages/telegram-bot/.env
+```
+
+Check, before going on:
+
+1. It prints one `https://…vercel.app` address. Today that is the `agentguard-onchain` project, the
+   page Phantom already reviewed (HUMAN-25).
+2. That address, opened with nothing after it, says "This link is not valid".
+3. In the Vercel dashboard, that project is in the owner's account, and its production branch is
+   `main`.
+
+If any of the three fails, stop. A link to a project nobody holds could serve a fake signing page.
+Then set the settings, the signing page taken from that same line:
+
+```bash
+cd ~/DefiMind && fly secrets set --app defimind-guard-core --stage PASSKEY_RP_ID=defimind-guard-core.fly.dev PASSKEY_ORIGIN=https://defimind-guard-core.fly.dev TELEGRAM_APPROVALS=false "$(grep '^SIGN_PAGE_URL=' packages/telegram-bot/.env)" VAPID_SUBJECT=https://github.com/SharkWhite7/-DefiMind ANCHOR_CHAIN=solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1 ANCHOR_RPC_URL=https://api.devnet.solana.com
 fly secrets list --app defimind-guard-core
 ```
 
@@ -177,7 +195,8 @@ If it prints anything else, remove the secret with
 
 ## Part C: the switch (agents paused, about 15 minutes)
 
-**C1. Pause every agent** from Telegram, on the old bot. Send `/agent list`, then send
+**C1. Pause every agent** from Telegram, on the old bot. It still runs the old code with the admin
+token, so `/agent list` and `/pause` work there as before. Send `/agent list`, then send
 `/pause <id>` for each agent it lists. Then send `/status`, and keep its answer for C2.
 
 **C2. A final backup of the old database,** copied to this machine and opened with the new code.
@@ -206,7 +225,7 @@ Check: every machine of both apps is `stopped`.
 
 **C4. Put the database on the new guard-core.**
 
-- The file goes in under a new name, `migrated.db`. The empty `guard.db` that B5 created is never
+- The file goes in under a new name, `migrated.db`. The empty `guard.db` that B6 created is never
   overwritten while it is open.
 - The file is handed to the app's user.
 - `DATABASE_URL` then points at the file. A secret wins over the `fly.toml` value, and setting it
@@ -270,17 +289,46 @@ Check: Settings shows notifications on. A test push arrives when the next paymen
 
 **E1. Point each agent at the new address.**
 
-1. Read its id with `claude mcp get agentguard`, under `AGENT_ID`, and its chain under
-   `DEFAULT_CHAIN`.
-2. Run the lines below once per agent.
-3. Run the `claude mcp add …` command that setup prints.
+First, find each agent in Claude Code's config. The command below prints three things per agent:
+its id, its chain, and whether its token file is there. It never prints a token.
 
-The token is the same one as before: it came across with the database. It is piped from the old
-token file, so it is never typed.
+- An older manual setup may hold the token inline in the config instead of in a file. The command
+  then moves it into `~/.agentguard/mcp/<id>.token`, readable by the owner only.
+- `claude mcp get agentguard` is not used here: it would print an inline token.
 
 ```bash
-AGENT='the AGENT_ID shown'; CHAIN='the DEFAULT_CHAIN shown'
-cd ~/DefiMind && pnpm --filter @defimind/mcp-server run setup claude-code --guard-url https://defimind-guard-core.fly.dev --agent-id "$AGENT" --chain "$CHAIN" --check < ~/.agentguard/mcp/"$AGENT".token
+node -e '
+const fs = require("node:fs"), os = require("node:os"), path = require("node:path");
+const cfg = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".claude.json"), "utf8"));
+const servers = [cfg.mcpServers?.agentguard, ...Object.values(cfg.projects ?? {}).map((p) => p.mcpServers?.agentguard)].filter(Boolean);
+if (servers.length === 0) console.log("STOP: no agentguard server in ~/.claude.json");
+for (const { env = {} } of servers) {
+  const file = env.AGENT_TOKEN_FILE ?? path.join(os.homedir(), ".agentguard", "mcp", `${env.AGENT_ID}.token`);
+  if (!fs.existsSync(file) && env.AGENT_TOKEN) {
+    fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(file, env.AGENT_TOKEN + "\n", { mode: 0o600 });
+  }
+  console.log(`AGENT=${env.AGENT_ID} CHAIN=${env.DEFAULT_CHAIN ?? ""} TOKEN_FILE=${file} ${fs.existsSync(file) ? "present" : "MISSING"}`);
+}'
+```
+
+Check: each line ends with `present`.
+
+- If a line says `MISSING`, stop for that agent. Its token is in neither place, and the integrator
+  will help issue a new one for it.
+- If the command says `STOP`, the agent runs in another client, not Claude Code. Stop and tell the
+  integrator which client.
+
+Then, for each line, run the steps below:
+
+1. Copy the line's `AGENT=… CHAIN=… TOKEN_FILE=…` part, without the last word, into the shell.
+2. Run the setup line. It saves the same token for the new address: the token came across with the
+   database, and it is piped from its file, never typed.
+3. Run the `claude mcp add …` command that setup prints.
+4. Once every agent is done, remove the old server entry.
+
+```bash
+cd ~/DefiMind && pnpm --filter @defimind/mcp-server run setup claude-code --guard-url https://defimind-guard-core.fly.dev --agent-id "$AGENT" ${CHAIN:+--chain "$CHAIN"} --check < "$TOKEN_FILE"
 claude mcp remove agentguard
 ```
 
@@ -357,7 +405,7 @@ going back is clean:
    the command it prints:
 
    ```bash
-   cd ~/AgentGuard && pnpm --filter @agentguard/mcp-server run setup claude-code --guard-url https://agentguard-guard-core.fly.dev --agent-id "$AGENT" --chain "$CHAIN" --replace < ~/.agentguard/mcp/"$AGENT".token
+   cd ~/AgentGuard && pnpm --filter @agentguard/mcp-server run setup claude-code --guard-url https://agentguard-guard-core.fly.dev --agent-id "$AGENT" ${CHAIN:+--chain "$CHAIN"} --replace < "$TOKEN_FILE"
    ```
 
 4. Resume the agents with `/resume <id>` on the old bot.
