@@ -33,4 +33,9 @@
 
 - The gateway fails closed: a call whose receipt cannot be recorded stops further calls until the
   outbox drains. An agent may pause rather than act unrecorded.
+- guard-core's own integrity check compares the chain with the anchors table, which lives in the
+  same database. Someone who can edit that database can delete the newest receipts and their anchor
+  rows together, and the local check passes. Only `defimind-verify`, which reads the memo from the
+  chain, catches that. This is why anchoring exists, and why a bundle is checked against the chain,
+  not against our server.
 - Credit or scoring built on receipts is out of scope until a legal review.
