@@ -834,7 +834,8 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
 
 - **From:** integrator, for the panel role
 - **Date:** 2026-11-18
-- **Status:** proposed
+- **Status:** approved by the owner on 2026-11-18 ("cr14 eu aprovo", in the panel session). Applied as
+  SPEC v0.10.
 - **Why:** the panel (CR-012, merged in #5) cannot subscribe to push without the server's VAPID
   public key, and its Stop screen can only show raw transactions, while the bot gives the owner
   one-tap Phantom links for the onchain kill.
@@ -849,3 +850,29 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
      guard-core and the bot build the same links. They are pure, and every input is public.
 - **Blast radius:** guard-core (the route, the kill links, `SIGN_PAGE_URL`), shared (the two
   functions and the optional fields), the bot (imports from shared), SPEC v0.10.
+
+### CR-015 — Three more policy changes that need a passkey, and the step-up error codes
+
+- **From:** integrator, for guard-core (PR #11)
+- **Date:** 2026-11-18
+- **Status:** proposed
+- **Why:** SPEC v0.10 lists the policy changes that need a passkey. Three changes it leaves out
+  widen what an agent may do just as much:
+  - Unpausing through `PUT /v1/owner/policy` would be a resume without the resume's passkey.
+  - A higher `maxPaymentsPerMinute` lets more payments through before the breaker trips.
+  - A higher `priceIncreaseMaxPct` lets bigger x402 price jumps through without the owner.
+
+  The panel also needs to tell a missing assertion apart from a refused one.
+
+- **What:**
+  1. In the owner panel section, the `PUT /v1/owner/policy/:agentId` step-up list gains: `paused`
+     from true to false, a raised `maxPaymentsPerMinute`, and a raised `priceIncreaseMaxPct`.
+  2. Step-up errors: no assertion gives 403 `step_up_required`. An assertion that fails
+     verification, is for another action or body, or was already used gives 401
+     `passkey_not_verified`. A 401 with any code other than `no_session` must not end the
+     panel's session.
+- **Blast radius:**
+  - guard-core: already implemented in #11;
+  - panel: mirror the three fields in `domain/policy.ts`, and send only a 401 `no_session` to
+    the login screen;
+  - SPEC v0.11.

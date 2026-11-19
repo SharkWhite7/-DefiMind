@@ -3,7 +3,7 @@ import { httpAdminClient } from './adapters/admin.js'
 import { httpGuardClient } from './adapters/guard.js'
 import { createBot } from './bot/index.js'
 import { loadConfig } from './config.js'
-import { type KillTarget, phantomKill } from './domain/phantom.js'
+import { type KillTarget, phantomKill } from '@defimind/shared'
 import { buildServer } from './http/server.js'
 
 const EXPIRY_SWEEP_MS = 15_000

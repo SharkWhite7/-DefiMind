@@ -1,5 +1,5 @@
-import type { ChainId } from '@defimind/shared'
-import { CHAINS } from '@defimind/shared'
+import { CHAINS } from './constants.js'
+import type { ChainId } from './types.js'
 
 /** The cluster names the signing page accepts (packages/onchain/web/build.ts). */
 const CLUSTERS = new Map<ChainId, string>([
@@ -23,10 +23,10 @@ export interface PhantomKill {
 
 /**
  * Opens the onchain kill on our signing page inside Phantom, where only the owner can sign it (ADR
- * 003). Every value comes from the bot's own config and all of them are public: the page derives the
+ * 003). Every value comes from the caller's config (the bot's, or guard-core's for the owner kill) and all of
+ * them are public: the page derives the
  * limit from them and checks the chain before it asks for a signature. The page refuses a link whose
- * `issued` is more than 15 minutes old, so a button that outlives the bot's memory of it (a restart)
- * still stops working.
+ * `issued` is more than 15 minutes old, so a stale link stops working.
  */
 export function phantomKillUrl(signPage: string, target: KillTarget, issued: Date): string {
   const link = killPageUrl(signPage, target, issued)
