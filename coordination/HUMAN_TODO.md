@@ -68,6 +68,15 @@ is the owner's decision: which firm, what scope, what cost. Until then, the publ
 
 ---
 
+## ⏳ HUMAN-31 — Run the infrastructure migration
+
+CR-012, CR-013 and CR-016 are complete in code, so the move of the live deployment to this repository
+can start. The integrator writes the runbook and guides each step; HUMAN-27, HUMAN-28 and HUMAN-30
+happen during it. One rule from CR-016: the new bot app gets `BOT_TOKEN` only, never
+`GUARD_ADMIN_TOKEN`.
+
+---
+
 ## ⬜ HUMAN-30 — Create the anchoring key (CR-013)
 
 At the infrastructure migration. guard-core anchors the execution chain on Solana, and needs its own
