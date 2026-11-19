@@ -1,5 +1,5 @@
 import type { ChainAdapter } from '@defimind/onchain'
-import type { ChainId } from '@defimind/shared'
+import type { ChainId, KillTarget } from '@defimind/shared'
 import rateLimit from '@fastify/rate-limit'
 import Fastify, {
   type FastifyBaseLogger,
@@ -26,6 +26,12 @@ import { adminRoutes } from './admin.js'
 import { agentRoutes } from './agent.js'
 import { botRoutes } from './bot.js'
 import { ownerRoutes } from './owner.js'
+import { ownerPanelRoutes } from './owner-panel.js'
+import { DEFAULT_PANEL_DIR, panelRoutes } from './panel.js'
+import type { PushService } from '../adapters/push.js'
+import { pusher } from '../service/push.js'
+import { INTEGRITY_EVERY_MS, integrityMonitor } from '../service/integrity.js'
+import { ownerSessionRoutes } from './owner-session.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -44,6 +50,10 @@ export interface ServerDeps {
   sweepMs?: number
   /** Signs receipts. Receipts are off without it. */
   receiptKey?: KeyObject
+  /** Web Push to the owner's panel, with the VAPID public key the panel subscribes with. */
+  push?: { service: PushService; publicKey: string }
+  /** The chains the owner kill links to the signing page for, with SIGN_PAGE_URL (CR-014). */
+  killTargets?: KillTarget[]
 }
 
 /**
@@ -73,17 +83,39 @@ export async function buildServers(
       logger: {
         level: config.LOG_LEVEL,
         // A bearer token in a log file is the same as a bearer token in a repository.
-        redact: ['req.headers.authorization', 'req.headers["x-guard-signature"]'],
+        redact: [
+          'req.headers.authorization',
+          'req.headers.cookie',
+          'req.headers["x-guard-signature"]',
+          'res.headers["set-cookie"]',
+        ],
         serializers: { err: serializeError },
       },
     }),
   )
   const [first] = apps as [Server, ...Server[]]
   const deps = paymentDeps(options, first.log)
+  if (deps.receiptKey !== undefined) {
+    deps.integrity = integrityMonitor(deps, deps.receiptKey)
+  }
   for (const [i, surface] of surfaces.entries()) {
-    await serve(apps[i] as Server, surface, deps, config)
+    await serve(
+      apps[i] as Server,
+      surface,
+      deps,
+      config,
+      options.killTargets ?? [],
+      options.push?.publicKey,
+    )
   }
 
+  if (deps.integrity !== undefined) {
+    const { integrity } = deps
+    integrity.check()
+    const daily = setInterval(() => integrity.check(), INTEGRITY_EVERY_MS)
+    daily.unref()
+    first.addHook('onClose', async () => clearInterval(daily))
+  }
   if (options.sweepMs !== undefined) {
     const timer = setInterval(() => {
       const expired = sweep(deps)
@@ -123,6 +155,16 @@ function paymentDeps(options: ServerDeps, log: FastifyBaseLogger): X402Deps {
     log,
     ...(options.receiptKey === undefined ? {} : { receiptKey: options.receiptKey }),
     ...(passkeySetup(options.config) ?? {}),
+    ...(options.push === undefined
+      ? {}
+      : {
+          push: pusher({
+            db: options.db,
+            service: options.push.service,
+            now: options.now ?? (() => new Date()),
+            log,
+          }),
+        }),
   }
 }
 
@@ -131,8 +173,8 @@ function paymentDeps(options: ServerDeps, log: FastifyBaseLogger): X402Deps {
  * for the whole internet. Fly sets Fly-Client-IP to the real address. Only the public listener
  * sits behind that proxy, so only there is the header believed.
  */
-function clientIp(surface: Surface): (request: FastifyRequest) => string {
-  if (surface !== 'public') {
+function clientIp(surface: Surface, trustFly: boolean): (request: FastifyRequest) => string {
+  if (surface !== 'public' || !trustFly) {
     return (request) => request.ip
   }
   return (request) => {
@@ -141,8 +183,15 @@ function clientIp(surface: Surface): (request: FastifyRequest) => string {
   }
 }
 
-async function serve(app: FastifyInstance, surface: Surface, deps: X402Deps, config: Config) {
-  const ipOf = clientIp(surface)
+async function serve(
+  app: FastifyInstance,
+  surface: Surface,
+  deps: X402Deps,
+  config: Config,
+  killTargets: KillTarget[],
+  pushKey: string | undefined,
+) {
+  const ipOf = clientIp(surface, config.TRUST_FLY_CLIENT_IP === 'true')
   await app.register(rateLimit, {
     max: config.RATE_LIMIT_PER_IP,
     timeWindow: '1 minute',
@@ -176,6 +225,23 @@ async function serve(app: FastifyInstance, surface: Surface, deps: X402Deps, con
         ? undefined
         : { rpId: config.PASSKEY_RP_ID, origin: config.PASSKEY_ORIGIN }
     app.register(ownerRoutes(deps, rp))
+    app.register(panelRoutes(config.PANEL_DIR ?? DEFAULT_PANEL_DIR))
+    if (rp !== undefined) {
+      app.register(
+        ownerSessionRoutes(
+          deps,
+          rp,
+          ownerPanelRoutes(deps, rp, {
+            botUrl: config.BOT_URL,
+            databaseUrl: config.DATABASE_URL,
+            ...(pushKey === undefined ? {} : { pushKey }),
+            ...(config.SIGN_PAGE_URL === undefined
+              ? {}
+              : { signing: { page: config.SIGN_PAGE_URL, targets: killTargets } }),
+          }),
+        ),
+      )
+    }
     app.register(
       agentRoutes(deps, {
         perIp: config.RATE_LIMIT_PER_IP,
@@ -205,7 +271,7 @@ async function serve(app: FastifyInstance, surface: Surface, deps: X402Deps, con
     app.register(
       async (bot) => {
         bot.addHook('preHandler', requireToken(config.BOT_TOKEN))
-        await bot.register(botRoutes(deps))
+        await bot.register(botRoutes(deps, config.TELEGRAM_APPROVALS === 'true'))
       },
       { prefix: '/v1/bot' },
     )

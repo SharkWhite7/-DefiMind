@@ -71,9 +71,32 @@ export const configSchema = z
     PASSKEY_RP_ID: optional(z.hostname()),
     PASSKEY_ORIGIN: optional(z.url({ protocol: /^https$/ })),
 
+    /**
+     * CR-012. When false, the default, the panel is the only place to approve: a Telegram tap can
+     * still reject, never approve, so a stolen Telegram account moves nothing.
+     */
+    TELEGRAM_APPROVALS: z.enum(['true', 'false']).default('false'),
+    /**
+     * CR-012. Web Push to the owner's panel: a P-256 private key in PEM, and the contact the push
+     * services may reach (mailto: or https:). Both or neither; push is off without them.
+     */
+    VAPID_PRIVATE_KEY_FILE: optional(z.string().min(1)),
+    VAPID_SUBJECT: optional(z.string().regex(/^(mailto:|https:\/\/)\S+$/)),
+    /** CR-014. The onchain signing page; with it, the owner kill links each chain's kill there. */
+    SIGN_PAGE_URL: optional(z.url({ protocol: /^https$/ })),
+    /** The panel's static build, served at /panel. Defaults to packages/panel/dist. */
+    PANEL_DIR: optional(z.string().min(1)),
+
     /** Offline chains that move no money. For local development only. */
     GUARD_STUB_CHAINS: z.enum(['true', 'false']).default('false'),
     EXPIRY_SWEEP_MS: z.coerce.number().int().positive().default(30_000),
+
+    /**
+     * Whether the public listener may read the client's address from Fly-Client-IP. Only behind a
+     * proxy that sets it and drops the client's own (Fly, or the Caddy in deploy/): anywhere else a
+     * client picks a fresh one per request and is never limited.
+     */
+    TRUST_FLY_CLIENT_IP: z.enum(['true', 'false']).default('false'),
 
     /** Requests per minute. Per IP on every route, and per agent token on the agent routes. */
     RATE_LIMIT_PER_IP: z.coerce.number().int().positive().default(120),
@@ -88,6 +111,9 @@ export const configSchema = z
       path: ['PASSKEY_ORIGIN'],
     },
   )
+  .refine((c) => (c.VAPID_PRIVATE_KEY_FILE === undefined) === (c.VAPID_SUBJECT === undefined), {
+    path: ['VAPID_SUBJECT'],
+  })
   // A passkey is bound to an address, so turning them on without one would approve nothing.
   .refine(
     (c) =>

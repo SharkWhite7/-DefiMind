@@ -64,6 +64,34 @@
       "when": 1794254021289,
       "tag": "0008_passkey_last_used",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1795025282777,
+      "tag": "0009_owner_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1795043566008,
+      "tag": "0010_approval_requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1795050737257,
+      "tag": "0011_push_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1795051900295,
+      "tag": "0012_executions",
+      "breakpoints": true
     }
   ]
 }

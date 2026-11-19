@@ -7,7 +7,7 @@ import { vi } from 'vitest'
 import type { AdminClient } from '../src/adapters/admin.js'
 import type { GuardClient } from '../src/adapters/guard.js'
 import { createBot } from '../src/bot/index.js'
-import type { PhantomKill } from '../src/domain/phantom.js'
+import type { PhantomKill } from '@defimind/shared'
 import type { ReportSchedule } from '../src/domain/report.js'
 
 export const OWNER = { id: 1001, is_bot: false, first_name: 'Ana', username: 'ana' }
@@ -218,6 +218,8 @@ export function setup(
     phantomKills?: PhantomKill[]
     weekly?: ReportSchedule
     guardPublicUrl?: string
+    /** The tests of Telegram approvals turn them on; the panel tests leave them off. */
+    telegramApprovals?: boolean
     admin?: AdminClient
     log?: Logger
   } = {},
@@ -236,6 +238,7 @@ export function setup(
     phantomKills: options.phantomKills,
     weekly: options.weekly,
     guardPublicUrl: options.guardPublicUrl,
+    telegramApprovals: options.telegramApprovals,
   })
   const calls = mockTelegram(bot, options.fail)
   return { bot, desk, commands, owner, guard, admin, calls }

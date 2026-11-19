@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.9 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.10 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -290,12 +290,17 @@ GET  /v1/owner/policy/:agentId; PUT /v1/owner/policy/:agentId { policy, assertio
   assertion required when the PUT raises perTxMax, dailyMax or approvalThreshold, adds to chains,
   tokens, allowedRecipients or allowedDomains, sets mode "live", or sets requireMandate false
 POST /v1/owner/pause { agentId }; POST /v1/owner/resume { agentId, assertion }
-POST /v1/owner/kill {} -> the same body as POST /v1/admin/kill
+POST /v1/owner/kill {} -> the same body as POST /v1/admin/kill, plus on each ownerTransactions entry
+  link?: string (Phantom universal link) and pageLink?: string (the signing page itself), built with
+  phantomKillUrl / killPageUrl from @defimind/shared. Only when guard-core has SIGN_PAGE_URL and the
+  chain has a signing-page target (CR-014). The admin kill never carries them.
 GET  /v1/owner/passkeys -> as GET /v1/admin/passkeys
 POST /v1/owner/push { subscription: { endpoint, keys: { p256dh, auth } } } -> { id }
 DELETE /v1/owner/push/:id
+GET  /v1/owner/push/key -> { publicKey }   the VAPID public key, base64url; session only (CR-014)
   Web Push with VAPID (VAPID_PRIVATE_KEY_FILE, VAPID_SUBJECT) and RFC 8291 encryption. Payload
-  { kind: "approval" | "mandate" | "executed" | "attack" | "breaker" | "passkey_enrolled" | "kill",
+  { kind: "approval" | "mandate" | "executed" | "attack" | "breaker" | "passkey_enrolled" | "kill"
+  | "chain_broken" (CR-013),
   agentId?, chain?, amount?, intentId?, sentAt } and never a recipient or URL. A 404 or 410 from the
   push service deletes the subscription.
 GET  /panel/enrol#code=…   the first-passkey page; src/scripts/passkey-code.ts prints the link
@@ -386,6 +391,9 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.10 (2026-11-18): CR-014, approved by the owner. GET /v1/owner/push/key for the VAPID public
+  key; optional link and pageLink on the owner kill's ownerTransactions; the Phantom kill-link
+  builders move from the bot to @defimind/shared.
 - v0.9 (2026-11-18): CR-013, approved by the owner. Verified execution: a signed, hash-chained
   ExecutionReceipt for every tool call and payment, the MCP gateway mode, the SDK, optional Merkle
   anchoring with no custom contract, defimind-verify, and the executions routes for the panel.

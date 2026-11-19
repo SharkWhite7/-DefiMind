@@ -53,7 +53,7 @@ software fails. DefiMind uses both, in layers.
   their own wallet. There is no hosted service and nothing in the path belongs to us.
 - **Money is bigint.** Every amount is an integer in the token's base units. No floating point
   touches money.
-- **Everything is audited.** Every decision is written to an audit log with its reasons.
+- **Everything is logged.** Every decision is written to an audit log with its reasons.
 
 ## 3. Architecture
 

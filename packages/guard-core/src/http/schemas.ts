@@ -120,13 +120,14 @@ export const idParam = z.object({ id: z.uuid() })
  * A WebAuthn response is checked in full by the library; here only its outer shape and size, so
  * nothing unbounded reaches it.
  */
-const webAuthnResponse = z
+export const webAuthnResponse = z
   .object({ id: z.string().min(1).max(1024), type: z.literal('public-key') })
   .loose()
   .refine((value) => JSON.stringify(value).length <= 16_384, 'response too large')
 
 export const passkeyEnrolment = z.object({ response: webAuthnResponse })
 export const ownerApproval = z.object({ intentId: z.uuid(), assertion: webAuthnResponse })
+export const ownerSignIn = z.object({ assertion: webAuthnResponse })
 
 const enrolCode = z.string().regex(/^[A-Za-z0-9_-]{32}$/, 'not an enrolment code')
 export const enrolCodeBody = z.object({ code: enrolCode })
@@ -136,3 +137,52 @@ export const ownerEnrolment = z.object({
   /** From an enrolled passkey, once there is one: it vouches for the new one. */
   assertion: webAuthnResponse.optional(),
 })
+
+const OWNER_ACTIONS = [
+  'approve_intent',
+  'approve_mandate',
+  'loosen_policy',
+  'resume',
+  'create_agent',
+] as const
+
+/** CR-012. `body` is hashed as sent, so it is only bounded here, never reshaped. */
+export const ownerChallenge = z.object({
+  action: z.enum(OWNER_ACTIONS),
+  body: z
+    .unknown()
+    .refine((value) => JSON.stringify(value ?? null).length <= 16_384, 'body too large'),
+})
+export const ownerDecision = z.object({
+  decision: z.enum(['approve', 'reject']),
+  assertion: webAuthnResponse.optional(),
+})
+export const ownerNewAgent = z.object({ agentId: newAgentId, assertion: webAuthnResponse })
+export const ownerResume = z.object({ agentId, assertion: webAuthnResponse })
+export const ownerPolicy = z.object({ policy: policyBody, assertion: webAuthnResponse.optional() })
+
+const base64url = z.string().regex(/^[A-Za-z0-9_-]+$/)
+/**
+ * A browser's PushSubscription. The endpoint is the push service's own https URL; guard-core posts
+ * only there, so nothing else is accepted.
+ */
+export const ownerPush = z.object({
+  subscription: z.object({
+    endpoint: z.url({ protocol: /^https$/ }).max(2048),
+    keys: z.object({ p256dh: base64url.min(80).max(100), auth: base64url.min(16).max(32) }),
+  }),
+})
+
+const sha256Hex = z.string().regex(/^[0-9a-f]{64}$/, 'hex SHA-256')
+/** CR-013: what a gateway or the SDK reports about one tool call. Hashes only, never bodies. */
+export const executionReport = z
+  .object({
+    server: z.string().min(1).max(128),
+    tool: z.string().min(1).max(128),
+    requestHash: sha256Hex,
+    responseHash: sha256Hex,
+    outcome: z.enum(['ok', 'error', 'refused']),
+    startedAt: z.iso.datetime(),
+    endedAt: z.iso.datetime(),
+  })
+  .refine((r) => r.startedAt <= r.endedAt, { path: ['endedAt'], message: 'before startedAt' })

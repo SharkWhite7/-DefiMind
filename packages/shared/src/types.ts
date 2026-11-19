@@ -128,6 +128,8 @@ export interface ProofBundle {
 export type AlertEvent =
   | { kind: 'breaker_tripped'; agentId: string; detail: string; sentAt: string }
   | { kind: 'passkey_enrolled'; detail: string; sentAt: string }
+  /** CR-013: the execution receipt chain failed its integrity check. */
+  | { kind: 'chain_broken'; detail: string; sentAt: string }
 
 export type IntentStatus =
   | 'approved'
@@ -277,6 +279,10 @@ export interface OwnerTransaction {
   description: string
   /** Null when the transaction could not be built: that chain's allowance is still live. */
   payload: unknown
+  /** CR-014: the Phantom universal link to the signing page; owner kill only, with SIGN_PAGE_URL. */
+  link?: string
+  /** CR-014: the signing page itself, for Phantom's desktop extension. */
+  pageLink?: string
 }
 
 /** Response of POST /v1/admin/kill. */

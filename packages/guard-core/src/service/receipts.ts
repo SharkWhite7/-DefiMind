@@ -3,6 +3,8 @@ import { createHash, createPublicKey, sign, type KeyObject } from 'node:crypto'
 import { getClearance, saveReceipt } from '../db/receipts.js'
 import type { Db } from '../db/client.js'
 import { canonicalJson } from '../domain/canonical.js'
+import { appendExecution, sha256Hex } from './executions.js'
+import type { PaymentDeps } from './payments.js'
 
 /** Hex SHA-256 of the policy's canonical JSON: a receipt names the rules it was paid under. */
 export function policyHash(policy: Policy): string {
@@ -40,4 +42,51 @@ export function issueReceipt(
 export function publicKeyHex(key: KeyObject): string {
   const spki = createPublicKey(key).export({ format: 'der', type: 'spki' })
   return spki.subarray(spki.length - 32).toString('hex')
+}
+
+/**
+ * After an executed payment: its CR-010 receipt, then its entry in the execution chain (CR-013),
+ * which points to the receipt by hash. Neither may undo a payment that already happened.
+ */
+export function recordExecuted(deps: PaymentDeps, intent: PayIntent): void {
+  const key = deps.receiptKey
+  if (key === undefined) {
+    return
+  }
+  try {
+    const receipt = issueReceipt(deps.db, key, intent, deps.now())
+    const { agentId, kind, chain, token, amount, recipient, reason, domain, mandateId } = intent
+    appendExecution(
+      deps.db,
+      key,
+      {
+        agentId,
+        kind: 'payment',
+        server: 'defimind',
+        tool: kind,
+        requestHash: sha256Hex(
+          canonicalJson({
+            agentId,
+            kind,
+            chain,
+            token,
+            amount,
+            recipient,
+            reason,
+            domain,
+            mandateId,
+          }),
+        ),
+        responseHash: sha256Hex(canonicalJson({ status: intent.status, txId: intent.txId })),
+        outcome: 'ok',
+        assurance: 'executed',
+        ...(receipt === undefined ? {} : { paymentReceipt: sha256Hex(canonicalJson(receipt)) }),
+        startedAt: intent.createdAt,
+        endedAt: deps.now().toISOString(),
+      },
+      deps.now(),
+    )
+  } catch (error) {
+    deps.log.error({ err: error, intentId: intent.id }, 'receipt not issued')
+  }
 }

@@ -119,6 +119,14 @@ describe('loadConfig', () => {
     }
   })
 
+  it('leaves Telegram approvals off unless set to true', () => {
+    expect(loadConfig(env).TELEGRAM_APPROVALS).toBe(false)
+    expect(loadConfig({ ...env, TELEGRAM_APPROVALS: 'true' }).TELEGRAM_APPROVALS).toBe(true)
+    expect(() => loadConfig({ ...env, TELEGRAM_APPROVALS: 'yes' })).toThrow(
+      /^invalid configuration: TELEGRAM_APPROVALS$/,
+    )
+  })
+
   it('needs at least one owner', () => {
     expect(() => loadConfig({ ...env, OWNER_TELEGRAM_IDS: '' })).toThrow('OWNER_TELEGRAM_IDS')
   })

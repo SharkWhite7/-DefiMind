@@ -254,3 +254,62 @@ export const enrolCodes = sqliteTable('enrol_codes', {
   hash: text('hash').primaryKey(),
   expiresAt: text('expires_at').notNull(),
 })
+
+/** An owner's signed-in panel session (CR-012). The cookie holds the token; only its hash is here. */
+export const ownerSessions = sqliteTable('owner_sessions', {
+  tokenHash: text('token_hash').primaryKey(),
+  /** The passkey that signed in, so a removed passkey's sessions can be ended. */
+  passkeyId: text('passkey_id').notNull(),
+  createdAt: text('created_at').notNull(),
+  lastSeenAt: text('last_seen_at').notNull(),
+  /** Twelve hours after sign-in, however active the session. */
+  expiresAt: text('expires_at').notNull(),
+})
+
+/**
+ * What the owner was asked, kept so the panel can show it (CR-012): the bot gets it once, the
+ * panel reads it on every visit. Pruned once its approval deadline has passed.
+ */
+export const approvalRequests = sqliteTable('approval_requests', {
+  /** The intent's id, or the mandate's. */
+  id: text('id').primaryKey(),
+  kind: text('kind', { enum: ['intent', 'mandate'] }).notNull(),
+  body: text('body', { mode: 'json' }).notNull(),
+  approveBefore: text('approve_before').notNull(),
+})
+
+/** The owner's browsers that get Web Push (CR-012). The keys are the browser's, public by design. */
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+  id: text('id').primaryKey(),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  createdAt: text('created_at').notNull(),
+})
+
+/**
+ * CR-013: one row per tool call or payment, in one hash chain. Hashes and metadata only: the
+ * arguments and results never reach guard-core's database.
+ */
+export const executions = sqliteTable(
+  'executions',
+  {
+    seq: integer('seq').primaryKey(),
+    prevHash: text('prev_hash').notNull(),
+    agentId: text('agent_id').notNull(),
+    kind: text('kind', { enum: ['tool_call', 'payment'] }).notNull(),
+    server: text('server').notNull(),
+    tool: text('tool').notNull(),
+    requestHash: text('request_hash').notNull(),
+    responseHash: text('response_hash').notNull(),
+    outcome: text('outcome', { enum: ['ok', 'error', 'refused'] }).notNull(),
+    assurance: text('assurance', { enum: ['executed', 'relayed'] }).notNull(),
+    paymentReceipt: text('payment_receipt'),
+    startedAt: text('started_at').notNull(),
+    endedAt: text('ended_at').notNull(),
+    issuedAt: text('issued_at').notNull(),
+    hash: text('hash').notNull().unique(),
+    signature: text('signature').notNull(),
+  },
+  (t) => [index('executions_agent_issued').on(t.agentId, t.issuedAt)],
+)

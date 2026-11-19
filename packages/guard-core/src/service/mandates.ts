@@ -1,3 +1,4 @@
+import { saveRequest } from '../db/requests.js'
 import type { Amount, Mandate, MandateApprovalRequest, RejectCode } from '@defimind/shared'
 import { randomUUID } from 'node:crypto'
 import { insertMandate } from '../db/mandates.js'
@@ -23,7 +24,7 @@ export type Opened = { mandate: Mandate } | { refused: RejectCode[] } | { notFou
  * approval threshold, and otherwise waits for the owner, as a payment of that size would.
  */
 export async function openMandate(
-  deps: Pick<PaymentDeps, 'db' | 'bot' | 'now' | 'log'>,
+  deps: Pick<PaymentDeps, 'db' | 'bot' | 'now' | 'log' | 'push'>,
   terms: MandateTerms,
   byOwner: boolean,
 ): Promise<Opened> {
@@ -77,6 +78,8 @@ export async function openMandate(
         simulation: { summary: 'opens a task budget; no funds move now', balanceChanges: [] },
         approveBefore: mandate.expiresAt,
       }
+      saveRequest(db, request)
+      deps.push?.approval(request)
       await deps.bot.requestApproval(request)
     } catch (error) {
       // Saved as pending first, so the sweep closes it if the bot never hears.

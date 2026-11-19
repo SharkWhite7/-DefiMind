@@ -73,6 +73,11 @@ export const configSchema = z
       .default(CHAINS.robinhoodTestnet),
     // guard-core's public page, where an owner approves with a passkey.
     GUARD_PUBLIC_URL: optional(httpsPage),
+    // Off by default: the panel approves, and the bot only rejects. Must match guard-core's.
+    TELEGRAM_APPROVALS: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
     // The weekly report: both, or neither for no weekly report. 0 is Sunday.
     REPORT_WEEKDAY: optional(z.coerce.number().int().min(0).max(6)),
     REPORT_HOUR_UTC: optional(z.coerce.number().int().min(0).max(23)),

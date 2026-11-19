@@ -1,4 +1,5 @@
-import type { AlertEvent, PayIntent } from '@defimind/shared'
+import type { PayIntent } from '@defimind/shared'
+import type { GuardAlert } from '../adapters/bot.js'
 import type { PaymentDeps } from './payments.js'
 
 // About 21 seconds in all: enough to ride out a bot restart, short enough that the alert still
@@ -11,6 +12,7 @@ const RETRY_MS = [1_000, 4_000, 16_000]
  * Never awaited: a bot that is down must not hold up or fail a payment that already happened.
  */
 export function notify(deps: Deps, intent: PayIntent): void {
+  deps.push?.intent(intent)
   void deliver(
     deps,
     // Stamped per attempt: the bot refuses events older than five minutes.
@@ -20,8 +22,8 @@ export function notify(deps: Deps, intent: PayIntent): void {
 }
 
 /** An alert as the caller builds it; the time is stamped per attempt. */
-export type AlertBody = AlertEvent extends infer A
-  ? A extends AlertEvent
+export type AlertBody = GuardAlert extends infer A
+  ? A extends GuardAlert
     ? Omit<A, 'sentAt'>
     : never
   : never
@@ -31,14 +33,15 @@ export type AlertBody = AlertEvent extends infer A
  * Never awaited.
  */
 export function alert(deps: Deps, event: AlertBody): void {
+  deps.push?.alert(event)
   void deliver(
     deps,
-    () => deps.bot.alert({ ...event, sentAt: deps.now().toISOString() } as AlertEvent),
+    () => deps.bot.alert({ ...event, sentAt: deps.now().toISOString() } as GuardAlert),
     'agentId' in event ? { kind: event.kind, agentId: event.agentId } : { kind: event.kind },
   )
 }
 
-type Deps = Pick<PaymentDeps, 'bot' | 'now' | 'log'>
+type Deps = Pick<PaymentDeps, 'bot' | 'now' | 'log' | 'push'>
 
 async function deliver(deps: Deps, send: () => Promise<void>, about: Record<string, string>) {
   for (let attempt = 0; ; attempt++) {

@@ -52,6 +52,7 @@ beforeEach(async () => {
       BOT_URL: 'http://localhost:8788',
       BOT_WEBHOOK_SECRET: 'c'.repeat(64),
       LOG_LEVEL: 'fatal',
+      TELEGRAM_APPROVALS: 'true',
     }),
     now: () => new Date('2026-11-03T12:00:00Z'),
   })

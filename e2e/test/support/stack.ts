@@ -1,3 +1,4 @@
+import { generateKeyPairSync } from 'node:crypto'
 import {
   buildServer as buildGuard,
   createAgent,
@@ -20,6 +21,8 @@ const ADMIN_TOKEN = 'a'.repeat(64)
 const BOT_TOKEN = 'b'.repeat(64)
 export const WEBHOOK_SECRET = 'w'.repeat(64)
 const AGENT = 'agent-1'
+/** The relying party the panel's passkeys are bound to; requests carry it as their Origin. */
+export const PANEL_RP = { id: 'guard.example', origin: 'https://guard.example' }
 
 export const START = new Date('2026-11-03T12:00:00.000Z')
 
@@ -48,7 +51,7 @@ export function policy(
  * them. Only the chain (a stub that signs nothing) and Telegram (recorded, not sent) are fake, and
  * one clock drives all three so expiry can be tested without waiting.
  */
-export async function stack(options: { chain?: StubChain; net?: Net } = {}) {
+export async function stack(options: { chain?: StubChain; net?: Net; panel?: boolean } = {}) {
   const net = options.net ?? SOLANA
   const log = pino({ level: 'silent' })
   const clock = { now: START }
@@ -79,10 +82,15 @@ export async function stack(options: { chain?: StubChain; net?: Net } = {}) {
       BOT_URL: botUrl,
       BOT_WEBHOOK_SECRET: WEBHOOK_SECRET,
       LOG_LEVEL: 'fatal',
+      // The flows approve through the bot unless they test the panel, its default since CR-012.
+      ...(options.panel
+        ? { PASSKEY_RP_ID: PANEL_RP.id, PASSKEY_ORIGIN: PANEL_RP.origin }
+        : { TELEGRAM_APPROVALS: 'true' }),
     }),
     chains: new Map([[chain.chain, chain]]),
     now,
     sweepMs: 20,
+    ...(options.panel ? { receiptKey: generateKeyPairSync('ed25519').privateKey } : {}),
   })
   const guardUrl = await guard.listen({ port: 0, host: '127.0.0.1' })
 
@@ -117,6 +125,7 @@ export async function stack(options: { chain?: StubChain; net?: Net } = {}) {
   return {
     clock,
     chain,
+    guard,
     guardUrl,
     botUrl,
     agentToken,

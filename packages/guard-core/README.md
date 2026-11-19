@@ -204,9 +204,136 @@ Without the key, receipts are off and nothing else changes. Generate one with
 `openssl genpkey -algorithm ed25519 -out receipt.pem`. On Fly it is the `RECEIPT_SIGNING_KEY`
 secret, which the entrypoint moves to tmpfs like the hot keys.
 
+### The panel and Telegram
+
+- guard-core serves the panel's static build at `/panel/` on the public listener, from
+  `packages/panel/dist` or `PANEL_DIR`. Run `pnpm --filter @defimind/panel build` first.
+  - `/panel` redirects (308) to `/panel/`.
+  - Only the build's own files are read from disk, by a fixed list of names. Any other path under
+    `/panel/` gets `index.html`, and the app routes itself.
+  - Every response carries the SPEC CSP, `nosniff`, `X-Frame-Options: DENY` and HSTS.
+  - `index.html` and `sw.js` are always revalidated. The other files are cached for a day: their
+    names carry no hash, so a longer cache would keep an old `app.js` next to a new page.
+- `TELEGRAM_APPROVALS` (default `false`): while false, `/v1/bot/decision` and
+  `/v1/bot/mandates/:id/decision` refuse `approve` with 403 `approve_in_panel` and still take
+  `reject`. Approving is then a passkey in the panel, and a stolen Telegram account moves nothing.
+- `pnpm --filter @defimind/guard-core passkey-code` prints `{PASSKEY_ORIGIN}/panel/enrol#code=…`,
+  the link that enrols the owner's first passkey. The code is good for one enrolment within ten
+  minutes, sits in the fragment so no server log sees it, and its issue is audited.
+
+### Verified execution (CR-013)
+
+With the receipt key (`RECEIPT_SIGNING_KEY_FILE`), guard-core keeps one hash chain of
+`ExecutionReceipt`s per deployment: one entry per tool call an agent reports, and one per payment.
+
+- `POST /v1/agent/executions { server, tool, requestHash, responseHash, outcome, startedAt, endedAt }`
+  returns the signed receipt. It is called with the agent token, and the agent comes from the token.
+  The hashes are hex SHA-256: guard-core never sees or stores the arguments or the result. Without
+  the receipt key the answer is 409 `receipts_not_configured`.
+- **What a receipt is worth** is in `assurance`, and should be read as written:
+  - `executed`: guard-core made the payment itself. An executed payment's receipt points to its
+    payment receipt by `paymentReceipt`, the SHA-256 of that receipt's canonical JSON.
+  - `relayed`: a gateway or the SDK reported the call. guard-core vouches for when it heard of it
+    and that the record has not changed since. It does not vouch for what the tool really did.
+- Every receipt has `seq` (1, 2, 3… with no gap), `prevHash` (the previous receipt's hash, 64 zeros
+  for the first) and `hash`, the SHA-256 of the canonical JSON of every other field. `signature`
+  is Ed25519 over the same bytes, with the key `GET /v1/receipts/key` serves. The last link is read
+  and the next written in one synchronous transaction, so two appends at once cannot fork the chain.
+- guard-core re-checks the whole chain at start-up and once a day: every `seq`, every `prevHash`,
+  every hash and signature. A deleted, inserted or edited row breaks one of them. A break is
+  logged, sent to the bot as `{ kind: "chain_broken", detail: "seq <n>" }` and pushed to the
+  panel, once per break.
+
+### Web Push
+
+With `VAPID_PRIVATE_KEY_FILE` (a P-256 private key in PEM) and `VAPID_SUBJECT` (`mailto:` or
+`https:`), guard-core pushes to the owner's browsers. Messages use RFC 8291 encryption and RFC 8292
+VAPID, by the pinned `web-push` library.
+
+- `GET /v1/owner/push/key` returns `{ publicKey }`, the uncompressed P-256 point in base64url
+  (CR-014).
+- `POST /v1/owner/push { subscription: { endpoint, keys: { p256dh, auth } } }` returns `{ id }`.
+  guard-core posts to the endpoint, so it must belong to a browser push service, or the answer is
+  400 `push_host_not_allowed`: `fcm.googleapis.com`, `web.push.apple.com` or `*.push.apple.com`,
+  `updates.push.services.mozilla.com` or `*.push.services.mozilla.com`, `*.notify.windows.com`.
+  It must be https on 443, by name, with no IP literal. The same check runs again before every
+  send. The same endpoint subscribing again keeps its id.
+- `DELETE /v1/owner/push/:id` removes a subscription.
+- All three need the session. Without VAPID keys they answer 404 `push_not_configured`.
+- The payload is `{ kind, agentId?, chain?, amount?, intentId?, sentAt }`, never a recipient or a
+  URL. The kinds:
+  - `approval` and `mandate`: sent before the bot is called, so the panel hears even when the bot is
+    down;
+  - `executed`;
+  - `attack`: throttled like the bot, once per agent and code every 5 minutes;
+  - `breaker`;
+  - `passkey_enrolled`;
+  - `kill`.
+- A 404 or 410 from the push service deletes the subscription. Pushes are never awaited, so a slow
+  push service holds up no payment. Each message lives 10 minutes (`TTL`), the life of an approval.
+  A failure is logged with the status and the endpoint's host only: the endpoint itself is a
+  capability URL.
+- On Fly, set the key as the secret `VAPID_PRIVATE_KEY` (the PEM). The entrypoint moves it to tmpfs
+  with the hot keys and sets `VAPID_PRIVATE_KEY_FILE`.
+
+### Owner panel sign-in
+
+The owner panel (CR-012) signs the owner in with an enrolled passkey. These routes are on the
+public listener, and only exist with `PASSKEY_RP_ID` and `PASSKEY_ORIGIN` set.
+
+- `POST /v1/owner/session/options` returns WebAuthn authentication options. Each request gets its
+  own challenge, good for one use within two minutes.
+- `POST /v1/owner/session { assertion }` verifies the assertion and returns `{ expiresAt }`, the
+  time the session ends if left idle. It sets the cookie `dm_session` with `HttpOnly; Secure;
+SameSite=Strict; Path=/v1/owner`. A session ends after 30 minutes idle, or 12 hours after sign-in
+  however active it is. Only the SHA-256 of its token is stored (`owner_sessions`). Sessions past
+  their 12 hours are pruned by the sweep.
+- `POST /v1/owner/session/logout` ends the session and clears the cookie.
+- Without a live session, a panel route answers 401 `{ "error": "no_session" }`.
+- Every state-changing request needs `X-DefiMind-Request: 1` and an `Origin` equal to
+  `PASSKEY_ORIGIN`, or it gets 403 `{ "error": "bad_origin" }`. This covers sign-in and sign-out
+  too. No plain form or cross-site request can set that header.
+- Sign-ins, refused sign-ins and sign-outs are audited. Cookies are redacted from the logs.
+
 ### Passkey approvals
 
-With `PASSKEY_ABOVE` set (an amount), an intent at or above it can be approved only with a passkey
+With `PASSKEY_ABOVE` set (an amount), an intent at or above it ### Owner panel routes
+
+Behind the panel session, with the same `X-DefiMind-Request` and `Origin` check on every state
+change. They mirror the admin routes, through the same code (`src/http/control.ts`), so the two
+cannot drift. The audit says which one a change came through (`via: "admin" | "panel"`).
+
+- `GET /v1/owner/overview` returns `{ chains, agents, pending, mandates }`. `pending` and `mandates`
+  are the approval requests still waiting, as the bot received them. They are kept in
+  `approval_requests` until their deadline passes.
+- `POST /v1/owner/challenge { action, body }` returns WebAuthn options for one exact request. The
+  challenge is keyed by the SHA-256 of the canonical JSON of `{ action, body }`. The route that takes
+  the assertion rebuilds that body from its own request, so an assertion made for another action, or
+  for the same action with another body, finds no challenge. A challenge lasts five minutes, and is
+  used up by compare-and-delete: one assertion sent twice at once gets through once.
+- These need a step-up, as `{ assertion }` in the body. Without one the answer is 403
+  `step_up_required`; with a bad or reused one, 401 `passkey_not_verified`.
+  - `POST /v1/owner/intents/:id/decision` and `POST /v1/owner/mandates/:id/decision` with
+    `approve`. The step-up bodies are `{ intentId }` and `{ mandateId }`. A rejection needs the
+    session only. Every panel approval records `approvedBy: "passkey"`.
+  - `POST /v1/owner/agents { agentId }`, with the body `{ agentId }`.
+  - `POST /v1/owner/resume { agentId }`, with the body `{ agentId }`.
+  - `PUT /v1/owner/policy/:agentId { policy }` when the change loosens the policy. The body is
+    `{ agentId, policy }`, with `policy` exactly as sent. A loosening is SPEC's list (a raised
+    `perTxMax`, `dailyMax` or `approvalThreshold`, anything added to an allowlist, going live, no
+    longer requiring a mandate) plus three more: unpausing (otherwise a resume without its passkey),
+    and a raised `maxPaymentsPerMinute` or `priceIncreaseMaxPct`. A change that only tightens
+    needs the session only.
+- `POST /v1/owner/kill` returns what the admin kill returns. With `SIGN_PAGE_URL` set, each
+  entry for a chain the signing page can kill also carries `link` (the Phantom universal link) and
+  `pageLink` (the page itself), stamped now, since the page refuses a link more than 15 minutes old
+  (CR-014). On Solana the target is `SQUADS_MULTISIG` with the hot wallet's public key, read from
+  its own keypair file. On Robinhood Chain it is `ROBINHOOD_SAFE_ADDRESS`. The admin kill never
+  carries links.
+- Session only: `GET /v1/owner/report`, `/doctor`, `/budget/:agentId`, `/agents`,
+  `/policy/:agentId`, `/passkeys`; `POST /v1/owner/agents/:id/revoke`, `/pause` and `/kill`.
+
+can be approved only with a passkey
 the owner enrolled, never by a Telegram tap alone. A stolen Telegram account can still reject it,
 never approve it. `PASSKEY_RP_ID` and `PASSKEY_ORIGIN` name guard-core's public address, which the
 passkey is bound to, so a look-alike site cannot use it.
@@ -233,7 +360,7 @@ detail: <first 8 characters of the credential id>, sentAt }`, so the owner hears
 - Removing a passkey has no route: it takes a shell on the machine.
   `pnpm --filter @defimind/guard-core remove-passkey` lists them, and
   `pnpm --filter @defimind/guard-core remove-passkey <id or prefix>` removes one, audited. The
-  prefix must be at least 8 characters and match exactly one passkey.
+  prefix must be at least 8 characters and match exactly one passkey. Every panel session the passkey opened ends with it.
 - Both require user verification. Challenges are single-use and last five minutes. Opening a page
   again reuses the challenge still out, and a challenge is used up only by a verified answer, so a
   stray or forged request cannot spoil the owner's open page. Challenges and codes are used up by
@@ -321,13 +448,18 @@ Env vars are documented in [`.env.example`](./.env.example).
 
 ## Deploy on Fly.io
 
+The image builds the panel in its own stage and copies `packages/panel/dist` next to guard-core,
+with `PANEL_DIR` pointing at it, so `/panel/` works with no extra step.
+
 `Dockerfile` and `fly.toml` run guard-core as one machine, `defimind-guard-core`, in the same org
 and region (`gru`) as the bot (`defimind-bot`, see its README):
 
 - **Two listeners**, each with only its own routes registered:
-  - **public**, `0.0.0.0:8080` behind Fly's TLS (`force_https`): `/v1/agent/*` and `/health`,
-    nothing else. Agents call `https://defimind-guard-core.fly.dev/v1/agent/...`. The per-IP
-    limit keys on `Fly-Client-IP`, the real client, believed on this listener only.
+  - **public**, `0.0.0.0:8080` behind Fly's TLS (`force_https`): `/v1/agent/*`, the owner's
+    `/v1/owner/*` and `/owner/*` pages, the panel at `/panel/`, and `/health`. Agents call `https://defimind-guard-core.fly.dev/v1/agent/...`. The per-IP
+    limit keys on `Fly-Client-IP`, the real client, believed on this listener only and only with
+    `TRUST_FLY_CLIENT_IP=true` (set in `fly.toml`). Without it the limit keys on the connection
+    address, so a client off Fly cannot pick a fresh address per request.
   - **private**, `fly-local-6pn:8787`: `/v1/admin/*`, `/v1/bot/*` and `/health`. No Fly service
     exposes it. The bot reaches it at `http://defimind-guard-core.internal:8787`, and guard-core
     calls the bot at `http://defimind-bot.internal:8788` (`BOT_URL` in `fly.toml`).

@@ -15,9 +15,11 @@ import { pinFlags } from '../domain/pinning.js'
 import { evaluate } from '../domain/policy.js'
 import { askOwner, expiresAt } from './approvals.js'
 import { needsPasskey, type PasskeySetup } from './passkeys.js'
-import { issueReceipt, policyHash } from './receipts.js'
+import { policyHash, recordExecuted } from './receipts.js'
 import { simulate } from './simulate.js'
 import { alert, notify } from './events.js'
+import type { IntegrityMonitor } from './integrity.js'
+import type { Pusher } from './push.js'
 import type { Serial } from './serial.js'
 
 export interface PaymentDeps {
@@ -31,6 +33,10 @@ export interface PaymentDeps {
   log: Pick<FastifyBaseLogger, 'warn' | 'error'>
   /** Signs a receipt for every executed payment. Receipts are off without it. */
   receiptKey?: KeyObject
+  /** Re-checks the execution chain (CR-013); there with the receipt key. */
+  integrity?: IntegrityMonitor
+  /** Web Push to the owner's panel (CR-012). Off without VAPID keys. */
+  push?: Pusher
   /** Set when approvals at or above an amount need the owner's passkey. */
   passkey?: PasskeySetup
 }
@@ -282,13 +288,8 @@ export function finish(
     },
     deps.now(),
   )
-  if (done.status === 'executed' && deps.receiptKey !== undefined) {
-    // A receipt that cannot be issued must not undo a payment that already happened.
-    try {
-      issueReceipt(deps.db, deps.receiptKey, done, deps.now())
-    } catch (error) {
-      deps.log.error({ err: error, intentId: intent.id }, 'receipt not issued')
-    }
+  if (done.status === 'executed') {
+    recordExecuted(deps, done)
   }
   notify(deps, done)
   return done
