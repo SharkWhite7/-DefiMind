@@ -286,7 +286,9 @@ GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummar
 POST /v1/owner/intents/:id/decision { decision: "approve" | "reject", assertion? } -> PayIntent
 POST /v1/owner/mandates/:id/decision { decision, assertion? } -> Mandate
   approve needs the step-up assertion; every panel approval records approvedBy "passkey"
-GET  /v1/owner/report?from&to, GET /v1/owner/doctor, GET /v1/owner/budget/:agentId   as the admin ones
+GET  /v1/owner/report?from&to, GET /v1/owner/doctor, GET /v1/owner/budget/:agentId,
+GET  /v1/owner/receipts?from&to   as the admin ones (the panel matches a payment execution's
+  paymentReceipt to its Receipt to show the amount)
 GET  /v1/owner/agents; POST /v1/owner/agents { agentId, assertion } -> { agentId, token } (once);
 POST /v1/owner/agents/:id/revoke
 GET  /v1/owner/policy/:agentId; PUT /v1/owner/policy/:agentId { policy, assertion? }
