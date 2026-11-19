@@ -17,6 +17,15 @@ export function passkeyText(detail: string): string {
   ].join('\n')
 }
 
+/** CR-013: a receipt was changed or removed after it was written, or the chain has a gap. */
+export function chainBrokenText(detail: string): string {
+  return [
+    '<b>The execution record failed its integrity check.</b> A receipt was changed or removed ' +
+      'after it was written. Open the DefiMind panel to see where.',
+    ...(detail === '' ? [] : [`guard-core says: <i>${escapeHtml(detail)}</i>`]),
+  ].join('\n')
+}
+
 // Telegram refuses a message over 4096 characters, and /status adds the chains after this.
 const PENDING_LIMIT = 2000
 

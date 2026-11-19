@@ -9,6 +9,7 @@ export type Route =
   | { name: 'agent'; id: string }
   | { name: 'report' }
   | { name: 'doctor' }
+  | { name: 'executions' }
   | { name: 'passkeys' }
   | { name: 'settings' }
   | { name: 'kill' }
@@ -18,7 +19,16 @@ export const BASE = '/panel/'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const AGENT_ID = /^\S{1,64}$/
-const SIMPLE = ['login', 'agents', 'report', 'doctor', 'passkeys', 'settings', 'kill'] as const
+const SIMPLE = [
+  'login',
+  'agents',
+  'report',
+  'doctor',
+  'executions',
+  'passkeys',
+  'settings',
+  'kill',
+] as const
 
 function decode(part: string): string | undefined {
   try {

@@ -111,4 +111,5 @@ export const alertEvent = z.discriminatedUnion('kind', [
     sentAt: isoTime,
   }),
   z.object({ kind: z.literal('passkey_enrolled'), detail: z.string().max(500), sentAt: isoTime }),
+  z.object({ kind: z.literal('chain_broken'), detail: z.string().max(500), sentAt: isoTime }),
 ])

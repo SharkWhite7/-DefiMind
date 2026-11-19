@@ -1,4 +1,4 @@
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { chromium, type Browser, type Page } from 'playwright'
@@ -180,5 +180,42 @@ it('keeps the owner signed in when guard-core refuses a passkey', async () => {
   expect(new URL(page.url()).pathname).toBe(`/panel/approvals/${guard.intentId}`)
   await page.getByRole('button', { name: 'Approve with passkey' }).click()
   await expect.poll(() => status(page).textContent()).toBe('Approved.')
+  await close()
+})
+
+describe.each([390, 1280])('the executions screen at %i px', (width) => {
+  it('shows the record, says what relayed means and downloads a proof as sent', async () => {
+    const { guard, page, violations, close } = await device(width)
+    await signIn(page, guard.origin)
+    await page.locator('nav').getByRole('link', { name: 'Executions' }).click()
+    await page.getByText('✓ Intact: 2 receipts, each one linked and signed.').waitFor()
+    await page.getByText('Anchored up to #1 on Solana devnet').waitFor()
+    await page.getByText(/^Relayed: reported by the gateway\. DefiMind vouches/).waitFor()
+    await page.getByText('#1 github · create_issue').waitFor()
+    await page.getByText('#2 Payment').waitFor()
+    await expect.poll(() => page.getByText('Proof once anchored.').count()).toBe(1)
+
+    const download = page.waitForEvent('download')
+    await page.getByRole('button', { name: 'Download proof' }).click()
+    const file = await download
+    expect(file.suggestedFilename()).toBe('defimind-proof-1.json')
+    const bundle = JSON.parse(await readFile((await file.path())!, 'utf8')) as Record<
+      string,
+      unknown
+    >
+    expect(bundle['receipt']).toEqual(guard.receipts[0])
+    expect(violations).toEqual([])
+    const scroll = await page.evaluate(() => document.documentElement.scrollWidth)
+    expect(scroll).toBeLessThanOrEqual(width)
+    await close()
+  })
+})
+
+it('says where the execution record broke', async () => {
+  const { guard, page, close } = await device(390)
+  guard.state.brokenAt = 2
+  await signIn(page, guard.origin)
+  await page.goto(`${guard.origin}/panel/executions`)
+  await page.getByText(/^✗ Broken at receipt #2/).waitFor()
   await close()
 })

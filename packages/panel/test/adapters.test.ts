@@ -233,6 +233,46 @@ describe('owner api', () => {
     expect(calls[1]?.body).toEqual({ subscription })
   })
 
+  it('reads the execution record and keeps a proof bundle as guard-core sent it', async () => {
+    const receipt = {
+      type: 'defimind.execution.v1',
+      seq: 1,
+      agentId: 'bot',
+      kind: 'tool_call',
+      server: 'github',
+      tool: 'create_issue',
+      outcome: 'ok',
+      assurance: 'relayed',
+      startedAt: '2026-11-18T12:00:00.000Z',
+      endedAt: '2026-11-18T12:00:01.000Z',
+      hash: 'a'.repeat(64),
+      signature: 'b'.repeat(128),
+      futureField: 'kept',
+    }
+    const anchor = {
+      fromSeq: 1,
+      toSeq: 1,
+      root: 'c'.repeat(64),
+      chain: 'solana:x',
+      txId: 'tx',
+      anchoredAt: '2026-11-18T13:00:00.000Z',
+    }
+    const bundle = { receipt, siblings: [], anchor }
+    const { api, calls } = server([
+      [200, { receipts: [receipt] }],
+      [200, { lastSeq: 1, lastHash: 'a'.repeat(64), lastAnchor: anchor }],
+      [200, bundle],
+    ])
+    await api.executions(new Date('2026-11-11T00:00:00Z'), new Date('2026-11-18T00:00:00Z'))
+    await expect(api.integrity()).resolves.toMatchObject({ lastSeq: 1 })
+    await expect(api.proof(1)).resolves.toEqual(bundle)
+    expect(calls.map((call) => call.path)).toEqual([
+      '/v1/owner/executions?from=2026-11-11T00%3A00%3A00.000Z&to=2026-11-18T00%3A00%3A00.000Z',
+      '/v1/owner/executions/integrity',
+      '/v1/owner/executions/1/proof',
+    ])
+  })
+
   it('asks the report for the window it shows', async () => {
     const { api, calls } = server([[200, { agents: [] }]])
     await api.report(new Date('2026-11-01T00:00:00Z'), new Date('2026-11-08T00:00:00Z'))

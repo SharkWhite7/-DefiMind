@@ -17,6 +17,7 @@ optional next to it.
 | Agents      | `/panel/agents`        | List, and create with a passkey: the token is shown once    |
 | Agent       | `/panel/agents/:id`    | Shadow or live with the shadow total, pause, resume, policy |
 | Report      | `/panel/report`        | The last 7 days per agent                                   |
+| Executions  | `/panel/executions`    | CR-013 record: integrity, anchor, timeline, proof download  |
 | Doctor      | `/panel/doctor`        | guard-core's checks                                         |
 | Settings    | `/panel/settings`      | Push on this device, passkeys, sign out                     |
 | Stop        | `/panel/kill`          | Pauses every agent, then each chain's onchain step          |
