@@ -41,7 +41,13 @@ if [ -n "${RECEIPT_SIGNING_KEY:-}" ]; then
   chown "$uid:$gid" "$dir/receipt.pem"
   export RECEIPT_SIGNING_KEY_FILE="$dir/receipt.pem"
 fi
-unset SOLANA_HOT_WALLET_KEYPAIR_JSON BASE_HOT_WALLET_KEY ROBINHOOD_HOT_WALLET_KEY RECEIPT_SIGNING_KEY
+if [ -n "${VAPID_PRIVATE_KEY:-}" ]; then
+  printf '%s\n' "$VAPID_PRIVATE_KEY" >"$dir/vapid.pem"
+  chown "$uid:$gid" "$dir/vapid.pem"
+  export VAPID_PRIVATE_KEY_FILE="$dir/vapid.pem"
+fi
+unset SOLANA_HOT_WALLET_KEYPAIR_JSON BASE_HOT_WALLET_KEY ROBINHOOD_HOT_WALLET_KEY RECEIPT_SIGNING_KEY \
+  VAPID_PRIVATE_KEY
 
 # Fly mounts the database volume owned by root.
 if [ -d "$data" ]; then

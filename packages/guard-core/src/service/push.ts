@@ -3,6 +3,7 @@ import type { FastifyBaseLogger } from 'fastify'
 import type { PushService } from '../adapters/push.js'
 import type { Db } from '../db/client.js'
 import { subscriptions, unsubscribe } from '../db/push.js'
+import { pushEndpointAllowed } from '../domain/push-host.js'
 import type { AlertBody } from './events.js'
 
 /** What a push says (SPEC, CR-012). Never a recipient or a URL: the panel shows the rest. */
@@ -46,13 +47,21 @@ export function pusher(deps: PushDeps) {
   function send(payload: PushPayload) {
     const body = JSON.stringify({ ...payload, sentAt: deps.now().toISOString() })
     for (const target of subscriptions(deps.db)) {
+      // Checked again here, so a row from before the allowlist, or written by hand, is never sent to.
+      if (!pushEndpointAllowed(target.endpoint)) {
+        continue
+      }
+      // The host only: the endpoint is a capability URL, and the error carries it and the reply.
+      const host = new URL(target.endpoint).hostname
       void deps.service.send(target, body).then(
         (status) => {
           if (status === 404 || status === 410) {
             unsubscribe(deps.db, target.id)
+          } else if (status >= 300) {
+            deps.log.warn({ status, host }, 'push refused')
           }
         },
-        (error: unknown) => deps.log.warn({ err: error }, 'push failed'),
+        () => deps.log.warn({ host }, 'push failed'),
       )
     }
   }

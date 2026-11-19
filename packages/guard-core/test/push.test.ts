@@ -117,14 +117,14 @@ describe('Web Push to the panel', () => {
     h = await harness({ push: { service, publicKey: 'BPUBLIC' } })
     owner = await signedIn(h)
     await owner.call('POST', '/v1/owner/push', {
-      subscription: { endpoint: 'https://push.example/send/1', keys: browser().keys },
+      subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/1', keys: browser().keys },
     })
   })
 
   it('gives the panel the public key, and keeps one subscription per endpoint', async () => {
     expect((await owner.call('GET', '/v1/owner/push/key')).json()).toEqual({ publicKey: 'BPUBLIC' })
     const again = await owner.call('POST', '/v1/owner/push', {
-      subscription: { endpoint: 'https://push.example/send/1', keys: browser().keys },
+      subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/1', keys: browser().keys },
     })
     expect(h.db.select().from(schema.pushSubscriptions).all()).toHaveLength(1)
     expect((await owner.call('DELETE', `/v1/owner/push/${again.json().id}`)).json()).toEqual({
@@ -133,11 +133,31 @@ describe('Web Push to the panel', () => {
     expect(h.db.select().from(schema.pushSubscriptions).all()).toHaveLength(0)
   })
 
-  it('refuses an endpoint that is not https', async () => {
+  it.each([
+    'https://internal.service.local/hook',
+    'https://169.254.169.254/latest',
+    'https://fcm.googleapis.com.evil.example/fcm/send/1',
+  ])('refuses %s, which is not a browser push service', async (endpoint) => {
     const res = await owner.call('POST', '/v1/owner/push', {
-      subscription: { endpoint: 'http://169.254.169.254/latest', keys: browser().keys },
+      subscription: { endpoint, keys: browser().keys },
     })
-    expect(res.statusCode).toBe(400)
+    expect(res.json()).toEqual({ error: 'push_host_not_allowed' })
+  })
+
+  it('never sends to a stored endpoint outside the push services', async () => {
+    h.db
+      .insert(schema.pushSubscriptions)
+      .values({
+        id: 'x',
+        endpoint: 'https://internal.local/hook',
+        p256dh: 'p',
+        auth: 'a',
+        createdAt: NOW.toISOString(),
+      })
+      .run()
+    await owner.call('POST', '/v1/owner/kill', {})
+    await flush()
+    expect(sent.map((s) => s.endpoint)).toEqual(['https://fcm.googleapis.com/fcm/send/1'])
   })
 
   it('pushes an approval with no recipient and no URL', async () => {

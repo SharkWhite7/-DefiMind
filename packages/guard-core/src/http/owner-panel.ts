@@ -5,6 +5,7 @@ import { subscribe, unsubscribe } from '../db/push.js'
 import * as repo from '../db/repo.js'
 import { openRequests } from '../db/requests.js'
 import { loosened } from '../domain/loosen.js'
+import { pushEndpointAllowed } from '../domain/push-host.js'
 import type { PasskeySetup } from '../service/passkeys.js'
 import { type OwnerAction, stepUpChallenge, verifyStepUp } from '../service/step-up.js'
 import type { X402Deps } from '../service/x402.js'
@@ -141,6 +142,9 @@ export function ownerPanelRoutes(
         throw new HttpError(404, 'push_not_configured')
       }
       const { subscription } = ownerPush.parse(request.body)
+      if (!pushEndpointAllowed(subscription.endpoint)) {
+        throw new HttpError(400, 'push_host_not_allowed')
+      }
       const id = subscribe(db, { endpoint: subscription.endpoint, ...subscription.keys }, now())
       repo.audit(db, { event: 'push_subscribed', detail: { id } }, now())
       return { id }
