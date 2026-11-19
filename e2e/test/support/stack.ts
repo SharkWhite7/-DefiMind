@@ -1,5 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto'
 import {
+  type Db,
   buildServer as buildGuard,
   createAgent,
   loadConfig,
@@ -125,6 +126,8 @@ export async function stack(options: { chain?: StubChain; net?: Net; panel?: boo
   return {
     clock,
     chain,
+    /** The database, for tests that run guard-core's own jobs against it. */
+    db: db as Db,
     guard,
     guardUrl,
     botUrl,
