@@ -1,4 +1,5 @@
 import type { ExecutionReceipt } from '@defimind/shared'
+import { z } from 'zod'
 import { executionReceipt } from '../domain/schemas.js'
 
 /** The body of POST /v1/agent/executions: hashes and times, never the call's content. */
@@ -28,10 +29,22 @@ export class RecordError extends Error {
   constructor(
     message: string,
     readonly httpStatus?: number,
+    /** guard-core's error code, such as "unauthorized"; never the rest of its body. */
+    readonly code?: string,
   ) {
     super(message)
   }
+
+  /** What an operator needs to act on, for logs and the agent: no body, no secret. */
+  get reason(): string {
+    if (this.httpStatus === undefined) {
+      return 'guard-core could not be reached'
+    }
+    return `guard-core refused (${this.httpStatus}${this.code === undefined ? '' : ` ${this.code}`})`
+  }
 }
+
+const errorBody = z.object({ error: z.string().regex(/^[a-z0-9_]{1,64}$/) })
 
 export function httpRecorder(options: RecorderOptions): Recorder {
   const { token, fetch = globalThis.fetch, timeoutMs = 15_000 } = options
@@ -50,14 +63,20 @@ export function httpRecorder(options: RecorderOptions): Recorder {
         throw new RecordError('DefiMind could not be reached to record the call.')
       }
       if (!response.ok) {
+        const body = errorBody.safeParse(await response.json().catch(() => undefined))
         throw new RecordError(
           `DefiMind did not record the call (HTTP ${response.status}).`,
           response.status,
+          body.success ? body.data.error : undefined,
         )
       }
       const receipt = executionReceipt.safeParse(await response.json().catch(() => undefined))
       if (!receipt.success) {
-        throw new RecordError('DefiMind answered with something that is not a receipt.')
+        throw new RecordError(
+          'DefiMind answered with something that is not a receipt.',
+          response.status,
+          'not_a_receipt',
+        )
       }
       return receipt.data
     },

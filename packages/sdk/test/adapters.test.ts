@@ -33,19 +33,33 @@ describe('httpRecorder', () => {
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual(report)
   })
 
-  it('throws RecordError on a refusal, a non-receipt and no answer', async () => {
+  it('throws RecordError with the status and code, never the rest of the body', async () => {
     const refused = httpRecorder({
       guardUrl: 'http://localhost:8787',
       token: 't',
-      ...stub(401, {}),
+      ...stub(401, { error: 'unauthorized', detail: 'token sk_live_secret revoked' }),
     })
-    await expect(refused.record(report)).rejects.toMatchObject({ httpStatus: 401 })
+    const error = (await refused.record(report).catch((e: unknown) => e)) as RecordError
+    expect(error).toMatchObject({ httpStatus: 401, code: 'unauthorized' })
+    expect(error.reason).toBe('guard-core refused (401 unauthorized)')
+    expect(JSON.stringify(error) + error.message + error.reason).not.toContain('secret')
+  })
+
+  it('names a non-receipt and an unreachable guard-core', async () => {
     const odd = httpRecorder({
       guardUrl: 'http://localhost:8787',
       token: 't',
       ...stub(200, { ok: 1 }),
     })
-    await expect(odd.record(report)).rejects.toThrow('not a receipt')
+    await expect(odd.record(report)).rejects.toMatchObject({
+      reason: 'guard-core refused (200 not_a_receipt)',
+    })
+    const odder = httpRecorder({
+      guardUrl: 'http://localhost:8787',
+      token: 't',
+      ...stub(500, { error: 'Not A Code!' }),
+    })
+    await expect(odder.record(report)).rejects.toMatchObject({ reason: 'guard-core refused (500)' })
     const down = httpRecorder({
       guardUrl: 'http://localhost:8787',
       token: 't',
@@ -53,7 +67,9 @@ describe('httpRecorder', () => {
         throw new TypeError('fetch failed')
       },
     })
-    await expect(down.record(report)).rejects.toBeInstanceOf(RecordError)
+    const unreachable = (await down.record(report).catch((e: unknown) => e)) as RecordError
+    expect(unreachable).toBeInstanceOf(RecordError)
+    expect(unreachable.reason).toBe('guard-core could not be reached')
   })
 
   it('refuses plain http beyond this machine and a URL with credentials', () => {

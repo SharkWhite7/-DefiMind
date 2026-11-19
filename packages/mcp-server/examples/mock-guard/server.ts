@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { CHAINS } from '@defimind/shared'
+import { CHAINS, type ExecutionReceipt } from '@defimind/shared'
+import { executionLog } from './executions.js'
 
 /**
  * A stand-in for guard-core's agent API, faithful to the SPEC's request and response shapes and
@@ -16,6 +17,8 @@ import { CHAINS } from '@defimind/shared'
  *   Repeating the same fetch then redeems that approval once, as guard-core does.
  * - a task budget opens at once, whatever its size, and the budget lists it. Payments do not
  *   draw it down: the mock checks no task budget.
+ * - a reported tool call gets a signed, chained receipt, unless `executionsDown` says the mock is
+ *   failing, which is how the gateway's outbox is tried by hand.
  */
 export interface MockGuardOptions {
   agentId: string
@@ -25,6 +28,8 @@ export interface MockGuardOptions {
   allowedRecipients?: string[]
   approveAfterMs?: number
   now?: () => Date
+  /** While it returns true, POST /v1/agent/executions answers 503. */
+  executionsDown?: () => boolean
 }
 
 export interface MockIntent {
@@ -48,6 +53,7 @@ export interface MockGuard {
   url: string
   intents: Map<string, MockIntent>
   requests: { method: string; path: string; body: unknown }[]
+  executions: ExecutionReceipt[]
   close(): Promise<void>
 }
 
@@ -65,7 +71,9 @@ export async function startMockGuard(options: MockGuardOptions): Promise<MockGua
     allowedRecipients = [],
     approveAfterMs = 20_000,
     now = () => new Date(),
+    executionsDown = () => false,
   } = options
+  const executions = executionLog(agentId, now)
   const intents = new Map<string, MockIntent>()
   const requests: MockGuard['requests'] = []
   let spent = 0n
@@ -188,11 +196,23 @@ export async function startMockGuard(options: MockGuardOptions): Promise<MockGua
     const path = new URL(req.url ?? '/', 'http://mock').pathname
     const body = req.method === 'POST' ? await readJson(req) : undefined
     requests.push({ method: req.method ?? '', path, body })
+    if (req.method === 'GET' && path === '/v1/receipts/key') {
+      return send(res, 200, { publicKey: executions.publicKey })
+    }
     if (req.headers.authorization !== `Bearer ${token}`) {
       return send(res, 401, { error: 'unauthorized' })
     }
     if (req.method === 'POST' && path === '/v1/agent/x402/fetch') {
       return send(res, 200, await x402(body ?? {}))
+    }
+    if (req.method === 'POST' && path === '/v1/agent/executions') {
+      if (executionsDown()) {
+        return send(res, 503, { error: 'unavailable' })
+      }
+      const receipt = executions.append(body)
+      return receipt === undefined
+        ? send(res, 400, { error: 'invalid_request' })
+        : send(res, 200, receipt)
     }
     if (req.method === 'POST' && path === '/v1/agent/mandates') {
       const created = now()
@@ -241,6 +261,7 @@ export async function startMockGuard(options: MockGuardOptions): Promise<MockGua
     url: `http://127.0.0.1:${bound}`,
     intents,
     requests,
+    executions: executions.receipts,
     close: () => new Promise((resolve) => server.close(() => resolve())),
   }
 }

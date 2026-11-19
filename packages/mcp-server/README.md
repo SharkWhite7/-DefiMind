@@ -333,6 +333,68 @@ a reason to retry the same payment; only `MANDATE_REQUIRED` asks for it again, w
 `MCP_HTTP_TOKEN`), `403` (a non-loopback `Host` header on a loopback server), `405` (not a `POST`) or
 `429` (rate limited: wait `Retry-After` seconds).
 
+## Gateway mode: a signed receipt for every tool call
+
+With `GATEWAY_FILE` set, this server also fronts other MCP servers. The agent connects to DefiMind
+only. It sees each downstream tool as `<server>__<tool>`, next to the payment tools. Every call is
+forwarded, then reported to guard-core, which appends a signed, hash-chained `ExecutionReceipt`
+(CR-013).
+
+```json
+{
+  "servers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "<the server's package>"],
+      "env": { "GITHUB_TOKEN": "…" }
+    },
+    "search": {
+      "url": "https://search.example.com/mcp",
+      "headers": { "authorization": "Bearer …" }
+    }
+  }
+}
+```
+
+**The servers file:**
+
+- **Names:** server names use lowercase letters, digits and `-`. A tool whose full name would pass
+  64 characters is skipped, with a warning.
+- **Stdio servers:** they start with a minimal default environment plus the `env` you list. The
+  agent token and the rest of this process's environment never reach them.
+- **HTTP servers:** they must be `https://`, or `http://` to this machine.
+- **Startup:** one server that cannot be started or reached stops the gateway from starting.
+- **Secrets:** the file holds the downstream servers' credentials, so keep it readable by you only.
+
+**What a receipt says.**
+
+- **What DefiMind receives:** guard-core gets `{ server, tool, requestHash, responseHash, outcome,
+startedAt, endedAt }`. The hashes are the SHA-256 of the canonical JSON of the arguments and of
+  the result. It never sees the content.
+- **What these receipts vouch for:** they have `assurance: "relayed"`. guard-core vouches for when
+  it heard of the call and that the record never changed since. It does not vouch for what the
+  downstream tool really did.
+- **Where the agent sees it:** each result carries `_meta["defimind/receipt"]` with the receipt's
+  `seq` and `hash`.
+- **Checking it:** anyone can check a receipt with `defimind-verify` (`packages/sdk`).
+
+**It fails closed.**
+
+- When guard-core does not record a call, the agent still gets that call's result, with a note. The
+  report waits in `<GATEWAY_STATE_DIR>/<AGENT_ID>.outbox.jsonl`.
+- No new call is forwarded until the outbox is empty. The agent is told calls are paused, and why,
+  from guard-core's status and error code only. For example: `Receipts paused: guard-core refused
+(401 unauthorized); the operator must act.` A 4xx (a revoked token, a refused report) waits for
+  the operator. An outage or a 5xx is retried. The log line carries the same `httpStatus` and
+  `code`, never a body.
+- The outbox is retried on every call and every 30 seconds, oldest first, so the chain keeps the
+  order of the calls.
+- It survives a restart. A damaged outbox stops the start rather than lose calls.
+
+**Bodies.** `GATEWAY_KEEP_BODIES=true` appends each call's arguments and result, with its receipt's
+`seq` and `hash`, to `<GATEWAY_STATE_DIR>/<AGENT_ID>.bodies.jsonl` (mode 600). That is the
+operator's own copy, so the content can be matched to its receipt later. It is off by default.
+
 ## Configuration
 
 | Variable                | Required    | Default                | Notes                                                                                         |
@@ -349,6 +411,9 @@ a reason to retry the same payment; only `MANDATE_REQUIRED` asks for it again, w
 | `MCP_HTTP_TOKEN`        | with `http` |                        | Bearer token clients must send, ≥ 32 chars                                                    |
 | `MCP_HTTP_ALLOW_REMOTE` | no          | `false`                | Must be `true` to bind `MCP_HTTP_HOST` to anything but loopback                               |
 | `MCP_HTTP_RATE_LIMIT`   | no          | `60`                   | HTTP requests per minute per client address                                                   |
+| `GATEWAY_FILE`          | no          |                        | Gateway mode: the JSON file of downstream MCP servers                                         |
+| `GATEWAY_STATE_DIR`     | no          | `~/.defimind/mcp`      | Where the gateway keeps its outbox and, if asked, the bodies                                  |
+| `GATEWAY_KEEP_BODIES`   | no          | `false`                | `true` keeps each call's arguments and result in a local file for the operator                |
 | `LOG_LEVEL`             | no          | `info`                 | Logs go to stderr as JSON                                                                     |
 
 The config is validated at startup; a bad value stops the server with the field name, never the

@@ -7,6 +7,7 @@ import { loadConfig } from './config.js'
 import { rateLimiter } from './domain/rate-limit.js'
 import { startHttp } from './http.js'
 import { usdTokenFor } from './domain/chains.js'
+import { startGateway } from './gateway.js'
 import { createServer } from './server.js'
 import { checkDefaultChain } from './startup.js'
 import { runSetup } from './setup/run.js'
@@ -46,8 +47,14 @@ const deps = {
 
 await checkDefaultChain(deps.guard, config.DEFAULT_CHAIN, deps.usd(config.DEFAULT_CHAIN), log)
 
+const gateway =
+  config.GATEWAY_FILE === undefined
+    ? undefined
+    : await startGateway(config, config.GATEWAY_FILE, log)
+const serverDeps = gateway === undefined ? deps : { ...deps, gateway }
+
 if (config.MCP_TRANSPORT === 'stdio') {
-  await createServer(deps).connect(new StdioServerTransport())
+  await createServer(serverDeps).connect(new StdioServerTransport())
   log.info({ agentId: config.AGENT_ID }, 'defimind mcp server on stdio')
 } else {
   const token = config.MCP_HTTP_TOKEN
@@ -60,7 +67,7 @@ if (config.MCP_TRANSPORT === 'stdio') {
     token,
     log,
     limit: rateLimiter({ limit: config.MCP_HTTP_RATE_LIMIT, windowMs: 60_000 }),
-    newServer: () => createServer(deps),
+    newServer: () => createServer(serverDeps),
   })
   log.info({ agentId: config.AGENT_ID, port: config.MCP_HTTP_PORT }, 'defimind mcp server on http')
 }

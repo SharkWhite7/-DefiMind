@@ -153,6 +153,9 @@ importers:
 
   packages/mcp-server:
     dependencies:
+      '@defimind/sdk':
+        specifier: workspace:*
+        version: link:../sdk
       '@defimind/shared':
         specifier: workspace:*
         version: link:../shared
