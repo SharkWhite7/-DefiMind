@@ -193,7 +193,9 @@ We have run it on Fly and with this compose file only.
 ## 6. Agents
 
 1. Create an agent on the machine:
-   `fly ssh console --app <guard-core app> -C "sh -c 'cd /srv/defimind/packages/guard-core && node --import tsx src/scripts/create-agent.ts <agent-id>'"`.
+   `fly ssh console --app <guard-core app> -C "sh -c 'cd /srv/defimind/packages/guard-core && for f in receipt.pem:RECEIPT_SIGNING_KEY_FILE vapid.pem:VAPID_PRIVATE_KEY_FILE anchor.json:ANCHOR_KEY_FILE; do [ -f /run/defimind/\${f%%:*} ] && export \${f#*:}=/run/defimind/\${f%%:*}; done; node --import tsx src/scripts/create-agent.ts <agent-id>'"`.
+   The entrypoint gives the key paths to the server process only, so the loop names again each key
+   the machine has: the receipt, Web Push and anchoring keys.
    It prints the agent's token once.
 2. Its policy starts by denying everything. Set one through the proxy with
    `PUT /v1/admin/policy/<agent-id>`. The fields are in [`SPEC.md`](../SPEC.md). A sensible start

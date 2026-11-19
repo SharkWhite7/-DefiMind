@@ -193,7 +193,9 @@ curl -s https://defimind-guard-core.fly.dev/health; echo; curl -s -o /dev/null -
 Check:
 
 - one machine is `started`, and the log shows no config error;
-- `/health` answers;
+- `/health` answers. On an IPv4-only network a brand-new `*.fly.dev` name can resolve to IPv6
+  only for a while, from resolver caching. If `fly ips list --app defimind-guard-core` shows a
+  shared v4, wait a few minutes and try again;
 - the admin route prints `404`, because it is not public;
 - `/v1/receipts/key` prints a `publicKey`;
 - the panel prints `200`.
@@ -298,10 +300,12 @@ Then, in Telegram:
 ## Part D: the panel
 
 **D1. Enrol the first passkey (HUMAN-23).** This prints a one-time link, good for ten minutes. It
-runs as the app's user, so the database keeps one owner.
+runs as the app's user, so the database keeps one owner. The entrypoint gives the three key paths to the
+server process only, so the command names them again for the script: without them guard-core's
+config refuses `ANCHOR_CHAIN` and `VAPID_SUBJECT`.
 
 ```bash
-fly ssh console --app defimind-guard-core -C "sh -c 'cd /srv/defimind/packages/guard-core && exec setpriv --reuid=\$(id -u node) --regid=\$(id -g node) --clear-groups -- node --import tsx src/scripts/passkey-code.ts'"
+fly ssh console --app defimind-guard-core -C "sh -c 'cd /srv/defimind/packages/guard-core && export RECEIPT_SIGNING_KEY_FILE=/run/defimind/receipt.pem VAPID_PRIVATE_KEY_FILE=/run/defimind/vapid.pem ANCHOR_KEY_FILE=/run/defimind/anchor.json && exec setpriv --reuid=\$(id -u node) --regid=\$(id -g node) --clear-groups -- node --import tsx src/scripts/passkey-code.ts'"
 ```
 
 Open the link on the phone and save the passkey. Passkeys made for the old address do not work at
