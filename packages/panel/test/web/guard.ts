@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net'
 import { extname, join, normalize } from 'node:path'
 import { CHAINS, getAddress } from '@defimind/shared'
 import { canonicalJson } from '../../src/domain/canonical.js'
+import { setupMock } from './setup.js'
 
 /** SPEC's panel CSP, so a test fails on anything the real one would block. */
 export const CSP = [
@@ -45,7 +46,8 @@ export interface Decision {
  * what the panel must get right: the session cookie, X-DefiMind-Request and Origin on writes, and
  * that each step-up assertion signs a challenge issued for that exact action and body.
  */
-export async function guardCore(dist: string) {
+export async function guardCore(dist: string, { fresh = false } = {}) {
+  const setup = setupMock()
   const intentId = randomUUID()
   const mandateId = randomUUID()
   const later = new Date(Date.now() + 10 * 60_000).toISOString()
@@ -56,6 +58,9 @@ export async function guardCore(dist: string) {
     decisions: [] as Decision[],
     puts: [] as { policy: Record<string, unknown>; stepUp?: { action: string; body: unknown } }[],
     killed: false,
+    /** CR-019: a fresh deployment starts with no agent; the guide creates one. */
+    agents: fresh ? [] : [{ agentId: 'research-bot', mode: 'live' }],
+    tokens: [] as { agentId: string; stepUp?: { action: string; body: unknown } }[],
     /** guard-core's answer to an assertion it cannot verify, for the next decision. */
     refuseNextPasskey: false,
     /** CR-013: the first receipt that no longer holds, as guard-core's integrity check reports it. */
@@ -70,7 +75,7 @@ export async function guardCore(dist: string) {
       allowedRecipients: [],
       allowedDomains: ['api.example.com'],
       paused: false,
-      mode: 'live',
+      mode: fresh ? 'shadow' : 'live',
     } as Record<string, unknown>,
   }
   let origin = ''
@@ -137,7 +142,11 @@ export async function guardCore(dist: string) {
     chains: [
       { chain, allowance: { status: 'active', cap: '5000000', spent: '1250000', resetsAt: later } },
     ],
-    agents: [{ agentId: 'research-bot', paused: state.killed, mode: 'live' }],
+    agents: state.agents.map(({ agentId }) => ({
+      agentId,
+      paused: state.killed,
+      mode: state.policy['mode'],
+    })),
     pending: state.decisions.some((d) => d.id === intentId)
       ? []
       : [
@@ -277,8 +286,35 @@ export async function guardCore(dist: string) {
       })
       return send(200, {})
     }
+    if (path === '/v1/owner/agents' && method === 'POST') {
+      const bound = stepUp()
+      if (bound?.action !== 'create_agent') {
+        return send(403, { error: 'step_up_required' })
+      }
+      const agentId = String(body['agentId'])
+      state.agents.push({ agentId, mode: 'shadow' })
+      state.policy = { ...state.policy, agentId }
+      state.tokens.push({ agentId, stepUp: bound })
+      return send(200, { agentId, token: b64(randomBytes(32)) })
+    }
     if (path === '/v1/owner/agents') {
       return send(200, { agents: overview().agents })
+    }
+    if (path === '/v1/owner/setup/progress') {
+      const done = {
+        passkey: state.passkeys > 0,
+        vault: setup.state.vault !== undefined,
+        limit: setup.state.vault !== undefined,
+        deposit: setup.state.balance !== '0',
+        agent: state.agents.length > 0,
+        rules: state.puts.length > 0,
+        shadow: state.puts.length > 0,
+        live: state.policy['mode'] === 'live',
+      }
+      return send(200, { steps: Object.entries(done).map(([id, ok]) => ({ id, done: ok })) })
+    }
+    if (setup.route(method, path, body, send, stepUp, { passkeys: state.passkeys, origin })) {
+      return
     }
     if (path.startsWith('/v1/owner/policy/')) {
       if (method === 'PUT') {
@@ -359,9 +395,12 @@ export async function guardCore(dist: string) {
         return res.end(JSON.stringify({ error: 'bad_origin' }))
       }
       const open =
-        ['/v1/owner/session', '/v1/owner/session/options', '/v1/owner/passkeys/options'].includes(
-          url.pathname,
-        ) ||
+        [
+          '/v1/owner/session',
+          '/v1/owner/session/options',
+          '/v1/owner/passkeys/options',
+          '/v1/owner/setup',
+        ].includes(url.pathname) ||
         (url.pathname === '/v1/owner/passkeys' && method === 'POST')
       const cookie = /dm_session=([\w-]+)/.exec(req.headers.cookie ?? '')?.[1]
       if (!open && !(cookie && state.sessions.has(cookie))) {
@@ -398,6 +437,7 @@ export async function guardCore(dist: string) {
     origin,
     state,
     receipts,
+    setup: setup.state,
     intentId,
     mandateId,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
