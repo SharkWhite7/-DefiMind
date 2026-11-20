@@ -170,10 +170,12 @@ Phantom:
 ```
 https://phantom.app/ul/browse/<encodeURIComponent(link)>?ref=<encodeURIComponent(origin)>
 Solana:    link = <SIGN_PAGE_URL>/?action=kill&cluster=<devnet|mainnet-beta>&multisig=<SQUADS_MULTISIG>&hot=<SOLANA_HOT_WALLET_PUBKEY>&issued=<unix seconds>
-Robinhood: link = <SIGN_PAGE_URL>/?action=kill&cluster=<robinhood-testnet|robinhood>&safe=<ROBINHOOD_SAFE_ADDRESS>&issued=<unix seconds>
+Robinhood: link = <SIGN_PAGE_URL>/?action=kill&cluster=<robinhood-testnet|robinhood>&safe=<ROBINHOOD_SAFE_ADDRESS>[&hot=<ROBINHOOD_HOT_WALLET_ADDRESS>]&issued=<unix seconds>
 ```
 
-The Robinhood link names no hot wallet: the page uses the one it was built with.
+The Robinhood link names the hot wallet when `ROBINHOOD_HOT_WALLET_ADDRESS` is set. A page built
+for this deployment knows it already and refuses any other. The hosted page (`HOSTED_SIGN_PAGE`,
+CR-020) knows none, so with it the bot refuses to start without that address.
 
 Each chain's row also has **Open in browser (desktop)**, which opens `link` itself. On a desktop
 browser with the Phantom extension, the universal link only shows phantom.com's "open this in the
@@ -205,6 +207,8 @@ row carry the same `issued` and expire and retire together.
   unless at least one chain is complete: `SQUADS_MULTISIG` with `SOLANA_HOT_WALLET_PUBKEY`, or
   `ROBINHOOD_SAFE_ADDRESS`, or both. Half a Solana pair is refused. Without `SIGN_PAGE_URL`, there are
   no buttons.
+- With the hosted page and a Safe, `ROBINHOOD_HOT_WALLET_ADDRESS` is required too: a kill link
+  without it could only be refused.
 
 ## Owner commands
 
