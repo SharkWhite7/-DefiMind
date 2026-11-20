@@ -345,6 +345,12 @@ A one-click deployment starts with only `ADMIN_TOKEN` and `SETUP_CODE`, and a di
   read counts as not done.
 - **Deposit.** `GET /v1/owner/deposit` answers each chain's vault, token, balance and daily cap, and,
   with `SIGN_PAGE_URL`, the signing page's deposit link, which names the multisig or the Safe only.
+- **Signing page.** `/sign/` serves onchain's build (`SIGN_DIR`, default
+  `packages/onchain/web/dist`) with this deployment's hot wallets filled into the page's config at
+  serve time. A link never names them, so a crafted one cannot make the page grant another key. The
+  page reads the chain through each cluster's public RPC, never guard-core's own, since `/sign` is
+  public and that URL can carry an API key. Only `app.js` and `style.css` are served next to it,
+  under its CSP with `frame-ancestors 'none'`. The image builds the page in its own stage.
 - **One public listener.** `ADMIN_ROUTES=false` leaves `/v1/admin/*` unregistered. `PUBLIC_URL`
   defaults to `RENDER_EXTERNAL_URL`, and `PASSKEY_RP_ID`, `PASSKEY_ORIGIN` and `VAPID_SUBJECT` default
   from it. `TRUST_FORWARDED_FOR=true` takes the client's address for rate limits from the last

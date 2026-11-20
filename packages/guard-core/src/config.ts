@@ -124,6 +124,8 @@ const settings = z
     ANCHOR_KEY_FILE: optional(z.string().min(1)),
     /** CR-014. The onchain signing page; with it, the owner kill links each chain's kill there. */
     SIGN_PAGE_URL: optional(z.url({ protocol: /^https$/ })),
+    /** CR-019. The signing page's build, served at /sign. Defaults to packages/onchain/web/dist. */
+    SIGN_DIR: optional(z.string().min(1)),
     /** The panel's static build, served at /panel. Defaults to packages/panel/dist. */
     PANEL_DIR: optional(z.string().min(1)),
 

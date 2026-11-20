@@ -35,6 +35,7 @@ import { startTimers } from './timers.js'
 import { ownerSessionRoutes } from './owner-session.js'
 import { ownerSetupRoutes } from './owner-setup.js'
 import { clientIp } from './client-ip.js'
+import { DEFAULT_SIGN_DIR, signRoutes } from './sign.js'
 import type { PublicKeys } from '../adapters/public-keys.js'
 import type { ChainHost } from './owner-settings.js'
 
@@ -209,6 +210,9 @@ async function serve(
         : { rpId: config.PASSKEY_RP_ID, origin: config.PASSKEY_ORIGIN }
     app.register(ownerRoutes(deps, rp))
     app.register(panelRoutes(config.PANEL_DIR ?? DEFAULT_PANEL_DIR))
+    if (keys !== undefined) {
+      app.register(signRoutes(keys, config.SIGN_DIR ?? DEFAULT_SIGN_DIR))
+    }
     if (rp !== undefined) {
       app.register(ownerSetupRoutes(deps, rp.origin, config.SETUP_CODE))
       app.register(
