@@ -115,6 +115,11 @@ describe.each([390, 1280])('the panel at %i px', (width) => {
       'https://phantom.app/ul/browse/x',
     )
     await page.getByText('Could not build the kill transaction.').waitFor()
+    // No link for Solana here, as on a one-click deployment: the owner removes the limit in Squads.
+    expect(await page.getByRole('link', { name: 'Open app.squads.so' }).getAttribute('href')).toBe(
+      'https://app.squads.so',
+    )
+    expect(await page.getByRole('link', { name: 'Open app.safe.global' }).count()).toBe(0)
     expect(violations).toEqual([])
     await close()
   })

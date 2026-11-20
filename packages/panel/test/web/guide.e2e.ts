@@ -37,9 +37,14 @@ describe.each([390, 1280])('the guided setup at %i px', (width) => {
     await expect.poll(() => status(page).textContent()).toContain('That code is not right')
     await page.getByLabel('Setup code').fill(SETUP_CODE)
     await page.getByRole('button', { name: 'Continue' }).click()
+    await page.getByRole('heading', { name: 'Add your passkey' }).waitFor()
+    // The refusal belonged to the setup screen: the next one starts clean.
+    expect(await status(page).textContent()).toBe('')
     await page.getByRole('button', { name: 'Create passkey' }).click()
     await page.getByRole('button', { name: 'Sign in with passkey' }).click()
     await page.getByRole('heading', { name: 'Overview' }).waitFor()
+    await page.getByText('No vault yet: finish the guided setup.').waitFor()
+    await page.getByText('1 of 9 steps done.').waitFor()
 
     // The guide resumes at the first step guard-core does not report done.
     await page.goto(`${guard.origin}/panel/start`)
