@@ -1,5 +1,5 @@
 import { formatUsd } from '../domain/money.js'
-import { loosens } from '../domain/policy.js'
+import { chainRules, loosens, vaulted } from '../domain/policy.js'
 import { mcpCommand, type StepId } from '../domain/guide.js'
 import type { Context } from './context.js'
 import { button, card, el, type Child } from './dom.js'
@@ -70,7 +70,14 @@ export async function rules(ctx: Context): Promise<Child[]> {
   if (found === undefined) {
     return [el('p', {}, 'First connect an agent.'), next(ctx, 'agent', 'Back to the agent')]
   }
-  const policy = await ctx.api.policy(found.agentId)
+  const [policy, { chains }] = await Promise.all([
+    ctx.api.policy(found.agentId),
+    ctx.api.settings(),
+  ])
+  const payable = vaulted(chains)
+  if (payable.length === 0) {
+    return [el('p', {}, 'First save your vault.'), next(ctx, 'limit', 'Back to the limit')]
+  }
   const choose = (name: keyof typeof PRESETS) =>
     card(
       el('h3', {}, name),
@@ -80,7 +87,15 @@ export async function rules(ctx: Context): Promise<Child[]> {
         `Up to ${formatUsd(PRESETS[name].perTxMax)} a payment and ${formatUsd(PRESETS[name].dailyMax)} a day. Asks you from ${formatUsd(PRESETS[name].approvalThreshold)}.`,
       ),
       button(`Use ${name}`, async () => {
-        const after = { ...policy, ...PRESETS[name] }
+        // A new agent may pay on no chain at all: the preset opens the vaulted ones and their dollar.
+        const after = {
+          ...chainRules(
+            policy,
+            chains.map((c) => c.chain),
+            payable,
+          ),
+          ...PRESETS[name],
+        }
         await ctx.api.putPolicy(after, loosens(policy, after))
         await ctx.go({ name: 'guide', step: 'shadow' })
         ctx.say(`${name} rules saved for ${found.agentId}.`, 'done')

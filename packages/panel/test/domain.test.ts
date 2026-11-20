@@ -4,7 +4,7 @@ import { chainName } from '../src/domain/chains.js'
 import { fromForm, toForm } from '../src/domain/form.js'
 import { amountText, dollarsInput, formatUsd, parseDollars } from '../src/domain/money.js'
 import { notification } from '../src/domain/notify.js'
-import { hostname, loosens, type Rules } from '../src/domain/policy.js'
+import { chainRules, hostname, loosens, type Rules, vaulted } from '../src/domain/policy.js'
 import { href, parseRoute, type Route } from '../src/domain/route.js'
 
 describe('money', () => {
@@ -200,5 +200,42 @@ describe('notification', () => {
     })
     expect(notification({ kind: 'approval', intentId: '../../x' }).path).toBe('/panel/')
     expect(notification({ kind: 'toString' }).title).toBe('DefiMind')
+  })
+})
+
+describe('chain rules (PANEL-15)', () => {
+  const deny = {
+    chains: [] as string[],
+    tokens: [] as string[],
+    perTxMax: '0',
+    dailyMax: '0',
+    approvalThreshold: '0',
+    allowedRecipients: [],
+    allowedDomains: [],
+  }
+  const devnet = CHAINS.solanaDevnet
+  const robinhood = CHAINS.robinhood
+
+  it('opens a deny-all agent on the picked chains, each in its dollar', () => {
+    const after = chainRules(deny, [devnet, robinhood], [devnet])
+    expect(after.chains).toEqual([devnet])
+    expect(after.tokens).toEqual([getAddress(devnet, 'usd')])
+    expect(loosens(deny, after)).toBe(true)
+  })
+
+  it('takes a chain and its dollar away, and keeps what it does not manage', () => {
+    const before = {
+      ...deny,
+      chains: [devnet, CHAINS.baseSepolia],
+      tokens: [getAddress(devnet, 'usd')!, 'HandSetToken'],
+    }
+    const after = chainRules(before, [devnet, robinhood], [])
+    expect(after.chains).toEqual([CHAINS.baseSepolia])
+    expect(after.tokens).toEqual(['HandSetToken'])
+    expect(loosens(before, after)).toBe(false)
+  })
+
+  it('counts only the chains with a vault as payable', () => {
+    expect(vaulted([{ chain: devnet, vault: 'V' }, { chain: robinhood }])).toEqual([devnet])
   })
 })
