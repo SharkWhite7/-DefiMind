@@ -13,6 +13,7 @@ import {
   type Hex,
 } from 'viem'
 import { allowanceModuleAbi } from '../../../src/evm/safe.js'
+import { REJECT } from '../decoded.js'
 import { FALLBACK_HANDLER, MULTI_SEND_CALL_ONLY, PROXY_FACTORY, SAFE_L2, safeAbi } from './calls.js'
 
 const abi = [
@@ -35,7 +36,7 @@ const zero = (...values: (bigint | number)[]) => values.every((value) => BigInt(
 
 const units = (amount: bigint) =>
   `${formatUnits(amount, USDC_DECIMALS)} (${amount} base units at ${USDC_DECIMALS} decimals)`
-const UNKNOWN = 'A call this page cannot read: reject this transaction.'
+const UNKNOWN = `A call this page cannot read${REJECT}`
 
 /**
  * What the call Phantom is about to send does, read from its bytes alone and not from the link or
@@ -82,7 +83,7 @@ export function decodeEvm(to: Address, data: Hex): string[] {
         isAddressEqual(gasToken, zeroAddress) &&
         isAddressEqual(refund, zeroAddress)
       if (!noRefund) return [UNKNOWN]
-      if (value !== 0n) return [`The Safe sends ${value} wei of its own coin: reject this.`]
+      if (value !== 0n) return [`The Safe sends ${value} wei of its own coin${REJECT}`]
       const calls =
         operation === 1
           ? isAddressEqual(target, MULTI_SEND_CALL_ONLY)

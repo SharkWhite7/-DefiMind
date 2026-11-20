@@ -12,6 +12,7 @@ import { unreadable } from '../proof.js'
 import { button, decoded, link, show, waitFor } from '../view.js'
 import { openInPhantom } from '../wallet.js'
 import { prepareEvmCreate } from './create.js'
+import { cannotRead, NOT_ASKED } from '../decoded.js'
 import { decodeEvm } from './decoded.js'
 import { prepareEvmDeposit } from './deposit.js'
 import { prepareEvmEnable } from './enable.js'
@@ -158,6 +159,12 @@ async function run(client: PublicClient, wallet: Eip1193, owner: Address, plan: 
     show(plan.title, plan.summary, 'done')
     return
   }
+  const what = decodeEvm(plan.to, plan.data)
+  if (cannotRead(what)) {
+    show('Nothing to sign', NOT_ASKED, 'stop')
+    decoded(what)
+    return
+  }
   // The exact call Phantom will send, from the owner: the Safe takes its approval only from them.
   try {
     await client.call({ account: owner, to: plan.to, data: plan.data })
@@ -167,7 +174,6 @@ async function run(client: PublicClient, wallet: Eip1193, owner: Address, plan: 
     return
   }
   show(plan.title, plan.summary)
-  const what = decodeEvm(plan.to, plan.data)
   decoded(what)
   try {
     await wallet.request({

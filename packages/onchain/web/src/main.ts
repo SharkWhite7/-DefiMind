@@ -4,7 +4,7 @@ import { getAddress } from 'viem'
 import { z } from 'zod'
 import { config, configured } from './config.js'
 import { prepareCreate } from './create.js'
-import { decodeSolana } from './decoded.js'
+import { decodeSolana, cannotRead, NOT_ASKED } from './decoded.js'
 import { prepareDeposit } from './deposit.js'
 import { evmMain } from './evm/main.js'
 import { prepareKill } from './kill.js'
@@ -179,6 +179,11 @@ async function run(connection: Connection, wallet: Wallet, owner: PublicKey, pla
     tx.sign(plan.coSigners)
   }
   const what = await decodeSolana(connection, tx.message)
+  if (cannotRead(what)) {
+    show('Nothing to sign', NOT_ASKED, 'stop')
+    decoded(what)
+    return
+  }
   decoded(what)
   try {
     await wallet.signAndSendTransaction(tx)
