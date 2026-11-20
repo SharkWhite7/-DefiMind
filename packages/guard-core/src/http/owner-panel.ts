@@ -36,7 +36,7 @@ export function ownerPanelRoutes(
   deps: X402Deps,
   rp: Address,
   setup: {
-    botUrl: string
+    botUrl?: string
     databaseUrl: string
     /** The VAPID public key; push is off without it. */
     pushKey?: string
