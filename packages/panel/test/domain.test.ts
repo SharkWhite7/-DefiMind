@@ -69,6 +69,10 @@ describe('routes', () => {
     { name: 'passkeys' },
     { name: 'settings' },
     { name: 'kill' },
+    { name: 'setup' },
+    { name: 'deposit' },
+    { name: 'guide' },
+    { name: 'guide', step: 'limit' },
   ]
 
   it('parses every href back to its route', () => {
@@ -91,6 +95,7 @@ describe('routes', () => {
       '/panel/a/b/c',
       '/panel/enrol',
       '/panel/agents/%E0',
+      '/panel/start/nope',
     ]) {
       expect(parseRoute(path)).toEqual({ name: 'missing' })
     }

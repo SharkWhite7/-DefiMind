@@ -7,23 +7,26 @@ optional next to it.
 
 ## What it does
 
-| Screen      | Path                   | Notes                                                       |
-| ----------- | ---------------------- | ----------------------------------------------------------- |
-| Enrol       | `/panel/enrol#code=…`  | First passkey only, from the link `passkey-code.ts` prints  |
-| Sign in     | `/panel/login`         | Passkey, then a 30-minute session cookie (`dm_session`)     |
-| Overview    | `/panel/`              | Waiting approvals, each chain's onchain allowance, agents   |
-| Approval    | `/panel/approvals/:id` | Reject, or approve with a fresh passkey assertion           |
-| Task budget | `/panel/mandates/:id`  | The same for a mandate                                      |
-| Agents      | `/panel/agents`        | List, and create with a passkey: the token is shown once    |
-| Agent       | `/panel/agents/:id`    | Shadow or live with the shadow total, pause, resume, policy |
-| Report      | `/panel/report`        | The last 7 days per agent                                   |
-| Executions  | `/panel/executions`    | CR-013 record: integrity, anchor, timeline, proof download  |
-| Doctor      | `/panel/doctor`        | guard-core's checks                                         |
-| Settings    | `/panel/settings`      | Push on this device, passkeys, sign out                     |
-| Stop        | `/panel/kill`          | Pauses every agent, then each chain's onchain step          |
+| Screen       | Path                   | Notes                                                                         |
+| ------------ | ---------------------- | ----------------------------------------------------------------------------- |
+| First access | `/panel/setup`         | CR-019: the host's setup code issues the enrol link, until a passkey exists   |
+| Enrol        | `/panel/enrol#code=…`  | First passkey only, from the link `passkey-code.ts` prints                    |
+| Sign in      | `/panel/login`         | Passkey, then a 30-minute session cookie (`dm_session`)                       |
+| Overview     | `/panel/`              | Waiting approvals, each chain's onchain allowance, agents                     |
+| Approval     | `/panel/approvals/:id` | Reject, or approve with a fresh passkey assertion                             |
+| Task budget  | `/panel/mandates/:id`  | The same for a mandate                                                        |
+| Agents       | `/panel/agents`        | List, and create with a passkey: the token is shown once                      |
+| Agent        | `/panel/agents/:id`    | Shadow or live with the shadow total, pause, resume, policy                   |
+| Report       | `/panel/report`        | The last 7 days per agent                                                     |
+| Executions   | `/panel/executions`    | CR-013 record: integrity, anchor, timeline, proof download                    |
+| Doctor       | `/panel/doctor`        | guard-core's checks                                                           |
+| Guided setup | `/panel/start[/:step]` | CR-019: nine steps, progress from guard-core, any step can be reopened        |
+| Deposit      | `/panel/deposit`       | Each vault: balance, days of the daily limit, QR code, Phantom deposit        |
+| Settings     | `/panel/settings`      | Each chain's RPC and vault (passkey), push on this device, passkeys, sign out |
+| Stop         | `/panel/kill`          | Pauses every agent, then each chain's onchain step                            |
 
-Every step-up (approve, approve a task budget, loosen a policy, resume, create an agent) first asks
-`POST /v1/owner/challenge` for options bound to that exact action and body, then sends the
+Every step-up (approve, approve a task budget, loosen a policy, resume, create an agent, change
+settings) first asks `POST /v1/owner/challenge` for options bound to that exact action and body, then sends the
 assertion with the call. The panel works out on its own whether a policy change loosens it
 (`src/domain/policy.ts`, SPEC's list), so the passkey prompt comes before Save, not after a refusal.
 guard-core decides again on its side.
@@ -72,3 +75,17 @@ be cached. The worker's scope is `/panel/`.
   work.
 - `app.js` is about 480 kB minified, nearly all zod. The worker caches it, so only the first load
   pays for it.
+
+## Guided setup (CR-019)
+
+- The progress bar and the step the guide opens on come from `GET /v1/owner/setup/progress`, never
+  from a flag the panel keeps. Phantom leaves no trace on the server, so it counts as done once the
+  vault does.
+- guard-core adopts a vault only once its daily limit names guard-core's hot wallet. The guide keeps
+  the pasted address on this device (`localStorage`, public data) from the vault step to the limit
+  step, then saves it with the `change_settings` passkey.
+- Signing-page links point at `/sign` on the panel's own origin and never name a hot wallet.
+- The deposit QR code is made in the page (`src/domain/qr.ts`: byte mode, level M, versions 1 to 10)
+  and drawn as one SVG path, so the CSP stays as it is. Its tests decode every size with jsQR.
+- The agent step prints the MCP setup command with `--guard-url` and `--agent-id`; the command asks
+  for the token at a hidden prompt, so the token is never on a command line.

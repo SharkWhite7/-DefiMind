@@ -4,7 +4,12 @@ import { type Assertion, type Authenticator, creationOptions, requestOptions } f
 
 /** The step-up actions of SPEC: each assertion is bound to one action and its exact body. */
 export type OwnerAction =
-  'approve_intent' | 'approve_mandate' | 'loosen_policy' | 'resume' | 'create_agent'
+  | 'approve_intent'
+  | 'approve_mandate'
+  | 'loosen_policy'
+  | 'resume'
+  | 'create_agent'
+  | 'change_settings'
 
 /** An answer guard-core gave as an error: its status and the code in its body. */
 export class ApiError extends Error {
@@ -106,6 +111,18 @@ export function ownerApi(passkey: Authenticator, fetchImpl: typeof fetch = fetch
     },
 
     overview: () => get(s.overview, '/v1/owner/overview'),
+
+    setup: () => get(s.setup, '/v1/owner/setup'),
+    /** The host's setup code, good only until the first passkey exists. */
+    claim: (setupCode: string) => post(s.enrolLink, '/v1/owner/setup', { setupCode }),
+    progress: () => get(s.progress, '/v1/owner/setup/progress'),
+    deposit: () => get(s.deposit, '/v1/owner/deposit'),
+    keys: () => get(s.keys, '/v1/owner/keys'),
+    settings: () => get(s.settingsView, '/v1/owner/settings'),
+    putSettings: (chains: s.SettingsView['chains']) =>
+      stepUp('change_settings', { chains }, (assertion) =>
+        call(ignored, 'PUT', '/v1/owner/settings', { chains, assertion }),
+      ),
 
     rejectIntent: (id: string) =>
       post(ignored, `/v1/owner/intents/${id}/decision`, { decision: 'reject' }),
