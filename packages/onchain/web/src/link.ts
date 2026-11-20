@@ -18,7 +18,8 @@ export const issued = z
 
 export const expired = (at: number) => Date.now() / 1000 - at > KILL_LINK_TTL_S
 
-export const EXPIRED = 'This link expired. Use /kill in Telegram for a fresh one.'
+export const EXPIRED =
+  'This link expired. Press Stop everything in your DefiMind panel, or send /kill to the bot, for a fresh one.'
 
 /** A link that does not parse, as the owner should read it. */
 export const problems = (error: z.ZodError) =>
