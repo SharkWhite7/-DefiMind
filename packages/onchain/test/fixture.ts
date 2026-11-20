@@ -126,7 +126,13 @@ export function plantMultisig(c: Chain, configAuthority: PublicKey) {
   plant(c, c.multisigPda, data)
 }
 
-export function plantSpendingLimit(c: Chain, cap: bigint, remaining: bigint, lastReset: number) {
+export function plantSpendingLimit(
+  c: Chain,
+  cap: bigint,
+  remaining: bigint,
+  lastReset: number,
+  overrides: Partial<multisig.accounts.SpendingLimitArgs> = {},
+) {
   const data = multisig.accounts.SpendingLimit.fromArgs({
     multisig: c.multisigPda,
     createKey: c.hotWallet.publicKey,
@@ -139,6 +145,7 @@ export function plantSpendingLimit(c: Chain, cap: bigint, remaining: bigint, las
     bump: 255,
     members: [c.hotWallet.publicKey],
     destinations: [c.hotWallet.publicKey],
+    ...overrides,
   }).serialize()[0]
   plant(c, spendingLimitPda(c.multisigPda, c.hotWallet.publicKey), data)
 }

@@ -199,6 +199,7 @@ export interface SpendingLimitState {
   resetsAt: string
   members: string[]
   destinations: string[]
+  mint: string
 }
 
 /**
@@ -254,5 +255,6 @@ function spendingLimitState(
     resetsAt: new Date(Number(resetsAtS) * 1000).toISOString(),
     members: account.members.map((m) => m.toBase58()),
     destinations: account.destinations.map((d) => d.toBase58()),
+    mint: account.mint.toBase58(),
   }
 }
