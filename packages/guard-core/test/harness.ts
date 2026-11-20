@@ -2,6 +2,7 @@ import type { LightMyRequestResponse } from 'fastify'
 import type { KillTarget, Policy } from '@defimind/shared'
 import type { PushService } from '../src/adapters/push.js'
 import type { PublicKeys } from '../src/adapters/public-keys.js'
+import type { ChainHost } from '../src/http/owner-settings.js'
 import { CHAINS } from '@defimind/shared'
 import { encodePaymentRequiredHeader, encodePaymentResponseHeader } from '@x402/core/http'
 import type { PaymentRequirements } from '@x402/core/types'
@@ -65,6 +66,8 @@ export async function harness(
     /** More settings, over the defaults above. */
     env?: Record<string, string>
     keys?: PublicKeys
+    /** Turns the owner's settings on (CR-019), rebuilding the chains with this. */
+    build?: ChainHost['build']
   } = {},
 ): Promise<Harness> {
   const db = openDb(':memory:')
@@ -95,22 +98,23 @@ export async function harness(
   const fetchMock = vi.fn<typeof fetch>()
   const clock = { now: NOW }
 
+  const config = loadConfig({
+    ADMIN_TOKEN,
+    BOT_TOKEN,
+    BOT_URL: 'http://bot.local',
+    BOT_WEBHOOK_SECRET: 'c'.repeat(64),
+    LOG_LEVEL: 'fatal',
+    TELEGRAM_APPROVALS: options.telegramApprovals ?? 'true',
+    ...(options.panelDir === undefined ? {} : { PANEL_DIR: options.panelDir }),
+    ...(options.signPage === undefined ? {} : { SIGN_PAGE_URL: options.signPage }),
+    PASSKEY_RP_ID: PASSKEY_RP.id,
+    PASSKEY_ORIGIN: PASSKEY_RP.origin,
+    ...(options.passkeyAbove === undefined ? {} : { PASSKEY_ABOVE: options.passkeyAbove }),
+    ...options.env,
+  })
   const app = await buildServer({
     db,
-    config: loadConfig({
-      ADMIN_TOKEN,
-      BOT_TOKEN,
-      BOT_URL: 'http://bot.local',
-      BOT_WEBHOOK_SECRET: 'c'.repeat(64),
-      LOG_LEVEL: 'fatal',
-      TELEGRAM_APPROVALS: options.telegramApprovals ?? 'true',
-      ...(options.panelDir === undefined ? {} : { PANEL_DIR: options.panelDir }),
-      ...(options.signPage === undefined ? {} : { SIGN_PAGE_URL: options.signPage }),
-      PASSKEY_RP_ID: PASSKEY_RP.id,
-      PASSKEY_ORIGIN: PASSKEY_RP.origin,
-      ...(options.passkeyAbove === undefined ? {} : { PASSKEY_ABOVE: options.passkeyAbove }),
-      ...options.env,
-    }),
+    config,
     chains: new Map([[CHAIN, chain]]),
     bot,
     fetch: fetchMock,
@@ -120,6 +124,7 @@ export async function harness(
     ...(options.killTargets === undefined ? {} : { killTargets: options.killTargets }),
     ...(options.push === undefined ? {} : { push: options.push }),
     ...(options.keys === undefined ? {} : { keys: options.keys }),
+    ...(options.build === undefined ? {} : { host: { env: config, build: options.build } }),
   })
 
   return {

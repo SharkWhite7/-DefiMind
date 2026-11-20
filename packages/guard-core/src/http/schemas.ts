@@ -129,6 +129,24 @@ export const passkeyEnrolment = z.object({ response: webAuthnResponse })
 export const ownerApproval = z.object({ intentId: z.uuid(), assertion: webAuthnResponse })
 export const ownerSignIn = z.object({ assertion: webAuthnResponse })
 
+/** CR-019. The vault's shape per chain family is checked by the route, which knows the chain. */
+export const ownerSettings = z.object({
+  chains: z
+    .array(
+      z.object({
+        chain: z.string().min(1).max(64),
+        rpcUrl: z
+          .url({ protocol: /^https?$/ })
+          .max(512)
+          .optional(),
+        vault: z.string().min(1).max(64).optional(),
+      }),
+    )
+    .min(1)
+    .max(8),
+  assertion: webAuthnResponse.optional(),
+})
+
 export const ownerSetup = z.object({ setupCode: z.string().min(1).max(256) })
 
 const enrolCode = z.string().regex(/^[A-Za-z0-9_-]{32}$/, 'not an enrolment code')
@@ -146,6 +164,7 @@ const OWNER_ACTIONS = [
   'loosen_policy',
   'resume',
   'create_agent',
+  'change_settings',
 ] as const
 
 /** CR-012. `body` is hashed as sent, so it is only bounded here, never reshaped. */

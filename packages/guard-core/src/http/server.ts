@@ -36,6 +36,7 @@ import { ownerSessionRoutes } from './owner-session.js'
 import { ownerSetupRoutes } from './owner-setup.js'
 import { clientIp } from './client-ip.js'
 import type { PublicKeys } from '../adapters/public-keys.js'
+import type { ChainHost } from './owner-settings.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -62,6 +63,8 @@ export interface ServerDeps {
   killTargets?: KillTarget[]
   /** The public keys GET /v1/owner/keys answers (CR-019). */
   keys?: PublicKeys
+  /** Rebuilds the chains when the owner changes a setting (CR-019); settings are off without it. */
+  host?: ChainHost
 }
 
 /**
@@ -114,7 +117,7 @@ export async function buildServers(
       config,
       options.killTargets ?? [],
       options.push?.publicKey,
-      options.keys,
+      options,
     )
   }
 
@@ -169,7 +172,7 @@ async function serve(
   config: Config,
   killTargets: KillTarget[],
   pushKey: string | undefined,
-  keys: PublicKeys | undefined,
+  { keys, host }: Pick<ServerDeps, 'keys' | 'host'>,
 ) {
   const ipOf = clientIp(surface, config)
   await app.register(rateLimit, {
@@ -217,6 +220,7 @@ async function serve(
             databaseUrl: config.DATABASE_URL,
             ...(pushKey === undefined ? {} : { pushKey }),
             ...(keys === undefined ? {} : { keys }),
+            ...(host === undefined ? {} : { host }),
             ...(config.SIGN_PAGE_URL === undefined
               ? {}
               : { signing: { page: config.SIGN_PAGE_URL, targets: killTargets } }),

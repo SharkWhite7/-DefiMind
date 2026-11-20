@@ -9,6 +9,9 @@ import { migrateDb, openDb } from './db/client.js'
 import { countPasskeys } from './db/passkeys.js'
 import { requirePersistentDb } from './db/placement.js'
 import { buildServers } from './http/server.js'
+import type { ChainHost } from './http/owner-settings.js'
+import { readSettings } from './db/settings.js'
+import { applySettings } from './domain/settings.js'
 import { killTargets } from './kill-targets.js'
 
 const env = loadConfig()
@@ -26,7 +29,9 @@ if (config.PASSKEY_ABOVE !== undefined && countPasskeys(db) === 0) {
   throw new Error('invalid configuration: PASSKEY_ABOVE is set but no passkey is enrolled')
 }
 
-const chains = await buildChains(config)
+// A setting the owner stored in the panel fills in only what the env leaves unset (CR-019).
+const effective = applySettings(config, readSettings(db))
+const chains = await buildChains(effective)
 const receiptKey =
   config.RECEIPT_SIGNING_KEY_FILE === undefined
     ? undefined
@@ -50,7 +55,17 @@ const anchorPublisher =
         secretKey: await readKeypairFile(config.ANCHOR_KEY_FILE),
       })
 
-const targets = config.SIGN_PAGE_URL === undefined ? [] : await killTargets(config)
+const targets = config.SIGN_PAGE_URL === undefined ? [] : await killTargets(effective)
+const host: ChainHost = {
+  env: config,
+  build: (next) => buildChains(next),
+  // In place: the owner kill route holds this array.
+  changed: async (next) => {
+    if (config.SIGN_PAGE_URL !== undefined) {
+      targets.splice(0, targets.length, ...(await killTargets(next)))
+    }
+  },
+}
 
 const keys = await publicKeys(config)
 const split = config.PUBLIC_PORT !== undefined
@@ -62,6 +77,7 @@ const [app, publicApp] = await buildServers(
     sweepMs: config.EXPIRY_SWEEP_MS,
     killTargets: targets,
     keys,
+    host,
     ...(anchorPublisher === undefined ? {} : { anchorPublisher }),
     ...(vapid === undefined
       ? {}

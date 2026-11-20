@@ -332,6 +332,19 @@ A one-click deployment starts with only `ADMIN_TOKEN` and `SETUP_CODE`, and a di
   `pnpm passkey-code`. The code is compared in constant time, five tries per address per 15 minutes,
   and every wrong one is audited (`setup_code_refused`). Once a passkey exists it answers
   `410 setup_done`.
+- **Settings.** `GET /v1/owner/settings` answers each enabled chain's RPC and vault in force, the
+  env's or the panel's. `PUT /v1/owner/settings { chains, assertion }` needs the `change_settings`
+  step-up over `{ chains }` as sent, and answers like GET. A field the env sets is `409 set_by_env`,
+  a chain that is off `400 chain_not_enabled`. Every chain is rebuilt from the env and the new
+  settings, and a vault is adopted only if its adapter reports an active limit or allowance for this
+  hot wallet; otherwise `422 vault_not_ours` and nothing is stored. A vault without an RPC is
+  `400 settings_incomplete`. Adopted chains are swapped in for the next request, and the audit row
+  `settings_changed` names fields only, since an RPC URL can carry an API key.
+- **Progress.** `GET /v1/owner/setup/progress` answers the steps passkey, vault, limit, deposit,
+  agent, rules, shadow and live, each read from the database or the chain. A chain that cannot be
+  read counts as not done.
+- **Deposit.** `GET /v1/owner/deposit` answers each chain's vault, token, balance and daily cap, and,
+  with `SIGN_PAGE_URL`, the signing page's deposit link, which names the multisig or the Safe only.
 - **One public listener.** `ADMIN_ROUTES=false` leaves `/v1/admin/*` unregistered. `PUBLIC_URL`
   defaults to `RENDER_EXTERNAL_URL`, and `PASSKEY_RP_ID`, `PASSKEY_ORIGIN` and `VAPID_SUBJECT` default
   from it. `TRUST_FORWARDED_FOR=true` takes the client's address for rate limits from the last
