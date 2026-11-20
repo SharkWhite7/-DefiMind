@@ -18,10 +18,11 @@ const env = loadConfig()
 
 requirePersistentDb(env)
 
-const config = await withKeys(env)
-
-const db = openDb(config.DATABASE_URL)
+const db = openDb(env.DATABASE_URL)
 migrateDb(db)
+
+const stored = readSettings(db)
+const config = await withKeys(env, stored)
 
 // Approvals above PASSKEY_ABOVE need a passkey; with none enrolled, nothing above it could ever be
 // approved, and the owner would find out only when one was needed.
@@ -30,7 +31,7 @@ if (config.PASSKEY_ABOVE !== undefined && countPasskeys(db) === 0) {
 }
 
 // A setting the owner stored in the panel fills in only what the env leaves unset (CR-019).
-const effective = applySettings(config, readSettings(db))
+const effective = applySettings(config, stored)
 const chains = await buildChains(effective)
 const receiptKey =
   config.RECEIPT_SIGNING_KEY_FILE === undefined
