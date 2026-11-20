@@ -33,7 +33,7 @@
 - **Losing the disk loses the hot keys.** That costs nothing held in the vault, which only the
   owner's Phantom controls. The owner kills the old limit and adds one for the new hot wallet.
 - **Each owner's domain is new to Phantom** and may be flagged until it is reviewed (HUMAN-25).
-- **`/sign` shares guard-core's trust domain.** A compromised guard-core or host account could serve
+- **`/sign` shares guard-core's trust domain** (the owner accepted this on 2026-11-20). A compromised guard-core or host account could serve
   a modified page. That page could ask the owner to sign an add-limit for an attacker's key, so for
   create and add-limit the worst case is what the owner signs, not just the cap. The mitigations:
   - the transaction's own decoded destination or delegate and amount appear in large text before

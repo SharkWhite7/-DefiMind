@@ -1013,7 +1013,7 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   - The host costs each owner a few dollars a month.
   - Phantom may warn on each owner's own domain until it is reviewed, as it did for the hosted page
     (HUMAN-25).
-- **Amendment, from the manager's review, 2026-11-20 (waiting for the owner's acknowledgment):**
+- **Amendment, from the manager's review, 2026-11-20. The owner accepted the risk on 2026-11-20 ("aceito o risco do cr 19"):**
   - **The risk.** Serving `/sign` from guard-core puts the signing page in the same trust domain as
     the hot keys. A compromised guard-core, or a compromised host account, could serve a modified
     page. That page could ask Phantom to sign a deposit to the attacker, an add-limit for the
