@@ -23,7 +23,7 @@ const SECRETS = [SERVICE, AGENT, '123:telegram-secret', 'SOLKEY', 'PAGEKEY', '7,
 const page = 'https://acme-signing-page.vercel.app'
 
 const answers = () => [
-  ...['acme', '', '', '', '', '', '3', '', '111', ''],
+  ...['acme', '', '', '', '', '', '3', '', 'yes', '111', ''],
   // The bot token, the two Solana RPC URLs, and the public Robinhood RPC.
   ...['123:telegram-secret', 'https://sol.example/?api-key=SOLKEY'],
   ...['https://page.example/?api-key=PAGEKEY', ''],
@@ -82,6 +82,29 @@ describe('the wizard, against fakes', () => {
     expect(lines.filter((l) => l.startsWith('fly deploy'))).toHaveLength(2)
     expect(runner.started.map((command) => command.args[0])).toEqual(['proxy'])
     expect(runner.stopped()).toBe(1)
+  })
+
+  it('without Telegram asks no bot token, makes one app, and points the owner at the panel', async () => {
+    const panelOnly = [
+      ...['acme', '', '', '', '', '', '3', '', '', ''],
+      ...['https://sol.example/?api-key=SOLKEY', 'https://page.example/?api-key=PAGEKEY', ''],
+      ...['', MULTISIG, SAFE],
+    ]
+    const { ctx, runner, prompt, memory, out } = wizard(memoryFiles(checkoutSeed()), panelOnly)
+    await setup(ctx)
+    expect(prompt.refused).toEqual([])
+    const lines = runner.ran.map(line)
+    expect(lines.filter((l) => l.includes('acme-bot'))).toEqual([])
+    expect(lines.filter((l) => l.startsWith('fly deploy'))).toHaveLength(1)
+    const env = memory.files.get(`${HOME}/.defimind/acme.env`)?.contents ?? ''
+    expect(env).toMatch(/^SETUP_CODE=.+$/m)
+    expect(env).not.toMatch(/^(BOT_TOKEN|BOT_WEBHOOK_SECRET|TELEGRAM_BOT_TOKEN)=/m)
+    const said = out.join('\n')
+    expect(said).toContain('Your owner panel: https://acme-guard-core.fly.dev/panel/')
+    expect(said).not.toContain('Telegram')
+    // The setup code is named, never printed.
+    const code = /^SETUP_CODE=(.+)$/m.exec(env)?.[1] ?? 'missing'
+    expect(said).not.toContain(code)
   })
 
   it('never puts a secret in argv, and pipes each one on stdin', async () => {

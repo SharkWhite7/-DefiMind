@@ -6,6 +6,7 @@ import {
   agentTokenFile,
   dockerignoreGuard,
   finishTasks,
+  panelUrl,
   SECRETS,
   type Setup,
 } from '../domain/plan.js'
@@ -45,7 +46,14 @@ export async function finish(ctx: Ctx, setup: Setup, state: State): Promise<void
     await report(ctx, token, guard, healthy)
   })
   ctx.say()
-  const tokenFile = agentTokenFile(setup.paths, setup.answers.prefix, setup.answers.agentId)
+  const { prefix } = setup.answers
+  // The code itself stays in the env file: a terminal's scrollback is no place for it.
+  ctx.say(`Your owner panel: ${panelUrl(prefix)}/panel/`)
+  ctx.say(
+    `Open it on the phone or computer that will hold your passkey, and give it the setup code: ${SECRETS.setup} in ${tilde(setup.paths.envFile, ctx.home)}. It works until your first passkey exists.`,
+  )
+  ctx.say()
+  const tokenFile = agentTokenFile(setup.paths, prefix, setup.answers.agentId)
   ctx.say(
     'Done. In this checkout, connect your agent with one line. It asks for the agent token, in',
   )

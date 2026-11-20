@@ -21,18 +21,19 @@ continues there.
 
 You need Node 20+, `git`, [flyctl](https://fly.io/docs/flyctl/install/), and accounts on Fly.io
 (with a card on it) and Vercel. It checks `fly auth whoami` and `npx vercel whoami` and offers to
-log you in. You also need a Telegram bot token from @BotFather, your Telegram user id, and Phantom
-with a new owner account used for nothing else.
+log you in. You also need Phantom with a new owner account used for nothing else. A Telegram bot is
+optional (CR-017): only if you choose it, a bot token from @BotFather and your Telegram user id.
 
 ## What it does, in order
 
 1. **Checks** Node, `git --version`, `fly version`, `fly auth whoami`, `npx --yes vercel whoami`,
    and the checkout (`git clone https://github.com/SharkWhite7/-DefiMind.git ~/DefiMind` if
    you agree).
-2. **Asks** a name prefix for the Fly apps (`<prefix>-guard-core`, `<prefix>-bot`), the Fly org
-   and region (`gru`), the chains (Solana, Robinhood Chain, or both; test networks as an advanced
-   choice), each chain's daily cap (default 20, at most 50), the policy preset, your Telegram ids,
-   the agent's name, then the bot token (hidden as you type) and the RPC URLs.
+2. **Asks** a name prefix for the Fly apps (`<prefix>-guard-core`, and `<prefix>-bot` with
+   Telegram), the Fly org and region (`gru`), the chains (Solana, Robinhood Chain, or both; test
+   networks as an advanced choice), each chain's daily cap (default 20, at most 50), the policy
+   preset, whether to add a Telegram bot (default no) and then your Telegram ids, the agent's name,
+   then the bot token (hidden as you type) if you chose the bot, and the RPC URLs.
 
    | Preset   | Per payment | Per day | Your approval from |
    | -------- | ----------- | ------- | ------------------ |
@@ -43,12 +44,14 @@ with a new owner account used for nothing else.
 
 3. **Makes the keys** in its own process: a Solana keypair with `@solana/web3.js`, written as the
    64-byte JSON array, and an EVM key with viem's `generatePrivateKey()`. It prints the addresses
-   only. `ADMIN_TOKEN`, `BOT_TOKEN` and `BOT_WEBHOOK_SECRET` are 32 random bytes each, saved and
-   never printed.
+   only. `ADMIN_TOKEN`, `SETUP_CODE` and, with the bot, `BOT_TOKEN` and `BOT_WEBHOOK_SECRET` are
+   32 random bytes each, saved and never printed.
 4. **Fly:** writes each app's `fly.toml` into `~/.defimind/fly/`, from the package's own with only
-   `app`, `primary_region` and `BOT_URL`/`GUARD_URL` changed, then runs
-   `fly apps create` (both apps), `fly volumes create guard_data --size 1 --region … --app … --yes`,
-   and `fly secrets import --app … --stage` for each app. Nothing is deployed yet.
+   `app`, `primary_region` and the bot's `GUARD_URL` changed, then runs `fly apps create` for each
+   app, `fly volumes create guard_data --size 1 --region … --app … --yes`, and
+   `fly secrets import --app … --stage` for each app. guard-core gets `PUBLIC_URL`
+   (`https://<prefix>-guard-core.fly.dev`, the panel's address) and `SETUP_CODE`, and `BOT_URL` with
+   the bot's two tokens only with Telegram. Nothing is deployed yet.
 5. **Your signing page:** `npx --yes vercel link`, `vercel env add <name> production --force` for
    each hot wallet and the page's RPC, `vercel pull`, `vercel build --prod` and
    `vercel deploy --prebuilt --prod`, all with `--cwd packages/onchain/web`. The page is built on
@@ -63,11 +66,12 @@ with a new owner account used for nothing else.
 8. **Deploy and the first agent:** stages `SQUADS_MULTISIG`, `ROBINHOOD_SAFE_ADDRESS` and
    `SIGN_PAGE_URL`, checks `grep -qx '\*\*/.env' .dockerignore` as the deploy workflow does, and
    runs `fly deploy . --config ~/.defimind/fly/<app>.toml --dockerfile packages/<pkg>/Dockerfile
---ha=false` for guard-core, then the bot. Each app is deployed once, here: guard-core refuses to
+--ha=false` for guard-core, then the bot if you chose it. Each app is deployed once, here: guard-core refuses to
    start with a hot key but no vault, so a deploy before step 6 would crash-loop. Then, through
    `fly proxy 18787:8787`, it calls `POST /v1/admin/agents` (or, on a guard-core without that
    route, `create-agent.ts` over `fly ssh console`), `PUT /v1/admin/policy/<agent>` with the preset
-   in shadow mode, and the doctor. It ends with the one line for your agent:
+   in shadow mode, and the doctor. It ends with your owner panel's address and where the setup code
+   is (never the code itself), and the one line for your agent:
    `pnpm --filter @defimind/mcp-server run setup claude-code`.
 
 Each step records its progress in `~/.defimind/<prefix>.state.json`, so after a failure or a
@@ -91,14 +95,14 @@ exits 1 when a check fails.
 - **It never overwrites a key file.** An existing one is kept and reused.
 - **It writes secrets only under `~/.defimind/`**, the directory 0700 and each file 0600:
 
-  | File                           | Holds                                                 |
-  | ------------------------------ | ----------------------------------------------------- |
-  | `<prefix>.env`                 | the three service tokens, the bot token, the RPC URLs |
-  | `<prefix>-<network>-hot.json`  | the Solana hot key                                    |
-  | `<prefix>-<network>-hot.key`   | the Robinhood Chain hot key                           |
-  | `<prefix>-agent-<agent>.token` | the first agent's token                               |
-  | `<prefix>.state.json`          | progress, public values only                          |
-  | `fly/<app>.toml`               | each app's Fly config                                 |
+  | File                           | Holds                                                           |
+  | ------------------------------ | --------------------------------------------------------------- |
+  | `<prefix>.env`                 | the service tokens, the setup code, any bot token, the RPC URLs |
+  | `<prefix>-<network>-hot.json`  | the Solana hot key                                              |
+  | `<prefix>-<network>-hot.key`   | the Robinhood Chain hot key                                     |
+  | `<prefix>-agent-<agent>.token` | the first agent's token                                         |
+  | `<prefix>.state.json`          | progress, public values only                                    |
+  | `fly/<app>.toml`               | each app's Fly config                                           |
 
 `vercel pull` writes `packages/onchain/web/.vercel/`, with the page's Production variables: your
 hot wallets and the page's RPC URL, which the page shows anyway.

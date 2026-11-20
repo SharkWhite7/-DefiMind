@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { pageOrigin, vaultAddress } from '../src/domain/address.js'
 import { formatUsd, toBaseUnits } from '../src/domain/amount.js'
 import {
+  answersSchema,
   appNames,
   capSchema,
   check,
@@ -31,6 +32,7 @@ const answers: Answers = {
   networks: ['solana-mainnet', 'robinhood-mainnet'],
   caps: { 'solana-mainnet': '20000000', 'robinhood-mainnet': '3000000' },
   preset: 'careful',
+  telegram: true,
   ownerIds: '111',
   agentId: 'agent-1',
 }
@@ -52,6 +54,15 @@ describe('amounts', () => {
 })
 
 describe('answers', () => {
+  it('reads a state file from before the Telegram question as one with the bot (CR-017)', () => {
+    const { telegram: _asked, ...before } = answers
+    expect(answersSchema.parse(before).telegram).toBe(true)
+    expect(answersSchema.safeParse({ ...before, ownerIds: undefined }).success).toBe(false)
+    expect(answersSchema.parse({ ...before, telegram: false, ownerIds: undefined }).telegram).toBe(
+      false,
+    )
+  })
+
   it('validates Fly names, ids, tokens and URLs', () => {
     expect(check(prefixSchema, 'acme-1')).toBe('acme-1')
     for (const bad of ['a', 'Acme', '1acme', 'acme-', 'ac--me', 'x'.repeat(31)]) {

@@ -11,6 +11,8 @@ const WEB = 'packages/onchain/web'
 /** The keys of the wizard's env file, the only place its secrets are kept. */
 export const SECRETS = {
   admin: 'ADMIN_TOKEN',
+  /** CR-019: opens the owner panel for its first passkey, once. */
+  setup: 'SETUP_CODE',
   bot: 'BOT_TOKEN',
   webhook: 'BOT_WEBHOOK_SECRET',
   telegram: 'TELEGRAM_BOT_TOKEN',
@@ -97,16 +99,28 @@ function importTask(id: string, app: string, entries: Entry[]): Task {
   }
 }
 
+/** The address the owner opens the panel at, and the one each passkey is bound to. */
+export function panelUrl(prefix: string): string {
+  return `https://${appNames(prefix).guard}.fly.dev`
+}
+
 function guardSecrets(setup: Setup): Entry[] {
   const key = (network: NetworkId): Source => ({
     file: keyFile(setup.paths, setup.answers.prefix, network),
   })
   return [
     [SECRETS.admin, secret(setup, SECRETS.admin)],
-    // The bot's three, all or none (CR-017). The wizard deploys the bot, so it gives all three.
-    [SECRETS.bot, secret(setup, SECRETS.bot)],
-    [SECRETS.webhook, secret(setup, SECRETS.webhook)],
-    ['BOT_URL', { value: `http://${appNames(setup.answers.prefix).bot}.internal:8788` }],
+    // CR-019: the panel at this address, and the code that enrols its first passkey.
+    ['PUBLIC_URL', { value: panelUrl(setup.answers.prefix) }],
+    [SECRETS.setup, secret(setup, SECRETS.setup)],
+    // The bot's three, all or none (CR-017): only when the owner chose Telegram.
+    ...(setup.answers.telegram
+      ? ([
+          [SECRETS.bot, secret(setup, SECRETS.bot)],
+          [SECRETS.webhook, secret(setup, SECRETS.webhook)],
+          ['BOT_URL', { value: `http://${appNames(setup.answers.prefix).bot}.internal:8788` }],
+        ] satisfies Entry[])
+      : []),
     // SOLANA_CHAIN is set even on mainnet: without it guard-core runs on devnet.
     ...forFamily(setup, 'solana', (network) => [
       ['SOLANA_CHAIN', { value: NETWORKS[network].chain }],
@@ -122,9 +136,13 @@ function guardSecrets(setup: Setup): Entry[] {
 }
 
 function botSecrets(setup: Setup): Entry[] {
+  const ids = setup.answers.ownerIds
+  if (ids === undefined) {
+    throw new WizardError('NOT_SET_UP', 'the bot needs your Telegram user id, and none was given')
+  }
   return [
     ['TELEGRAM_BOT_TOKEN', secret(setup, SECRETS.telegram)],
-    ['OWNER_TELEGRAM_IDS', { value: setup.answers.ownerIds }],
+    ['OWNER_TELEGRAM_IDS', { value: ids }],
     ['GUARD_BOT_TOKEN', secret(setup, SECRETS.bot)],
     [SECRETS.webhook, secret(setup, SECRETS.webhook)],
     ...forFamily(setup, 'solana', (network) => [
@@ -152,9 +170,12 @@ function vaultSecrets(setup: Setup): Entry[] {
 export function flyTasks(setup: Setup): Task[] {
   const { org, region } = setup.answers
   const apps = appNames(setup.answers.prefix)
+  const telegram = setup.answers.telegram
   return [
     { id: `fly:create:${apps.guard}`, command: fly(['apps', 'create', apps.guard, '--org', org]) },
-    { id: `fly:create:${apps.bot}`, command: fly(['apps', 'create', apps.bot, '--org', org]) },
+    ...(telegram
+      ? [{ id: `fly:create:${apps.bot}`, command: fly(['apps', 'create', apps.bot, '--org', org]) }]
+      : []),
     {
       id: `fly:volume:${apps.guard}`,
       command: fly([
@@ -171,7 +192,7 @@ export function flyTasks(setup: Setup): Task[] {
       ]),
     },
     importTask(`fly:secrets:${apps.guard}`, apps.guard, guardSecrets(setup)),
-    importTask(`fly:secrets:${apps.bot}`, apps.bot, botSecrets(setup)),
+    ...(telegram ? [importTask(`fly:secrets:${apps.bot}`, apps.bot, botSecrets(setup))] : []),
   ]
 }
 
@@ -214,7 +235,8 @@ export function dockerignoreGuard(setup: Setup): Command {
 }
 
 /**
- * The vault addresses and the page, then the one deploy of each app. Deploying earlier would
+ * The vault addresses and the page, then the one deploy of each app (only guard-core without
+ * Telegram). Deploying earlier would
  * crash-loop: guard-core refuses to start with a chain's hot key but no vault address. Both secret
  * imports are staged, so each app's first deploy starts with every secret in place.
  */
@@ -239,12 +261,17 @@ export function finishTasks(setup: Setup): Task[] {
       { cwd: setup.paths.repo },
     ),
   })
+  // guard-core needs the page too: the panel's kill links each chain's kill there (CR-014).
+  const signing: Entry[] = [['SIGN_PAGE_URL', { value: page }], ...vaultSecrets(setup)]
+  if (!setup.answers.telegram) {
+    return [
+      importTask(`fly:vault-secrets:${apps.guard}`, apps.guard, signing),
+      deploy(apps.guard, 'guard-core'),
+    ]
+  }
   return [
-    importTask(`fly:vault-secrets:${apps.guard}`, apps.guard, vaultSecrets(setup)),
-    importTask(`fly:vault-secrets:${apps.bot}`, apps.bot, [
-      ['SIGN_PAGE_URL', { value: page }],
-      ...vaultSecrets(setup),
-    ]),
+    importTask(`fly:vault-secrets:${apps.guard}`, apps.guard, signing),
+    importTask(`fly:vault-secrets:${apps.bot}`, apps.bot, signing),
     deploy(apps.guard, 'guard-core'),
     deploy(apps.bot, 'telegram-bot'),
   ]

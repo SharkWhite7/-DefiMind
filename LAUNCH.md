@@ -346,14 +346,16 @@ leaked token or key, or any doubt at all. A kill is cheap to undo; a drain is no
 
 ### Kill, in order
 
-**Always start from `/kill` in Telegram.** A Phantom kill button from an older message removes the
-onchain limit but does not pause guard-core. That happened on the first hosted run (INT-7), and the
-agent stayed unpaused until `/kill` was confirmed. BOT-13 makes old buttons expire.
+**Always start from Stop everything in the owner panel**, or from `/kill` in Telegram when the bot
+runs. A Phantom kill link from earlier removes the onchain limit but does not pause guard-core. That
+happened on the first hosted run (INT-7), and the agent stayed unpaused until `/kill` was confirmed.
+BOT-13 makes old links expire.
 
-1. **Stop new payments.** In Telegram send `/kill`, then press **Kill everything**. guard-core
-   pauses every agent first (`POST /v1/admin/kill`). From then on every payment is refused with
-   `PAUSED`. The bot then shows the owner transaction for each chain. If Telegram is unavailable, use
-   the same call directly. On Fly the admin route is private, so open it on your machine first with
+1. **Stop new payments.** In the panel open **Kill** and press **Stop everything**, or in Telegram
+   send `/kill` and press **Kill everything**. guard-core pauses every agent first
+   (`POST /v1/owner/kill`, or `POST /v1/admin/kill` for the bot). From then on every payment is
+   refused with `PAUSED`. The panel, or the bot, then shows the owner transaction for each chain. If
+   neither is available, use the admin call directly. On Fly the admin route is private, so open it on your machine first with
    `fly proxy 18787:8787 --app defimind-guard-core` in another terminal, then:
 
    ```bash
@@ -364,18 +366,18 @@ agent stayed unpaused until `/kill` was confirmed. BOT-13 makes old buttons expi
    step 1 only stops the guard. The bot's message gives the `removeSpendingLimit` instruction, which
    must be signed by the config authority, the owner key.
 
-   With the owner key in Phantom (D4): press **Open kill in Phantom** under the message that
-   confirmed the pause, check that the page names your multisig and hot wallet, and approve in
-   Phantom. The page waits until the limit is gone. "Already killed" means there was nothing left
-   to remove. Then `/status` shows the chain without a limit. Until CR-008 lands, it reads
+   With the owner key in Phantom (D4): press the Phantom button the panel shows for the chain (or
+   **Open kill in Phantom** under the bot's message), check that the page names your multisig and hot
+   wallet, and approve in Phantom. The page waits until the limit is gone. "Already killed" means there was nothing left
+   to remove. Then the panel's overview (or `/status`) shows the chain without a limit. Until CR-008 lands, it reads
    "onchain allowance could not be read".
 
-   The button expires 15 minutes after the kill result is posted, and the page refuses an older
-   link (BOT-13). If the bot itself is down, build the link by hand. Every value in it is public,
+   The link expires 15 minutes after the kill result is shown, and the page refuses an older one
+   (BOT-13). If the panel and the bot are both down, build the link by hand. Every value in it is public,
    and it is good for 15 minutes:
 
    ```bash
-   issued=$(date +%s) && m=$(grep '^SQUADS_MULTISIG=' packages/guard-core/.env | cut -d= -f2-) && h=$(grep '^SOLANA_HOT_WALLET_PUBKEY=' packages/telegram-bot/.env | cut -d= -f2-) && s=$(grep '^SIGN_PAGE_URL=' packages/telegram-bot/.env | cut -d= -f2-) && echo "$s/?action=kill&cluster=mainnet-beta&multisig=$m&hot=$h&issued=$issued"
+   issued=$(date +%s) && m=$(grep '^SQUADS_MULTISIG=' packages/guard-core/.env | cut -d= -f2-) && h=$(solana-keygen pubkey "$(grep '^SOLANA_HOT_WALLET_KEYPAIR=' packages/guard-core/.env | cut -d= -f2-)") && s=$(grep '^SIGN_PAGE_URL=' packages/guard-core/.env | cut -d= -f2-) && echo "$s/?action=kill&cluster=mainnet-beta&multisig=$m&hot=$h&issued=$issued"
    ```
 
    Open it in a browser with Phantom, or on a phone inside Phantom through

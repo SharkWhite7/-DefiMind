@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { checkEnvs, type Envs } from '../src/env-check.js'
+import { checkEnvs, type BotEnv, type Envs } from '../src/env-check.js'
 
 const webhook = 'w'.repeat(64)
 const botToken = 'b'.repeat(64)
 const adminToken = 'a'.repeat(64)
 
-function envs(): Envs {
+function envs(): Envs & { bot: BotEnv } {
   return {
     guard: {
       PORT: '8787',
@@ -81,8 +81,8 @@ describe('checkEnvs', () => {
     e.guard.BOT_URL = 'http://localhost:8790'
     expect(checkEnvs(e).errors).toEqual([
       'telegram-bot GUARD_URL does not point at guard-core PORT (9000)',
-      'mcp-server GUARD_URL does not point at guard-core PORT (9000)',
       'guard-core BOT_URL does not point at telegram-bot PORT',
+      'mcp-server GUARD_URL does not point at guard-core PORT (9000)',
     ])
   })
 
@@ -127,5 +127,34 @@ describe('checkEnvs', () => {
     for (const secret of [webhook, botToken, adminToken, 'x'.repeat(64)]) {
       expect(text).not.toContain(secret)
     }
+  })
+
+  describe('without the Telegram bot (CR-017)', () => {
+    const panelOnly = (): Envs => {
+      const { guard, mcp } = envs()
+      const { BOT_URL: _url, BOT_TOKEN: _token, BOT_WEBHOOK_SECRET: _secret, ...rest } = guard
+      return { guard: rest, mcp }
+    }
+
+    it('accepts guard-core and mcp-server alone', () => {
+      expect(checkEnvs(panelOnly()).errors).toEqual([])
+    })
+
+    it('warns when a bot .env is left over that nothing will start', () => {
+      const e = { ...panelOnly(), bot: envs().bot }
+      expect(checkEnvs(e).warnings).toContain(
+        'packages/telegram-bot/.env exists but guard-core sets no BOT_URL: dev:all runs without the bot',
+      )
+      expect(checkEnvs(e).errors).toEqual([])
+    })
+
+    it('refuses part of the bot three, and a bot named with no .env for it', () => {
+      const e = panelOnly()
+      e.guard.BOT_URL = 'http://localhost:8788'
+      expect(checkEnvs(e).errors).toEqual([
+        'guard-core sets some of BOT_URL, BOT_TOKEN and BOT_WEBHOOK_SECRET but not BOT_TOKEN, BOT_WEBHOOK_SECRET: all three or none',
+        'guard-core names a bot but packages/telegram-bot/.env is missing: copy its .env.example, or unset BOT_URL, BOT_TOKEN and BOT_WEBHOOK_SECRET',
+      ])
+    })
   })
 })

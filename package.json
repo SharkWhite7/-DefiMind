@@ -19,7 +19,7 @@
     "test:coverage": "pnpm -r test:coverage",
     "build": "pnpm -r build",
     "check": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test",
-    "dev:all": "pnpm --filter @defimind/e2e dev:check && pnpm --parallel --filter @defimind/guard-core --filter @defimind/telegram-bot --filter @defimind/mcp-server run dev"
+    "dev:all": "pnpm --filter @defimind/e2e dev:all"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
