@@ -1,8 +1,10 @@
 import './shim.js'
 import { Connection, PublicKey, TransactionMessage, VersionedTransaction } from '@solana/web3.js'
+import { getAddress } from 'viem'
 import { z } from 'zod'
+import { config, configured } from './config.js'
 import { prepareCreate } from './create.js'
-import { evmMain, type EvmChain } from './evm/main.js'
+import { evmMain } from './evm/main.js'
 import { prepareKill } from './kill.js'
 import { prepareLimit } from './limit.js'
 import { EXPIRED, expired, issued, problems } from './link.js'
@@ -11,15 +13,8 @@ import { proveSolana, unreadable } from './proof.js'
 import { button, link, show, waitFor } from './view.js'
 import { openInPhantom, phantom, type Wallet } from './wallet.js'
 
-declare const RPC_URLS: Record<string, string>
-declare const USDC_MINTS: Record<string, string>
-declare const HOT_WALLETS: Record<string, string>
-declare const MAX_DAILY_CAP: string
-declare const EVM_CHAINS: Record<string, Omit<EvmChain, 'name' | 'rpc'>>
-
-/** A build-time value for the cluster, by its own name only. */
-const built = <T>(map: Record<string, T>, cluster: string) =>
-  Object.hasOwn(map, cluster) ? map[cluster] : undefined
+const { rpc: RPC_URLS, usdc: USDC_MINTS, hot: HOT_WALLETS, maxDailyCap: MAX_DAILY_CAP } = config
+const built = configured
 
 const key = z
   .string()
@@ -104,9 +99,17 @@ function prepare(
 
 async function main() {
   const query = Object.fromEntries(new URLSearchParams(location.search))
-  const evm = built(EVM_CHAINS, query['cluster'] ?? '')
+  const evm = built(config.evm, query['cluster'] ?? '')
   if (evm) {
-    await evmMain(query, { ...evm, name: query['cluster']!, rpc: RPC_URLS[query['cluster']!]! })
+    const { hot, ...chain } = evm
+    await evmMain(query, {
+      ...chain,
+      module: getAddress(chain.module),
+      usd: getAddress(chain.usd),
+      ...(hot ? { hot: getAddress(hot) } : {}),
+      name: query['cluster']!,
+      rpc: RPC_URLS[query['cluster']!]!,
+    })
     return
   }
   const parsed = solanaLink.safeParse(query)

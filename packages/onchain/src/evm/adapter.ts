@@ -113,6 +113,16 @@ export function evmAdapter(deps: EvmAdapterDeps): ChainAdapter {
     return receipt
   }
 
+  async function balanceOf(token: Address, owner: Address): Promise<Amount> {
+    const balance = await client.readContract({
+      address: token,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [owner],
+    })
+    return balance.toString()
+  }
+
   const confirmed = async (hash: Hash): Promise<TxId> => (await settled(hash)).transactionHash
 
   return {
@@ -135,15 +145,9 @@ export function evmAdapter(deps: EvmAdapterDeps): ChainAdapter {
       }
     },
 
-    async getHotWalletBalance(token: TokenAddress): Promise<Amount> {
-      const balance = await client.readContract({
-        address: getAddress(token),
-        abi: erc20Abi,
-        functionName: 'balanceOf',
-        args: [hot],
-      })
-      return balance.toString()
-    },
+    getHotWalletBalance: (token: TokenAddress) => balanceOf(getAddress(token), hot),
+
+    getVault: async () => ({ address: safe, token: usdc, balance: await balanceOf(usdc, safe) }),
 
     getHotWalletGas: () => hotWalletGas(client, hot),
 

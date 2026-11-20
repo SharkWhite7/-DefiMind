@@ -1,0 +1,114 @@
+import { CHAINS } from '@defimind/shared'
+
+/**
+ * CR-019's nine steps of the guided setup, in order. Each one says in plain words why it matters:
+ * the owner may never have used a wallet before.
+ */
+export const STEPS = [
+  {
+    id: 'passkey',
+    title: 'Your passkey',
+    why: 'It proves it is you. Approving a payment, or giving an agent more room, always asks for it.',
+  },
+  {
+    id: 'phantom',
+    title: 'Connect Phantom',
+    why: 'Phantom is the wallet that owns your money. DefiMind never holds it: you sign every change to your vault yourself.',
+  },
+  {
+    id: 'vault',
+    title: 'Create your vault',
+    why: 'The vault keeps the money your agents may use apart from the rest of your wallet, so the rest is never at risk.',
+  },
+  {
+    id: 'limit',
+    title: 'Set a daily limit',
+    why: 'The vault itself refuses to pay out more than this in a day, even if DefiMind were broken into.',
+  },
+  {
+    id: 'deposit',
+    title: 'Add money',
+    why: 'Your agents can only spend what is in the vault. Start small: you can add more at any time.',
+  },
+  {
+    id: 'agent',
+    title: 'Connect your agent',
+    why: 'Each agent gets its own key, so you can pause or remove one without touching the others.',
+  },
+  {
+    id: 'rules',
+    title: 'Choose the rules',
+    why: 'Rules say how much an agent may pay at once and per day, and when it has to ask you first.',
+  },
+  {
+    id: 'shadow',
+    title: 'Try it safely',
+    why: 'In test mode the agent works as usual but no money moves. You see what it would have paid.',
+  },
+  {
+    id: 'live',
+    title: 'Go live',
+    why: 'From now on the agent pays for real, within your rules and the daily limit of the vault.',
+  },
+] as const
+
+export type StepId = (typeof STEPS)[number]['id']
+
+export const isStep = (id: string): id is StepId => STEPS.some((step) => step.id === id)
+
+/**
+ * Which steps are done, from guard-core's progress. Phantom leaves no trace on the server: it counts
+ * as done once the vault it signed for is there.
+ */
+export function doneSteps(progress: { id: string; done: boolean }[]): Set<StepId> {
+  const done = new Set(progress.filter((step) => step.done && isStep(step.id)).map((s) => s.id))
+  if (done.has('vault')) {
+    done.add('phantom')
+  }
+  return done as Set<StepId>
+}
+
+/** The first step not done yet, or undefined once all nine are. */
+export function nextStep(done: Set<StepId>): StepId | undefined {
+  return STEPS.find((step) => !done.has(step.id))?.id
+}
+
+/** The signing page's names for the chains it serves (packages/onchain/web). */
+const CLUSTERS = new Map<string, string>([
+  [CHAINS.solanaDevnet, 'devnet'],
+  [CHAINS.solanaMainnet, 'mainnet-beta'],
+  [CHAINS.robinhoodTestnet, 'robinhood-testnet'],
+  [CHAINS.robinhood, 'robinhood'],
+])
+
+export const isSolana = (chain: string) => chain.startsWith('solana:')
+
+/**
+ * A link to the signing page guard-core serves at /sign on this same origin, for the owner's wallet.
+ * It never names the hot wallet: the page knows its own (SPEC, "Signing page").
+ */
+export function signLink(
+  origin: string,
+  chain: string,
+  params: Record<string, string>,
+): string | undefined {
+  const cluster = CLUSTERS.get(chain)
+  if (cluster === undefined) {
+    return undefined
+  }
+  return `${origin}/sign/?${new URLSearchParams({ ...params, cluster })}`
+}
+
+/** The same page inside the Phantom app, for a phone. */
+export function inPhantom(link: string): string {
+  const { origin } = new URL(link)
+  return `https://phantom.app/ul/browse/${encodeURIComponent(link)}?ref=${encodeURIComponent(origin)}`
+}
+
+/** Whole days of the daily cap the balance covers; undefined without a cap. */
+export function daysCovered(balance: string, cap: string | undefined): bigint | undefined {
+  if (cap === undefined || BigInt(cap) === 0n) {
+    return undefined
+  }
+  return BigInt(balance) / BigInt(cap)
+}

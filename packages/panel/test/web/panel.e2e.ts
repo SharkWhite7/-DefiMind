@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { buildPanel } from '../../build.js'
-import { guardCore } from './guard.js'
+import { openDevice, status } from './device.js'
 
 let browser: Browser
 let dist: string
@@ -19,33 +19,7 @@ afterAll(async () => {
   await browser.close()
 })
 
-/** A page with a platform passkey that always verifies the owner, and every CSP violation kept. */
-async function device(width: number) {
-  const guard = await guardCore(dist)
-  const context = await browser.newContext({ viewport: { width, height: 844 } })
-  const page = await context.newPage()
-  const cdp = await context.newCDPSession(page)
-  await cdp.send('WebAuthn.enable')
-  await cdp.send('WebAuthn.addVirtualAuthenticator', {
-    options: {
-      protocol: 'ctap2',
-      transport: 'internal',
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-      automaticPresenceSimulation: true,
-    },
-  })
-  const violations: string[] = []
-  page.on('console', (message) => {
-    if (message.type() === 'error' && /Content Security Policy/.test(message.text())) {
-      violations.push(message.text())
-    }
-  })
-  return { guard, page, violations, close: () => Promise.all([context.close(), guard.close()]) }
-}
-
-const status = (page: Page) => page.locator('#status')
+const device = (width: number) => openDevice(browser, dist, width)
 
 async function signIn(page: Page, origin: string) {
   await page.goto(`${origin}/panel/enrol#code=one-time`)
@@ -60,7 +34,7 @@ describe.each([390, 1280])('the panel at %i px', (width) => {
   it('enrols, signs in and approves a payment with a step-up passkey', async () => {
     const { guard, page, violations, close } = await device(width)
     await page.goto(`${guard.origin}/panel/`)
-    await page.getByRole('button', { name: 'Sign in with passkey' }).waitFor()
+    await page.getByRole('heading', { name: 'Welcome to DefiMind' }).waitFor()
     await signIn(page, guard.origin)
 
     await page.getByText('Waiting for you (2)').waitFor()

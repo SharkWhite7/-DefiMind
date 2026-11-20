@@ -198,6 +198,38 @@ export const proof = z.looseObject({
   anchor,
 })
 
+/** CR-019. The setup routes; a vault or RPC the owner never set is absent. */
+export const setup = z.object({ needsSetup: z.boolean() })
+// Any scheme: the panel follows it only to its own origin, which is http on a local guard-core.
+export const enrolLink = z.object({ enrolLink: z.url() })
+export const progress = z.object({
+  steps: z.array(z.object({ id: text(32), done: z.boolean() })).max(32),
+})
+export const settingsView = z.object({
+  chains: z
+    .array(z.object({ chain: text(64), rpcUrl: text(512).optional(), vault: text(128).optional() }))
+    .max(16),
+})
+export const keys = z.object({
+  hotWallets: z.array(z.object({ chain: text(64), address: text(128) })).max(16),
+  receiptKey: text(512),
+  anchorKey: text(512).optional(),
+})
+export const deposit = z.object({
+  chains: z
+    .array(
+      z.object({
+        chain: text(64),
+        vault: text(128),
+        token: text(128),
+        balance: atomic,
+        dailyCap: atomic.optional(),
+        depositPage: https.optional(),
+      }),
+    )
+    .max(16),
+})
+
 export const created = z.object({ agentId, token: z.string().min(16).max(512) })
 export const session = z.object({ expiresAt: isoTime })
 export const pushKey = z.object({ publicKey: z.string().regex(/^[A-Za-z0-9_-]+$/) })
@@ -213,3 +245,5 @@ export type BudgetView = z.infer<typeof budget>
 export type KillView = z.infer<typeof kill>
 export type ReceiptView = z.infer<typeof receipt>
 export type IntegrityView = z.infer<typeof integrity>
+export type SettingsView = z.infer<typeof settingsView>
+export type DepositView = z.infer<typeof deposit>['chains'][number]

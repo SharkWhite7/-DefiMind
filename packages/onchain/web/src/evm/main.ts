@@ -7,6 +7,7 @@ import {
   type PublicClient,
 } from 'viem'
 import { z } from 'zod'
+import { config } from '../config.js'
 import { EXPIRED, expired, issued, problems } from '../link.js'
 import { unreadable } from '../proof.js'
 import { button, link, show, waitFor } from '../view.js'
@@ -29,7 +30,7 @@ export interface EvmChain {
   hot?: Address
 }
 
-declare const MAX_DAILY_CAP: string
+const MAX_DAILY_CAP = config.maxDailyCap
 
 const address = z
   .string()

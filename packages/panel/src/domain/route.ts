@@ -1,3 +1,5 @@
+import { isStep, type StepId } from './guide.js'
+
 /** Every screen of the panel. guard-core serves index.html for any path under the base. */
 export type Route =
   | { name: 'overview' }
@@ -13,6 +15,9 @@ export type Route =
   | { name: 'passkeys' }
   | { name: 'settings' }
   | { name: 'kill' }
+  | { name: 'setup' }
+  | { name: 'deposit' }
+  | { name: 'guide'; step?: StepId }
   | { name: 'missing' }
 
 export const BASE = '/panel/'
@@ -28,6 +33,8 @@ const SIMPLE = [
   'passkeys',
   'settings',
   'kill',
+  'setup',
+  'deposit',
 ] as const
 
 function decode(part: string): string | undefined {
@@ -59,6 +66,9 @@ export function parseRoute(pathname: string, hash = ''): Route {
       const code = new URLSearchParams(hash.replace(/^#/, '')).get('code')
       return code ? { name: 'enrol', code } : { name: 'missing' }
     }
+    if (first === 'start') {
+      return { name: 'guide' }
+    }
     const simple = SIMPLE.find((name) => name === first)
     return simple ? { name: simple } : { name: 'missing' }
   }
@@ -71,6 +81,9 @@ export function parseRoute(pathname: string, hash = ''): Route {
   }
   if (first === 'agents' && id !== undefined && AGENT_ID.test(id)) {
     return { name: 'agent', id }
+  }
+  if (first === 'start' && id !== undefined && isStep(id)) {
+    return { name: 'guide', step: id }
   }
   return { name: 'missing' }
 }
@@ -89,6 +102,8 @@ export function href(route: Route): string {
       return `${BASE}mandates/${route.id}`
     case 'agent':
       return `${BASE}agents/${encodeURIComponent(route.id)}`
+    case 'guide':
+      return `${BASE}start${route.step === undefined ? '' : `/${route.step}`}`
     default:
       return `${BASE}${route.name}`
   }
