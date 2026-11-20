@@ -28,7 +28,7 @@ use.
 **"already has an allowance … kill it first" when you reload an enable link.** The cap is already
 set, and the page refuses to ask for a second signature. Read it back with `pnpm status:robinhood`.
 
-**"This link expired. Use /kill in Telegram for a fresh one."** A kill link works for 15 minutes, so
+**"This link expired. Press Stop everything in your DefiMind panel, or send /kill to the bot, for a fresh one."** A kill link works for 15 minutes, so
 an old button cannot fire later. Press **Stop everything** in the owner panel again (or send `/kill`
 with the bot) for a fresh one.
 
