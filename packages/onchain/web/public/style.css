@@ -22,3 +22,18 @@ a {
   font-size: 1.1rem;
   padding: 0.6rem 1rem;
 }
+label {
+  display: block;
+  margin-bottom: 0.5rem;
+}
+input {
+  display: block;
+  font-size: 1.4rem;
+  padding: 0.4rem;
+  margin-top: 0.4rem;
+  width: 100%;
+  max-width: 14rem;
+}
+[role='alert'] {
+  color: #c62828;
+}

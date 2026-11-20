@@ -10,6 +10,14 @@ interface PageVm {
     function parseJsonUint(string calldata json, string calldata key) external pure returns (uint256);
     function prank(address sender) external;
     function toString(address value) external pure returns (string memory);
+    function record() external;
+    function accesses(address target) external returns (bytes32[] memory reads, bytes32[] memory writes);
+    function load(address target, bytes32 slot) external view returns (bytes32);
+    function store(address target, bytes32 slot, bytes32 value) external;
+}
+
+interface PageToken {
+    function balanceOf(address owner) external view returns (uint256);
 }
 
 interface PageSafe {
@@ -100,6 +108,36 @@ abstract contract SigningPageFlows {
         send(owner, address(safe), "enable");
         require(!sends(address(0xBAD), address(safe), "kill"), "the Safe ran the kill for a stranger");
         require(listed() == hot, "a refused kill changed the delegate");
+    }
+
+    /// The deposit is one plain transfer from the owner into the Safe: the Safe gains exactly that, and
+    /// no module or delegate appears.
+    function test_depositIsAPlainTransferIntoTheSafe() public {
+        create();
+        uint256 amount = vm.parseJsonUint(fixture, ".cap");
+        give(owner, amount);
+        send(owner, usd, "deposit");
+        require(PageToken(usd).balanceOf(address(safe)) == amount, "the Safe did not get the deposit");
+        require(PageToken(usd).balanceOf(owner) == 0, "the owner kept some of the deposit");
+        (address[] memory modules,) = safe.getModulesPaginated(address(1), 20);
+        require(modules.length == 0, "the deposit enabled a module");
+    }
+
+    /// USDG for `who`, written into the token's storage: find the balance slot balanceOf reads.
+    function give(address who, uint256 amount) private {
+        vm.record();
+        PageToken(usd).balanceOf(who);
+        (bytes32[] memory reads,) = vm.accesses(usd);
+        for (uint256 i = 0; i < reads.length; i++) {
+            bytes32 before = vm.load(usd, reads[i]);
+            vm.store(usd, reads[i], bytes32(amount));
+            // A low-level call: overwriting the proxy's implementation slot makes balanceOf revert,
+            // which must only mean "not this slot".
+            (bool ok, bytes memory out) = usd.staticcall(abi.encodeCall(PageToken.balanceOf, (who)));
+            if (ok && out.length == 32 && abi.decode(out, (uint256)) == amount) return;
+            vm.store(usd, reads[i], before);
+        }
+        revert("no balance slot found for USDG");
     }
 
     /// The Safe at the fixture's address, from the page's create. Every later call goes there, and a

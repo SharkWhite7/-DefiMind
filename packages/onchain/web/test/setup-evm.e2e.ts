@@ -73,10 +73,10 @@ describe('the create page on an EVM chain', () => {
 })
 
 describe('the enable page on an EVM chain', () => {
-  const enable = (amount = s.state.cap) => ({
+  const enable = (amount: bigint | null = s.state.cap) => ({
     action: 'enable',
     safe: s.state.safe,
-    amount: String(amount),
+    ...(amount === null ? {} : { amount: String(amount) }),
   })
 
   beforeEach(() => {
@@ -98,6 +98,18 @@ describe('the enable page on an EVM chain', () => {
       },
     ])
     expect((await lines(page)).join(' ')).toContain('up to 20 USDG a day')
+  })
+
+  it('lets the owner type the cap when the link has none', async () => {
+    const page = await open(enable(null))
+    await settled(page, 'Set the daily cap')
+    expect((await lines(page)).join(' ')).toContain('at most 50 USDG a day')
+    await page.fill('input[name=amount]', '20')
+    await page.click('text=Continue')
+    await settled(page, 'Daily cap set')
+    const owner = s.state.owners[0]!
+    const allowance = { module: MODULE, hot: s.state.hot, usd: USDG, cap: 20_000_000n }
+    expect(s.sent.map((tx) => tx.data)).toEqual([enableData(owner, s.state.safe, allowance, false)])
   })
 
   it('leaves the module alone when it is on already, as after a kill', async () => {

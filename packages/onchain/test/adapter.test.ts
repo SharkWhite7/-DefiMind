@@ -262,6 +262,18 @@ describe('getAllowanceState', () => {
     })
   })
 
+  it.each([
+    ['another member', { members: [Keypair.generate().publicKey] }],
+    [
+      'a second destination',
+      { destinations: [Keypair.generate().publicKey, Keypair.generate().publicKey] },
+    ],
+    ['another mint', { mint: Keypair.generate().publicKey }],
+  ])('throws limit_not_ours, never none, for a limit with %s', async (_case, overrides) => {
+    plantSpendingLimit(c, 100n * USDC, 70n * USDC, lastReset, overrides)
+    await expect(c.adapter.getAllowanceState()).rejects.toThrow(/^limit_not_ours: /)
+  })
+
   it('is none when the limit account does not exist: before setup, or after the kill', async () => {
     expect(await c.adapter.getAllowanceState()).toEqual({
       status: 'none',

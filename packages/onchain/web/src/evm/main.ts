@@ -7,12 +7,12 @@ import {
   type PublicClient,
 } from 'viem'
 import { z } from 'zod'
-import { config } from '../config.js'
-import { EXPIRED, expired, issued, problems } from '../link.js'
+import { askCap, askDeposit, cap, deposit, EXPIRED, expired, issued, problems } from '../link.js'
 import { unreadable } from '../proof.js'
 import { button, link, show, waitFor } from '../view.js'
 import { openInPhantom } from '../wallet.js'
 import { prepareEvmCreate } from './create.js'
+import { prepareEvmDeposit } from './deposit.js'
 import { prepareEvmEnable } from './enable.js'
 import { prepareEvmKill } from './kill.js'
 import type { EvmPlan } from './plan.js'
@@ -30,8 +30,6 @@ export interface EvmChain {
   hot?: Address
 }
 
-const MAX_DAILY_CAP = config.maxDailyCap
-
 const address = z
   .string()
   .refine((value) => isAddress(value), 'not an EVM address')
@@ -42,18 +40,12 @@ const evmLink = z.discriminatedUnion('action', [
   z.object({ action: z.literal('kill'), safe: address, hot, issued }),
   z.object({ action: z.literal('create') }),
   z.object({ action: z.literal('proof'), safe: address }),
+  z.object({ action: z.literal('deposit'), safe: address, amount: deposit }),
   z.object({
     action: z.literal('enable'),
     safe: address,
     hot,
-    amount: z
-      .string()
-      .regex(/^[1-9]\d{0,19}$/, 'a positive whole number of base units')
-      .transform(BigInt)
-      .refine(
-        (amount) => amount <= BigInt(MAX_DAILY_CAP),
-        `above this page's maximum daily cap of ${MAX_DAILY_CAP} base units`,
-      ),
+    amount: cap,
   }),
 ])
 type EvmLink = z.infer<typeof evmLink>
@@ -116,7 +108,7 @@ async function prove(client: PublicClient, chain: EvmChain, safe: Address) {
   show(proof.title, proof.lines, proof.verified ? 'done' : 'stop')
 }
 
-function prepare(
+async function prepare(
   client: PublicClient,
   chain: EvmChain,
   request: Exclude<EvmLink, { action: 'proof' }>,
@@ -126,25 +118,34 @@ function prepare(
     return prepareEvmCreate(client, chain.name, owner)
   }
   if (request.action === 'kill' && expired(request.issued)) {
-    return Promise.resolve(refuse(EXPIRED))
+    return refuse(EXPIRED)
+  }
+  if (request.action === 'deposit') {
+    const { usd, symbol } = chain
+    return prepareEvmDeposit(
+      client,
+      { cluster: chain.name, safe: request.safe, usd, symbol },
+      owner,
+      () => askDeposit(symbol, request.amount),
+    )
   }
   const hot = chain.hot && getAddress(chain.hot)
   if (!hot) {
-    return Promise.resolve(refuse(`This page knows no hot wallet for ${chain.name}.`))
+    return refuse(`This page knows no hot wallet for ${chain.name}.`)
   }
   if (request.hot && request.hot !== hot) {
-    return Promise.resolve(
-      refuse(
-        `The link names ${request.hot} as the hot wallet, but this page only acts for ${hot}. ` +
-          'Do not sign anything from this link.',
-      ),
+    return refuse(
+      `The link names ${request.hot} as the hot wallet, but this page only acts for ${hot}. ` +
+        'Do not sign anything from this link.',
     )
   }
   const { module, usd, symbol } = chain
   const known = { cluster: chain.name, safe: request.safe, hot, module, usd }
-  return request.action === 'kill'
-    ? prepareEvmKill(client, known, owner)
-    : prepareEvmEnable(client, { ...known, symbol, amount: request.amount }, owner)
+  if (request.action === 'kill') {
+    return prepareEvmKill(client, known, owner)
+  }
+  const amount = request.amount ?? (await askCap(symbol))
+  return prepareEvmEnable(client, { ...known, symbol, amount }, owner)
 }
 
 async function run(client: PublicClient, wallet: Eip1193, owner: Address, plan: EvmPlan) {

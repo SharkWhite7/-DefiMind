@@ -38,6 +38,7 @@ const abi = [
     'function getDelegates(address safe, uint48 start, uint8 pageSize) view returns (address[] results, uint48 next)',
     'function getTokens(address safe, address delegate) view returns (address[])',
     'function balanceOf(address owner) view returns (uint256)',
+    'function transfer(address to, uint256 amount) returns (bool)',
   ]),
 ]
 const call = z.object({ from: z.string().optional(), to: z.string(), data: z.string() })
@@ -74,6 +75,8 @@ export async function stageEvm() {
     cap: 20_000_000n,
     /** USDG in the Safe, and what else the proof page must notice: other modules, delegates, tokens. */
     balance: 100_000_000n,
+    /** USDG in the first owner's own account, which a deposit moves into the Safe. */
+    ownerBalance: 40_000_000n,
     otherModules: [] as Address[],
     otherDelegates: [] as Address[],
     otherTokens: [] as Address[],
@@ -106,12 +109,30 @@ export async function stageEvm() {
         return answer([[...(state.listed ? [state.hot] : []), ...state.otherDelegates], 0])
       case 'getTokens':
         return answer([USDG, ...state.otherTokens])
-      case 'balanceOf':
-        return answer(
-          isAddressEqual(to, USDG) && isAddressEqual(args[0] as Address, state.safe)
-            ? state.balance
-            : 0n,
-        )
+      case 'balanceOf': {
+        const who = args[0] as Address
+        const held = isAddressEqual(who, state.safe)
+          ? state.balance
+          : isAddressEqual(who, state.owners[0]!)
+            ? state.ownerBalance
+            : 0n
+        return answer(isAddressEqual(to, USDG) ? held : 0n)
+      }
+      // USDG only, from the first owner into the Safe: the one transfer the deposit page sends.
+      case 'transfer': {
+        const [recipient, amount] = args as [Address, bigint]
+        const owner = state.owners[0]!
+        if (!from || !isAddressEqual(to, USDG) || !isAddressEqual(from, owner)) {
+          throw reverts('not the deposit this suite expects')
+        }
+        if (!isAddressEqual(recipient, state.safe) || amount > state.ownerBalance) {
+          throw reverts('ERC20: transfer amount exceeds balance')
+        }
+        return answer(true, () => {
+          state.ownerBalance -= amount
+          state.balance += amount
+        })
+      }
       case 'getThreshold':
         return answer(state.threshold)
       case 'isModuleEnabled':

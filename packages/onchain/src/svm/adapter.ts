@@ -111,7 +111,6 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
     }
   }
 
-  /** Reasons this adapter cannot pay the intent at all, before any transaction exists. */
   async function balanceOf(token: PublicKey, owner: PublicKey): Promise<Amount> {
     // The vault is a PDA, so its token account sits off the curve.
     const address = getAssociatedTokenAddressSync(token, owner, true)
@@ -126,6 +125,7 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
     }
   }
 
+  /** Reasons this adapter cannot pay the intent at all, before any transaction exists. */
   function refuse(intent: PayIntent): RejectCode[] {
     if (intent.chain !== chain) {
       return ['CHAIN_NOT_ALLOWED']
@@ -154,6 +154,14 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
       const state = await findSpendingLimit(connection, limit)
       if (!state) {
         return { status: 'none', delegate }
+      }
+      const only = (keys: string[]) => keys.length === 1 && keys[0] === delegate
+      if (!only(state.members) || !only(state.destinations) || state.mint !== mint.toBase58()) {
+        // Never 'none': to the kill flow that means already removed, and this limit is still there.
+        throw new Error(
+          `limit_not_ours: ${limit.toBase58()} has members ${state.members.join(', ')}, ` +
+            `destinations ${state.destinations.join(', ')} and mint ${state.mint}`,
+        )
       }
       const { cap, spent, resetsAt } = state
       return { status: 'active', cap, spent, resetsAt, delegate }
