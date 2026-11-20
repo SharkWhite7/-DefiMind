@@ -76,6 +76,25 @@ can start. The runbook is [`docs/migration.md`](../docs/migration.md) (Parts A t
 
 ---
 
+## ⏳ HUMAN-34 — Publish the hosted signing page `defimind-sign` (CR-020)
+
+Ready: ON-24 is on `main` (#87), so the first deploy is the right build. GC-58 waits for this step. This page serves the kill and the
+deposit for every deployment, so it holds no hot wallet and no key.
+
+1. On vercel.com: Add New → Project → import `SharkWhite7/-DefiMind`.
+2. Project name `defimind-sign`; Root Directory `packages/onchain/web`; Framework Preset: Other.
+   Leave Environment Variables empty.
+3. Deploy. Then Settings → Git: Production Branch `main`, and turn preview deployments off, so only
+   `main` ever reaches the URL.
+4. Check that `https://defimind-sign.vercel.app/?action=kill` shows "This link is not valid".
+5. Tell the integrator, who checks the deployed `app.js`, `style.css` and `index.template.html`
+   against the release's `SHA256SUMS`.
+
+If Vercel gives a different domain, the integrator changes `HOSTED_SIGN_PAGE` to it. Onchain confirmed
+these build settings.
+
+---
+
 ## ⬜ HUMAN-32 — Retire the Telegram bot
 
 The owner dropped Telegram on 2026-11-20: approvals and alerts go through the web panel only. At
