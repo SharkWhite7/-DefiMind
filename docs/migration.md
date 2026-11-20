@@ -304,17 +304,27 @@ Then, in Telegram:
 
 ## Part D: the panel
 
-**D1. Enrol the first passkey (HUMAN-23).** This prints a one-time link, good for ten minutes. It
-runs as the app's user, so the database keeps one owner. The entrypoint gives the three key paths to the
-server process only, so the command names them again for the script: without them guard-core's
-config refuses `ANCHOR_CHAIN` and `VAPID_SUBJECT`.
+**D1. Enrol the first passkey (HUMAN-23), on the phone.** This makes a one-time link, good for ten
+minutes, and shows it as a QR code: the phone's camera opens it, and the link is never copied or
+pasted anywhere. It runs as the app's user, so the database keeps one owner. The entrypoint gives the
+three key paths to the server process only, so the command names them again for the script: without
+them guard-core's config refuses `ANCHOR_CHAIN` and `VAPID_SUBJECT`.
 
 ```bash
-fly ssh console --app defimind-guard-core -C "sh -c 'cd /srv/defimind/packages/guard-core && export RECEIPT_SIGNING_KEY_FILE=/run/defimind/receipt.pem VAPID_PRIVATE_KEY_FILE=/run/defimind/vapid.pem ANCHOR_KEY_FILE=/run/defimind/anchor.json && exec setpriv --reuid=\$(id -u node) --regid=\$(id -g node) --clear-groups -- node --import tsx src/scripts/passkey-code.ts'"
+command -v qrencode >/dev/null || sudo apt install -y qrencode
+fly ssh console --app defimind-guard-core -C "sh -c 'cd /srv/defimind/packages/guard-core && export RECEIPT_SIGNING_KEY_FILE=/run/defimind/receipt.pem VAPID_PRIVATE_KEY_FILE=/run/defimind/vapid.pem ANCHOR_KEY_FILE=/run/defimind/anchor.json && exec setpriv --reuid=\$(id -u node) --regid=\$(id -g node) --clear-groups -- node --import tsx src/scripts/passkey-code.ts'" | grep '^https://' | qrencode -t ansiutf8
 ```
 
-Open the link on the phone and save the passkey. Passkeys made for the old address do not work at
-the new one: each passkey is bound to its address.
+Scan it with the phone's camera, tap **Create passkey**, and confirm with Face ID or the fingerprint.
+Then sign in at `https://defimind-guard-core.fly.dev/panel/` on the phone. Passkeys made for the old
+address do not work at the new one: each passkey is bound to its address.
+
+- Make the first passkey on the phone, not on the computer. A second passkey needs the first to
+  vouch for it, and Windows does not reliably create one on a phone from the computer.
+- If a passkey ended up on the wrong device, list them with `src/scripts/remove-passkey.ts` (same
+  command, that script instead of `passkey-code.ts`), then remove it with the first 8 characters of
+  its id at the end. With none left, the next link enrols without a vouch.
+- Never paste the link in a chat or a message: until it is used, it is the passkey.
 
 **D2. Install the panel.**
 
