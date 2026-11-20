@@ -9,9 +9,10 @@ import {
 import { z } from 'zod'
 import { askCap, askDeposit, cap, deposit, EXPIRED, expired, issued, problems } from '../link.js'
 import { unreadable } from '../proof.js'
-import { button, link, show, waitFor } from '../view.js'
+import { button, decoded, link, show, waitFor } from '../view.js'
 import { openInPhantom } from '../wallet.js'
 import { prepareEvmCreate } from './create.js'
+import { decodeEvm } from './decoded.js'
 import { prepareEvmDeposit } from './deposit.js'
 import { prepareEvmEnable } from './enable.js'
 import { prepareEvmKill } from './kill.js'
@@ -166,6 +167,8 @@ async function run(client: PublicClient, wallet: Eip1193, owner: Address, plan: 
     return
   }
   show(plan.title, plan.summary)
+  const what = decodeEvm(plan.to, plan.data)
+  decoded(what)
   try {
     await wallet.request({
       method: 'eth_sendTransaction',
@@ -173,6 +176,7 @@ async function run(client: PublicClient, wallet: Eip1193, owner: Address, plan: 
     })
   } catch (error) {
     show(plan.title, [...plan.summary, `Not sent: ${String(error)}`], 'stop')
+    decoded(what)
     button('Ask Phantom again', () => void run(client, wallet, owner, plan))
     return
   }

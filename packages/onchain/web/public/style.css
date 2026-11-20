@@ -37,3 +37,13 @@ input {
 [role='alert'] {
   color: #c62828;
 }
+.decoded {
+  margin: 1rem 0;
+  padding: 0.6rem 1rem;
+  border: 2px solid currentColor;
+}
+.decoded li {
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin: 0.4rem 0;
+}

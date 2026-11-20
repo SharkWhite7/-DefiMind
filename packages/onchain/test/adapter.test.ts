@@ -61,7 +61,7 @@ describe('getVault', () => {
   it('is the Squads vault at index 0, with its USDC balance', async () => {
     const [vault] = multisig.getVaultPda({ multisigPda: c.multisigPda, index: 0 })
     c.fund(vault, 25n * USDC)
-    expect(await c.adapter.getVault!()).toEqual({
+    expect(await c.adapter.getVault()).toEqual({
       address: vault.toBase58(),
       token: c.mint.toBase58(),
       balance: '25000000',
@@ -69,7 +69,7 @@ describe('getVault', () => {
   })
 
   it('holds nothing before the first deposit', async () => {
-    expect((await c.adapter.getVault!()).balance).toBe('0')
+    expect((await c.adapter.getVault()).balance).toBe('0')
   })
 })
 
