@@ -1817,6 +1817,25 @@
           scroll-behavior: auto;
         }
       }
+      /* Setup: three steps instead of four. */
+      .pipeline.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .setup-after {
+        margin-top: 32px;
+      }
+      @media (max-width: 960px) {
+        .pipeline.three {
+          grid-template-columns: 1fr;
+        }
+        .pipeline.three .step {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+        .pipeline.three .step:first-child {
+          border-top: 0;
+        }
+      }
     </style>
   </head>
   <body>
@@ -2032,6 +2051,145 @@
               <span class="mark">USDC <small>digital dollar</small></span>
               <span class="mark">Passkeys <small>approvals</small></span>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="band" id="setup">
+        <div class="wrap">
+          <div class="sec-head">
+            <span class="eyebrow">Setup · new, in beta</span>
+            <h2 class="h2">Set up in minutes. <span class="grad-text">No server skills.</span></h2>
+            <p class="lede">
+              You run your own DefiMind, and that no longer takes a server admin. One button puts it
+              online, and your panel walks you through the rest, one plain step at a time. The
+              one-click route is new: if a step trips you up, tell us and we fix it.
+            </p>
+          </div>
+
+          <div class="pipeline three">
+            <div class="step">
+              <span class="step-n">Step 1</span>
+              <div class="step-bar" style="background: var(--grad)"></div>
+              <h3>Deploy</h3>
+              <p>
+                Press Deploy to Render. Your DefiMind starts on its own server, makes its own keys
+                there, and gives you a setup code to claim it.
+              </p>
+              <ul>
+                <li>one button, beta</li>
+                <li>keys made by your server</li>
+                <li>a paid instance with a disk</li>
+              </ul>
+            </div>
+            <div class="step">
+              <span class="step-n">Step 2</span>
+              <div class="step-bar" style="background: #6d84ff"></div>
+              <h3>Follow the guide</h3>
+              <p>
+                Nine short steps in your panel. Each one is checked on the chain before it counts as
+                done.
+              </p>
+              <ul>
+                <li>passkey, vault, daily limit</li>
+                <li>deposit by QR code</li>
+                <li>agent, rules, test run, live</li>
+              </ul>
+            </div>
+            <div class="step">
+              <span class="step-n">Step 3</span>
+              <div class="step-bar" style="background: var(--mint)"></div>
+              <h3>Your agent pays</h3>
+              <p>
+                Inside your rules and the vault's daily limit, and it asks you, with your passkey,
+                above your threshold.
+              </p>
+              <ul>
+                <li>approve with your face or finger</li>
+                <li>Stop pauses every agent at once</li>
+                <li>live on Solana and Robinhood Chain</li>
+              </ul>
+            </div>
+          </div>
+
+          <ul class="checks setup-after">
+            <li>
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <circle cx="10" cy="10" r="9" stroke="url(#g)" stroke-width="1.6" />
+                <path
+                  d="m6.5 10.2 2.3 2.3 4.7-4.9"
+                  stroke="#34c98e"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                /></svg
+              ><span
+                ><b>A terminal only at the end.</b> The button and the panel do the setup; you open
+                a terminal once, to connect your agent.</span
+              >
+            </li>
+            <li>
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <circle cx="10" cy="10" r="9" stroke="url(#g)" stroke-width="1.6" />
+                <path
+                  d="m6.5 10.2 2.3 2.3 4.7-4.9"
+                  stroke="#34c98e"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                /></svg
+              ><span
+                ><b>No wallet key to handle.</b> Your server makes and keeps its own wallet keys;
+                the panel only ever shows public addresses.</span
+              >
+            </li>
+            <li>
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <circle cx="10" cy="10" r="9" stroke="url(#g)" stroke-width="1.6" />
+                <path
+                  d="m6.5 10.2 2.3 2.3 4.7-4.9"
+                  stroke="#34c98e"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                /></svg
+              ><span
+                ><b>No Telegram, no bot.</b> Approvals, alerts and the Stop button live in your
+                panel, with a push to your phone.</span
+              >
+            </li>
+            <li>
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                <circle cx="10" cy="10" r="9" stroke="url(#g)" stroke-width="1.6" />
+                <path
+                  d="m6.5 10.2 2.3 2.3 4.7-4.9"
+                  stroke="#34c98e"
+                  stroke-width="1.6"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                /></svg
+              ><span
+                ><b>Still your money, still your signature.</b> You sign every change to your vault
+                yourself, in Phantom. DefiMind never holds your wallet.</span
+              >
+            </li>
+          </ul>
+
+          <div class="hero-actions setup-after">
+            <a
+              class="btn btn-primary"
+              href="https://render.com/deploy?repo=https://github.com/SharkWhite7/-DefiMind"
+              target="_blank"
+              rel="noopener"
+              >Deploy to Render (beta)</a
+            >
+            <a
+              class="btn btn-ghost"
+              href="https://github.com/SharkWhite7/-DefiMind/blob/main/docs/getting-started.md"
+              target="_blank"
+              rel="noopener"
+              >Read the step-by-step guide</a
+            >
           </div>
         </div>
       </section>
