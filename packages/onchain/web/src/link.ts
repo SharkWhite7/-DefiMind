@@ -1,4 +1,8 @@
+import { USDC_DECIMALS } from '@defimind/shared'
 import { z } from 'zod'
+import { formatUnits } from '../../src/svm/transfer.js'
+import { config } from './config.js'
+import { askAmount } from './view.js'
 
 // A kill link is good for 15 minutes; a few minutes of clock skew either way are forgiven.
 const KILL_LINK_TTL_S = 15 * 60
@@ -19,3 +23,32 @@ export const EXPIRED = 'This link expired. Use /kill in Telegram for a fresh one
 /** A link that does not parse, as the owner should read it. */
 export const problems = (error: z.ZodError) =>
   error.issues.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join('; ')
+
+const ceiling = () => BigInt(config.maxDailyCap)
+
+/**
+ * A daily cap in base units, at most the page's ceiling. A link may leave it out, and then the owner
+ * types one on the page.
+ */
+export const cap = z
+  .string()
+  .regex(/^[1-9]\d{0,19}$/, 'a positive whole number of base units')
+  .transform(BigInt)
+  .refine(
+    (amount) => amount <= ceiling(),
+    `above this page's maximum daily cap of ${config.maxDailyCap} base units`,
+  )
+  .optional()
+
+export const askCap = (symbol: string) =>
+  askAmount({
+    title: 'Set the daily cap',
+    lines: [
+      'The most the agent may draw from your vault in any 24 hours.',
+      `During the beta the cap is at most ${formatUnits(ceiling(), USDC_DECIMALS)} ${symbol} a ` +
+        'day. That ceiling is temporary, for the beta only.',
+    ],
+    label: 'Daily cap',
+    symbol,
+    max: ceiling(),
+  })

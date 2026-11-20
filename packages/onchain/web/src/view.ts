@@ -1,3 +1,5 @@
+import { amountProblem, parseAmount } from './amount.js'
+
 const app = document.getElementById('app')!
 
 export function show(title: string, lines: string[], tone: 'info' | 'stop' | 'done' = 'info') {
@@ -45,4 +47,42 @@ export async function waitFor(plan: {
     ['The change is not on the chain yet. Run status before trying again.'],
     'stop',
   )
+}
+
+/**
+ * Asks the owner for an amount, in whole dollars, and resolves with it in base units once it is one
+ * the page can use. The page then shows what the transaction carries before Phantom asks to sign.
+ */
+export function askAmount(ask: {
+  title: string
+  lines: string[]
+  label: string
+  symbol: string
+  max?: bigint
+}): Promise<bigint> {
+  show(ask.title, ask.lines)
+  const form = document.createElement('form')
+  const label = document.createElement('label')
+  label.textContent = `${ask.label} (${ask.symbol})`
+  const input = document.createElement('input')
+  input.name = 'amount'
+  input.inputMode = 'decimal'
+  input.autocomplete = 'off'
+  input.required = true
+  label.append(input)
+  const problem = document.createElement('p')
+  problem.setAttribute('role', 'alert')
+  const submit = document.createElement('button')
+  submit.textContent = 'Continue'
+  form.append(label, problem, submit)
+  app.append(form)
+  input.focus()
+  return new Promise((resolve) => {
+    form.addEventListener('submit', (event) => {
+      event.preventDefault()
+      const found = amountProblem(input.value, ask.max, ask.symbol)
+      problem.textContent = found ?? ''
+      if (!found) resolve(parseAmount(input.value)!)
+    })
+  })
 }

@@ -7,13 +7,13 @@ import { prepareCreate } from './create.js'
 import { evmMain } from './evm/main.js'
 import { prepareKill } from './kill.js'
 import { prepareLimit } from './limit.js'
-import { EXPIRED, expired, issued, problems } from './link.js'
+import { askCap, cap, EXPIRED, expired, issued, problems } from './link.js'
 import { isPublicKey, type Plan } from './plan.js'
 import { proveSolana, unreadable } from './proof.js'
 import { button, link, show, waitFor } from './view.js'
 import { openInPhantom, phantom, type Wallet } from './wallet.js'
 
-const { rpc: RPC_URLS, usdc: USDC_MINTS, hot: HOT_WALLETS, maxDailyCap: MAX_DAILY_CAP } = config
+const { rpc: RPC_URLS, usdc: USDC_MINTS, hot: HOT_WALLETS } = config
 const built = configured
 
 const key = z
@@ -39,14 +39,7 @@ const solanaLink = z.discriminatedUnion('action', [
     multisig: key,
     // Optional, and only ever checked against the hot wallet the page was built for.
     hot: key.optional(),
-    amount: z
-      .string()
-      .regex(/^[1-9]\d{0,19}$/, 'a positive whole number of base units')
-      .transform(BigInt)
-      .refine(
-        (amount) => amount <= BigInt(MAX_DAILY_CAP),
-        `above this page's maximum daily cap of ${MAX_DAILY_CAP} base units`,
-      ),
+    amount: cap,
   }),
 ])
 
@@ -72,7 +65,7 @@ function builtHot(cluster: string, named: PublicKey | undefined): PublicKey | st
 
 type SolanaLink = z.infer<typeof solanaLink>
 
-function prepare(
+async function prepare(
   connection: Connection,
   owner: PublicKey,
   request: Exclude<SolanaLink, { action: 'proof' }>,
@@ -94,7 +87,12 @@ function prepare(
   if (!usdc) {
     return refuse(`This page knows no USDC for ${request.cluster}.`)
   }
-  return prepareLimit(connection, { ...request, hotWallet, usdc: new PublicKey(usdc) }, owner)
+  const amount = request.amount ?? (await askCap('USDC'))
+  return prepareLimit(
+    connection,
+    { ...request, amount, hotWallet, usdc: new PublicKey(usdc) },
+    owner,
+  )
 }
 
 async function main() {

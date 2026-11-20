@@ -28,11 +28,11 @@ beforeEach(async () => {
 })
 afterEach(() => s.server.close())
 
-const addLimit = (amount = '100000000') => ({
+const addLimit = (amount: string | null = '100000000') => ({
   action: 'add-limit',
   multisig: multisigPda.toBase58(),
   hot: s.c.hotWallet.publicKey.toBase58(),
-  amount,
+  ...(amount === null ? {} : { amount }),
 })
 
 describe('the add-limit page', () => {
@@ -80,6 +80,25 @@ describe('the add-limit page', () => {
         'Reject anything else.',
       'Not signed: Error: User rejected the request.',
     ])
+  })
+
+  it('lets the owner type the cap when the link has none, up to the beta ceiling', async () => {
+    const page = await s.open(browser, addLimit(null))
+    await expect.poll(() => heading(page).textContent()).toBe('Set the daily cap')
+    expect(await lines(page)).toContain(
+      'During the beta the cap is at most 100 USDC a day. That ceiling is temporary, for the beta ' +
+        'only.',
+    )
+    await page.fill('input[name=amount]', '150')
+    await page.click('text=Continue')
+    await expect
+      .poll(() => page.locator('[role=alert]').textContent())
+      .toBe('The most this page allows is 100 USDC.')
+    await page.fill('input[name=amount]', '2.5')
+    await page.click('text=Continue')
+    await expect.poll(() => heading(page).textContent(), { timeout: 20_000 }).toBe('Daily cap set')
+    expect(s.server.signed).toHaveLength(1)
+    expect((await readSpendingLimit(s.c.connection, limit)).cap).toBe('2500000')
   })
 
   it('refuses a second limit: changing the cap means killing the first', async () => {
