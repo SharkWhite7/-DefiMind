@@ -519,7 +519,7 @@ and region (`gru`) as the bot (`defimind-bot`, see its README):
     address, so a client off Fly cannot pick a fresh address per request.
   - **private**, `fly-local-6pn:8787`: `/v1/admin/*`, `/v1/bot/*` and `/health`. No Fly service
     exposes it. The bot reaches it at `http://defimind-guard-core.internal:8787`, and guard-core
-    calls the bot, when there is one, at `http://defimind-bot.internal:8788` (`BOT_URL` in `fly.toml`).
+    calls the bot, when there is one, at `http://defimind-bot.internal:8788` (the `BOT_URL` secret).
 
   Both listeners share one set of deps, so the per-agent lock covers an agent's request and the
   owner's approval alike. Without `PUBLIC_PORT`, as in a local run, one listener on `HOST:PORT`

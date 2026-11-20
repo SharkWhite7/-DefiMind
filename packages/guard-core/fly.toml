@@ -17,9 +17,9 @@ primary_region = "gru"
   # Fly's proxy sets Fly-Client-IP to the real client and drops any the client sent.
   TRUST_FLY_CLIENT_IP = "true"
   DATABASE_URL = "file:/data/guard.db"
-  BOT_URL = "http://defimind-bot.internal:8788"
   LOG_LEVEL = "info"
-  # Tokens, the RPC URL, SOLANA_CHAIN and the hot key come from `fly secrets import`.
+  # Tokens, the RPC URL, SOLANA_CHAIN and the hot key come from `fly secrets import`. So does
+  # BOT_URL, with BOT_TOKEN and BOT_WEBHOOK_SECRET, only when a Telegram bot runs (CR-017).
 
 [mounts]
   source = "guard_data"

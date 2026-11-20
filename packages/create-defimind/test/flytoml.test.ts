@@ -13,20 +13,13 @@ function changed(before: string, after: string): [string, string][] {
 }
 
 describe('rewriteFlyToml', () => {
-  it("changes only guard-core's app, region and BOT_URL host", () => {
-    const out = rewriteFlyToml(guard, {
-      app: 'acme-guard-core',
-      region: 'iad',
-      peer: { name: 'BOT_URL', app: 'acme-bot' },
-    })
+  it("changes only guard-core's app and region: BOT_URL is a secret now (CR-017)", () => {
+    const out = rewriteFlyToml(guard, { app: 'acme-guard-core', region: 'iad' })
     expect(changed(guard, out)).toEqual([
       ['app = "defimind-guard-core"', 'app = "acme-guard-core"'],
       ['primary_region = "gru"', 'primary_region = "iad"'],
-      [
-        '  BOT_URL = "http://defimind-bot.internal:8788"',
-        '  BOT_URL = "http://acme-bot.internal:8788"',
-      ],
     ])
+    expect(guard).not.toMatch(/^\s*BOT_URL/m)
   })
 
   it("changes only the bot's app, region and GUARD_URL host, keeping the port", () => {
@@ -45,10 +38,11 @@ describe('rewriteFlyToml', () => {
   })
 
   it('refuses a fly.toml whose shape it does not know', () => {
-    const changes = { app: 'a-b', region: 'gru', peer: { name: 'BOT_URL', app: 'x-bot' } } as const
+    const changes = { app: 'a-b', region: 'gru' }
     expect(() => rewriteFlyToml(guard.replace(/^app = .*$/m, ''), changes)).toThrow(/app line/)
     expect(() => rewriteFlyToml(`${guard}\napp = "again"\n`, changes)).toThrow(/exactly one app/)
-    expect(() => rewriteFlyToml(guard.replace(/BOT_URL/, 'OTHER'), changes)).toThrow(/BOT_URL/)
+    const peer = { ...changes, peer: { name: 'GUARD_URL', app: 'x' } } as const
+    expect(() => rewriteFlyToml(bot.replace(/GUARD_URL/, 'OTHER'), peer)).toThrow(/GUARD_URL/)
     expect(() => rewriteFlyToml(guard.replace(/primary_region.*/, ''), changes)).toThrow(
       /primary_region/,
     )
