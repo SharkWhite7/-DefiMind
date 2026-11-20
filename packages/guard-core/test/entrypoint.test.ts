@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { generateKeyPairSync } from 'node:crypto'
-import { chmodSync, mkdirSync, mkdtempSync, statSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -81,6 +81,21 @@ describe.skipIf(!root)('deploy/entrypoint.sh', () => {
       expect(stat.mode & 0o777).toBe(0o600)
       expect(String(stat.uid)).toBe(nobody)
     }
+  })
+
+  it('mounts nothing when the env carries no key, as on a one-click host', () => {
+    const none = join(parent, 'none')
+    const out = execFileSync(ENTRYPOINT, ['id', '-u'], {
+      encoding: 'utf8',
+      env: {
+        PATH: process.env['PATH'],
+        DEFIMIND_KEY_DIR: none,
+        DEFIMIND_USER: 'nobody',
+        DEFIMIND_DATA_DIR: data,
+      },
+    })
+    expect(out.trim()).toBe(execFileSync('id', ['-u', 'nobody'], { encoding: 'utf8' }).trim())
+    expect(existsSync(none)).toBe(false)
   })
 
   it('writes files guard-core reads back as the same keys', async () => {
