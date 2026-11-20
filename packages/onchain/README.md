@@ -263,7 +263,8 @@ design is in [ADR 003](../../docs/adr/003-phantom-owner.md).
   Phantom does. A kill link carries `issued`, when the bot made it, and the page refuses it once it
   is more than 15 minutes old ("This link expired. Press Stop everything in your DefiMind panel, or send /kill to the bot, for a fresh one"), so a
   button left in an old message cannot remove the limit out of step with guard-core. After a kill,
-  the page tells the owner to confirm in Telegram that guard-core is paused.
+  the page tells the owner to check in the panel that guard-core is paused (or with `/status`, with
+  the Telegram bot).
 
   **If the bot is down,** build the kill link by hand. Its values are public: the multisig and the
   hot wallet from guard-core's `.env`, and the page's own URL. It is good for 15 minutes:
