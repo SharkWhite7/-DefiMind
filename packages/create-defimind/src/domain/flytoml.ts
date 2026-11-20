@@ -4,11 +4,11 @@ export interface FlyTomlChanges {
   app: string
   region: string
   /** An env variable holding the other app's private URL, and that app's name. */
-  peer: { name: 'BOT_URL' | 'GUARD_URL'; app: string }
+  peer?: { name: 'GUARD_URL'; app: string }
 }
 
 /**
- * The package's own fly.toml with only the app, its region and the peer's private host changed, so
+ * The package's own fly.toml with only the app, its region and any peer's private host changed, so
  * every other setting stays the one the package's maintainers ship. A line that is missing or
  * appears twice fails rather than being guessed at.
  */
@@ -20,6 +20,9 @@ export function rewriteFlyToml(source: string, changes: FlyTomlChanges): string 
     `primary_region = "${changes.region}"`,
     'primary_region',
   )
+  if (changes.peer === undefined) {
+    return text
+  }
   const { name, app } = changes.peer
   const line = new RegExp(`^(\\s*${name} = ")([^"]*)(")$`, 'm')
   const match = line.exec(text)
