@@ -59,8 +59,8 @@ export async function prepareEvmKill(
         : [
             `The hot wallet ${hot} is no longer a delegate of Safe ${safe}.`,
             'It can no longer draw from the Safe.',
-            'In Telegram, check /status that guard-core is paused, or run /kill → Kill everything if ' +
-              'you have not.',
+            'Check in your DefiMind panel that guard-core is paused, or press Stop everything if ' +
+              'you have not. With the Telegram bot, /status and /kill → Kill everything do the same.',
           ],
   }
 }

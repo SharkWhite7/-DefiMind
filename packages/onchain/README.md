@@ -261,7 +261,7 @@ design is in [ADR 003](../../docs/adr/003-phantom-owner.md).
   of the Safe; the page refuses anyone else before it asks for an amount. It needs no hot wallet,
   so it works on the hosted page for any deployment. Create makes its one-time create key in the browser; the key signs before
   Phantom does. A kill link carries `issued`, when the bot made it, and the page refuses it once it
-  is more than 15 minutes old ("This link expired. Use /kill in Telegram for a fresh one"), so a
+  is more than 15 minutes old ("This link expired. Press Stop everything in your DefiMind panel, or send /kill to the bot, for a fresh one"), so a
   button left in an old message cannot remove the limit out of step with guard-core. After a kill,
   the page tells the owner to confirm in Telegram that guard-core is paused.
 

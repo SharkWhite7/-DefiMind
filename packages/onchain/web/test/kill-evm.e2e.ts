@@ -115,7 +115,9 @@ describe('the kill page on an EVM chain', () => {
   it('refuses a link older than 15 minutes', async () => {
     const page = await open({ issued: now() - 16 * 60 })
     await settled(page, 'Nothing to sign')
-    expect(await lines(page)).toEqual(['This link expired. Use /kill in Telegram for a fresh one.'])
+    expect(await lines(page)).toEqual([
+      'This link expired. Press Stop everything in your DefiMind panel, or send /kill to the bot, for a fresh one.',
+    ])
   })
 
   it('kills the hot wallet the page was built for, and refuses a link naming another', async () => {

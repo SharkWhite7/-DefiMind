@@ -62,8 +62,8 @@ describe('the kill page', () => {
     expect(await lines(page)).toEqual([
       `The spending limit ${limit.toBase58()} is gone.`,
       'The hot wallet can no longer draw from the vault.',
-      'In Telegram, check /status that guard-core is paused, or run /kill → Kill everything if ' +
-        'you have not.',
+      'Check in your DefiMind panel that guard-core is paused, or press Stop everything if ' +
+        'you have not. With the Telegram bot, /status and /kill → Kill everything do the same.',
     ])
   })
 
@@ -123,7 +123,9 @@ describe('the kill page', () => {
   it('refuses a kill link older than 15 minutes, so a stale button cannot fire', async () => {
     const page = await s.open(browser, kill(now() - 15 * 60 - 1))
     await expect.poll(() => heading(page).textContent()).toBe('Nothing to sign')
-    expect(await lines(page)).toEqual(['This link expired. Use /kill in Telegram for a fresh one.'])
+    expect(await lines(page)).toEqual([
+      'This link expired. Press Stop everything in your DefiMind panel, or send /kill to the bot, for a fresh one.',
+    ])
     expect(s.server.signed).toEqual([])
     expect(s.c.svm.getAccount(limit)).not.toBeNull()
   })
