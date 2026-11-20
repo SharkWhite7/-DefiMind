@@ -37,7 +37,12 @@ export function signPageUrl(
       query.set(key, value)
     }
   }
-  return `${page.replace(/\/+$/, '')}/?${query}`
+  let base = page
+  // A loop, not /\/+$/: that regex backtracks quadratically on a long run of slashes.
+  while (base.endsWith('/')) {
+    base = base.slice(0, -1)
+  }
+  return `${base}/?${query}`
 }
 
 /** The same page inside the Phantom app, for a phone. */
