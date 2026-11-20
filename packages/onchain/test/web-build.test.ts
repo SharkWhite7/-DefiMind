@@ -1,5 +1,6 @@
+import { CHAINS, getAddress } from '@defimind/shared'
 import { describe, expect, it } from 'vitest'
-import { csp, hotWallets, maxDailyCap } from '../web/build.js'
+import { csp, evmChains, fromSignPage, hotWallets, maxDailyCap, pageHtml } from '../web/page.js'
 
 describe('the signing page build', () => {
   it('caps a daily limit at 50 USDC unless the build says otherwise', () => {
@@ -37,5 +38,46 @@ describe('the signing page build', () => {
       "base-uri 'none'",
       "form-action 'none'",
     ])
+  })
+})
+
+describe("guard-core's /sign", () => {
+  const sol = '11111111111111111111111111111112'
+  const evmHot = '0x00000000000000000000000000000000000000B0'
+
+  it('takes the RPC and hot wallet per cluster, and the tokens and modules from shared', () => {
+    const config = fromSignPage({
+      solana: { devnet: { rpc: 'https://devnet.example/', hot: sol } },
+      evm: { robinhood: { rpc: 'https://rh.example/', hot: evmHot } },
+      maxDailyCap: '50000000',
+    })
+    expect(config.rpc).toEqual({
+      devnet: 'https://devnet.example/',
+      robinhood: 'https://rh.example/',
+    })
+    expect(config.hot).toEqual({ devnet: sol })
+    expect(config.usdc['devnet']).toBe(getAddress(CHAINS.solanaDevnet, 'usd'))
+    expect(config.evm['robinhood']).toEqual({ ...evmChains({})['robinhood'], hot: evmHot })
+  })
+
+  it.each([
+    ['an unknown cluster', { solana: { localnet: { rpc: 'https://x.example' } } }],
+    ['a token of its own', { solana: { devnet: { rpc: 'https://x.example', usdc: sol } } }],
+    [
+      'a hot wallet that is not a key',
+      { solana: { devnet: { rpc: 'https://x.example', hot: 'x' } } },
+    ],
+    ['an RPC that is not http', { evm: { robinhood: { rpc: 'javascript:alert(1)' } } }],
+  ])('refuses %s', (_case, input) => {
+    expect(() => fromSignPage({ maxDailyCap: '1', ...input } as never)).toThrow()
+  })
+
+  it('writes the config so that no value can close its script element', () => {
+    const config = fromSignPage({ maxDailyCap: '1' })
+    config.hot['x'] = '</script><script>alert(1)</script>'
+    const html = pageHtml('<meta content="%CSP%"><script id="config">%CONFIG%</script>', config)
+    expect(html).not.toContain('</script><script>')
+    const json = /<script id="config">(.*)<\/script>/.exec(html)![1]!
+    expect(JSON.parse(json)).toEqual(config)
   })
 })

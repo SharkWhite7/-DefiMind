@@ -32,7 +32,7 @@ import {
 import { hotWalletGas } from './gas.js'
 import { inspectTransfer } from './inspect.js'
 import { simulateMessage, topUpFor } from './simulate.js'
-import { confirm, connect, findSpendingLimit, spendingLimitPda } from './squads.js'
+import { confirm, connect, findSpendingLimit, spendingLimitPda, VAULT_INDEX } from './squads.js'
 import { useSpendingLimit } from './draw.js'
 import { expectedTransfer, transferInstructions, type Payment } from './transfer.js'
 import { gatedScheme } from './x402.js'
@@ -112,6 +112,20 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
   }
 
   /** Reasons this adapter cannot pay the intent at all, before any transaction exists. */
+  async function balanceOf(token: PublicKey, owner: PublicKey): Promise<Amount> {
+    // The vault is a PDA, so its token account sits off the curve.
+    const address = getAssociatedTokenAddressSync(token, owner, true)
+    try {
+      return (await getAccount(connection, address)).amount.toString()
+    } catch (error) {
+      // A wallet that never held the token has no account for it, which is a balance of zero.
+      if (error instanceof TokenAccountNotFoundError) {
+        return '0'
+      }
+      throw error
+    }
+  }
+
   function refuse(intent: PayIntent): RejectCode[] {
     if (intent.chain !== chain) {
       return ['CHAIN_NOT_ALLOWED']
@@ -145,16 +159,14 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
       return { status: 'active', cap, spent, resetsAt, delegate }
     },
 
-    async getHotWalletBalance(token: Address): Promise<Amount> {
-      const address = getAssociatedTokenAddressSync(new PublicKey(token), hotWallet.publicKey)
-      try {
-        return (await getAccount(connection, address)).amount.toString()
-      } catch (error) {
-        // A wallet that never held the token has no account for it, which is a balance of zero.
-        if (error instanceof TokenAccountNotFoundError) {
-          return '0'
-        }
-        throw error
+    getHotWalletBalance: (token: Address) => balanceOf(new PublicKey(token), hotWallet.publicKey),
+
+    async getVault() {
+      const [vault] = multisig.getVaultPda({ multisigPda, index: VAULT_INDEX })
+      return {
+        address: vault.toBase58(),
+        token: mint.toBase58(),
+        balance: await balanceOf(mint, vault),
       }
     },
 

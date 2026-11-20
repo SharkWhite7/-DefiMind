@@ -2,6 +2,7 @@ import { CHAINS } from '@defimind/shared'
 import type { PaymentRequirements } from '@x402/core/types'
 import {
   decodeFunctionData,
+  getAddress,
   encodeAbiParameters,
   encodeEventTopics,
   parseAbi,
@@ -52,6 +53,16 @@ describe('reads', () => {
   it('the hot wallet USDC balance', async () => {
     node.handlers['eth_call'] = () => uint(7_000_000n)
     expect(await adapter.getHotWalletBalance(usdc)).toBe('7000000')
+  })
+
+  it('the Safe as the vault, with its USDC balance', async () => {
+    node.handlers['eth_call'] = ([call]) => {
+      const { to, data } = call as { to: string; data: string }
+      expect(getAddress(to)).toBe(usdc)
+      expect(data).toContain(safe.slice(2).toLowerCase())
+      return uint(42_000_000n)
+    }
+    expect(await adapter.getVault!()).toEqual({ address: safe, token: usdc, balance: '42000000' })
   })
 
   const minute = 29_896_000n
