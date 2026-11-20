@@ -1,5 +1,5 @@
 import type { ChainAdapter } from '@defimind/onchain'
-import type { ChainId, KillTarget } from '@defimind/shared'
+import { type ChainId, HOSTED_SIGN_PAGE, type KillTarget } from '@defimind/shared'
 import rateLimit from '@fastify/rate-limit'
 import Fastify, {
   type FastifyBaseLogger,
@@ -60,7 +60,7 @@ export interface ServerDeps {
   push?: { service: PushService; publicKey: string }
   /** Publishes receipt anchors (CR-013); anchoring is off without it. */
   anchorPublisher?: AnchorPublisher
-  /** The chains the owner kill links to the signing page for, with SIGN_PAGE_URL (CR-014). */
+  /** The chains the owner kill links to the signing page for (CR-014, CR-020). */
   killTargets?: KillTarget[]
   /** The public keys GET /v1/owner/keys answers (CR-019). */
   keys?: PublicKeys
@@ -226,9 +226,8 @@ async function serve(
             ...(pushKey === undefined ? {} : { pushKey }),
             ...(keys === undefined ? {} : { keys }),
             ...(host === undefined ? {} : { host }),
-            ...(config.SIGN_PAGE_URL === undefined
-              ? {}
-              : { signing: { page: config.SIGN_PAGE_URL, targets: killTargets } }),
+            // CR-020: without its own page, a deployment links kill and deposit to the hosted one.
+            signing: { page: config.SIGN_PAGE_URL ?? HOSTED_SIGN_PAGE, targets: killTargets },
           }),
         ),
       )

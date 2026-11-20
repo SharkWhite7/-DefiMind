@@ -1,5 +1,5 @@
 import type { ChainAdapter } from '@defimind/onchain'
-import { signPageUrl, type ChainId } from '@defimind/shared'
+import { HOSTED_SIGN_PAGE, signPageUrl, type ChainId } from '@defimind/shared'
 import type { FastifyInstance } from 'fastify'
 import { listAgents } from '../db/agents.js'
 import { countPasskeys } from '../db/passkeys.js'
@@ -15,7 +15,7 @@ import type { ChainHost } from './owner-settings.js'
  * or from the chain, never from a flag the panel sets, so a step the owner undoes (a killed limit,
  * a revoked agent) shows as not done again.
  */
-export function ownerGuideRoutes(deps: X402Deps, host: ChainHost, signPage?: string) {
+export function ownerGuideRoutes(deps: X402Deps, host: ChainHost, signPage = HOSTED_SIGN_PAGE) {
   const { db } = deps
   const adapters = () => [...deps.chains.values()]
 
@@ -58,7 +58,7 @@ export function ownerGuideRoutes(deps: X402Deps, host: ChainHost, signPage?: str
   function depositPage(chain: ChainId): string | undefined {
     const keys = settingKeys(host.env).find((k) => k.chain === chain)
     const vault = keys && applySettings(host.env, readSettings(db))[keys.vault]
-    if (signPage === undefined || typeof vault !== 'string') {
+    if (typeof vault !== 'string') {
       return undefined
     }
     const ref = { [chain.startsWith('solana:') ? 'multisig' : 'safe']: vault }

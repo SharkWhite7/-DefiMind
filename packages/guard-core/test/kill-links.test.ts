@@ -2,6 +2,10 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { HOSTED_SIGN_PAGE } from '@defimind/shared'
+import { privateKeyToAddress } from 'viem/accounts'
+import { readEvmKeyFile } from '../src/adapters/keypair.js'
+import { ensureKey } from '../src/adapters/keystore.js'
 import { loadConfig } from '../src/config.js'
 import { base58 } from '../src/domain/base58.js'
 import { killTargets } from '../src/kill-targets.js'
@@ -42,6 +46,26 @@ describe('kill targets', () => {
       hot: base58(Uint8Array.from(bytes.slice(32))),
     })
   })
+
+  // CR-020: the hosted page knows no hot wallet, so the EVM link names it as Solana's does.
+  it('names the Safe and the EVM hot wallet', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'kp-'))
+    const file = await ensureKey(dir, 'robinhood-hot', 'evm')
+    const safe = `0x${'5a'.repeat(20)}`
+    const config = loadConfig({
+      ADMIN_TOKEN: 'a'.repeat(64),
+      ROBINHOOD_CHAIN: 'eip155:46630',
+      ROBINHOOD_SAFE_ADDRESS: safe,
+      ROBINHOOD_HOT_WALLET_KEY_FILE: file,
+    })
+    expect(await killTargets(config)).toEqual([
+      {
+        chain: 'eip155:46630',
+        safe,
+        hot: privateKeyToAddress(await readEvmKeyFile(file)),
+      },
+    ])
+  })
 })
 
 describe('the owner kill links', () => {
@@ -61,11 +85,18 @@ describe('the owner kill links', () => {
     expect(admin.json().ownerTransactions[0]).not.toHaveProperty('link')
   })
 
-  it('carries no links without SIGN_PAGE_URL', async () => {
+  // CR-020: a one-click deployment sets no page of its own and still gets a kill it can sign.
+  it('links the hosted page without SIGN_PAGE_URL, naming the vault and the hot wallet', async () => {
     const h = await harness({ killTargets: [target] })
     const owner = await signedIn(h)
     const [tx] = (await owner.call('POST', '/v1/owner/kill', {})).json().ownerTransactions
-    expect(tx).not.toHaveProperty('link')
-    expect(tx).not.toHaveProperty('pageLink')
+    const page = new URL(tx.pageLink)
+    expect(page.origin).toBe(HOSTED_SIGN_PAGE)
+    expect(Object.fromEntries(page.searchParams)).toMatchObject({
+      action: 'kill',
+      multisig: 'Msig111',
+      hot: 'Hot111',
+    })
+    expect(tx.link).toContain(encodeURIComponent(HOSTED_SIGN_PAGE))
   })
 })
