@@ -139,9 +139,15 @@ export async function guardCore(dist: string, { fresh = false } = {}) {
   }
 
   const overview = () => ({
-    chains: [
-      { chain, allowance: { status: 'active', cap: '5000000', spent: '1250000', resetsAt: later } },
-    ],
+    // A fresh deployment has no vault, so no chain to draw on yet.
+    chains: fresh
+      ? []
+      : [
+          {
+            chain,
+            allowance: { status: 'active', cap: '5000000', spent: '1250000', resetsAt: later },
+          },
+        ],
     agents: state.agents.map(({ agentId }) => ({
       agentId,
       paused: state.killed,

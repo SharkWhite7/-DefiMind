@@ -43,6 +43,8 @@ const ERRORS: Record<string, string> = {
 const ctx: Context = {
   api: ownerApi(browserAuthenticator),
   go(route, replace = false) {
+    // A message belongs to the screen it was said on: a refusal must not greet the next one.
+    ctx.say('')
     history[replace ? 'replaceState' : 'pushState'](null, '', href(route))
     return render()
   },
@@ -142,9 +144,15 @@ document.addEventListener('click', (event) => {
     void render()
   }
 })
-window.addEventListener('popstate', () => void render())
+window.addEventListener('popstate', () => {
+  ctx.say('')
+  void render()
+})
 
 if ('serviceWorker' in navigator) {
-  void navigator.serviceWorker.register(`${BASE}sw.js`, { scope: BASE })
+  // Offline support only: a failure here must not overwrite what the status line says.
+  navigator.serviceWorker
+    .register(`${BASE}sw.js`, { scope: BASE })
+    .catch((error: unknown) => console.warn('service worker not registered', error))
 }
 void render()
