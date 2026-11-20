@@ -14,7 +14,8 @@ import {
 } from 'viem'
 import { describe, expect, it } from 'vitest'
 import { allowanceCalls, allowanceModuleAbi } from '../src/evm/safe.js'
-import { buildPage, csp, evmChains, rpcUrls } from '../web/build.js'
+import { buildPage } from '../web/build.js'
+import { csp, evmChains, rpcUrls } from '../web/page.js'
 import {
   createData,
   enableData,
@@ -200,16 +201,21 @@ describe('the EVM clusters the page is built for', () => {
     expect(policy).toContain('https://rpc.mainnet.chain.robinhood.com')
   })
 
-  it('build into a page for the mainnet pilot: its hot wallet, USDG and RPC, no stand-in', async () => {
+  it('build a page for the mainnet pilot: its hot wallet, USDG and RPC in index.html, no stand-in', async () => {
     const dist = await mkdtemp(join(tmpdir(), 'defimind-page-'))
     await buildPage(dist, { ROBINHOOD_HOT_WALLET_MAINNET: hot })
-    const app = await readFile(join(dist, 'app.js'), 'utf8')
-    // esbuild prints the define without quoting its keys.
-    const usd = sharedAddress(CHAINS.robinhood, 'usd')
-    const mainnet = `robinhood:{chainId:4663,module:"${module}",usd:"${usd}",symbol:"USDG",hot:"${hot}"}`
-    expect(app.includes(mainnet)).toBe(true)
-    expect(app.includes('evm-localnet')).toBe(false)
     const html = await readFile(join(dist, 'index.html'), 'utf8')
+    const config = JSON.parse(/id="config">([^<]*)</.exec(html)![1]!)
+    expect(config.evm.robinhood).toEqual({
+      chainId: 4663,
+      module,
+      usd: sharedAddress(CHAINS.robinhood, 'usd'),
+      symbol: 'USDG',
+      hot,
+    })
+    expect(config.rpc).not.toHaveProperty('evm-localnet')
+    // app.js holds no address: the same bundle serves every config.
+    expect(await readFile(join(dist, 'app.js'), 'utf8')).not.toContain(hot)
     expect(html).toContain('https://rpc.mainnet.chain.robinhood.com')
   })
 })

@@ -320,6 +320,37 @@ pnpm test:web    # Chromium, against the real Squads program in LiteSVM, with a 
 `web/vercel.json` deploys it as its own project, separate from the landing site, only from `main` (its `ignoreCommand` skips every other branch, previews included), with the security
 headers. The owner creates that project and protects its deploys.
 
+**Served by guard-core at `/sign` (CR-019).** `app.js` holds no address. Everything the page acts for
+is a JSON config inside `index.html`, which the page reads once at load:
+
+- the RPC endpoints;
+- the hot wallets;
+- the tokens and modules;
+- `maxDailyCap`.
+
+The hosted build fills that config from its env at build time. guard-core instead fills it at serve
+time, with its own hot wallets, through `@defimind/onchain/sign-page`:
+
+```ts
+import { SIGN_PAGE_DIR, signPageHtml } from '@defimind/onchain/sign-page'
+
+signPageHtml({
+  solana: { 'mainnet-beta': { rpc, hot } }, // and/or devnet
+  evm: { robinhood: { rpc, hot } }, // and/or robinhood-testnet
+  maxDailyCap: '50000000',
+})
+// GET /sign/ -> that HTML; /sign/app.js and /sign/style.css -> files in SIGN_PAGE_DIR
+```
+
+What the caller can set, and what it cannot:
+
+- **Per cluster, only the RPC and the hot wallet.** USDC, USDG, the Allowance Module and the chain
+  ids always come from the verified addresses in `@defimind/shared`.
+- **Validation:** the input is checked with zod. An unknown cluster, an extra field, an RPC that is
+  not http(s), or a malformed key throws.
+- **Escaping:** every `<` in the JSON is escaped, so no value can close the script element.
+- **Build step:** `SIGN_PAGE_DIR` is `web/dist`, so the image must run `pnpm build:web` first.
+
 ### Base adapter
 
 A Safe holds the funds and the Safe Allowance Module caps the hot wallet per day. Neither is ours.
