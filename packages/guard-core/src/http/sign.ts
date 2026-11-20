@@ -11,6 +11,7 @@ import { CHAINS, type ChainId } from '@defimind/shared'
 import type { FastifyInstance, FastifyReply } from 'fastify'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { z } from 'zod'
 import type { PublicKeys } from '../adapters/public-keys.js'
 
 const SOLANA = new Map<ChainId, 'devnet' | 'mainnet-beta'>([
@@ -27,7 +28,7 @@ const EVM = new Map<ChainId, 'robinhood-testnet' | 'robinhood'>([
  * allowance (`enable`) that names it. Deposit and kill stay on the hosted page built from main,
  * which a compromised guard-core cannot change (SPEC, "Signing page").
  */
-const ACTIONS = new Set(['create', 'add-limit', 'enable'])
+const served = z.object({ action: z.enum(['create', 'add-limit', 'enable']) })
 
 const FILES = new Map([
   ['app.js', 'text/javascript; charset=utf-8'],
@@ -81,8 +82,7 @@ export function signRoutes(keys: PublicKeys, dir: string) {
   return async (app: FastifyInstance) => {
     app.get('/sign', async (_request, reply) => reply.redirect('/sign/', 308))
     app.get('/sign/', async (request, reply) => {
-      const { action } = request.query as { action?: unknown }
-      if (typeof action !== 'string' || !ACTIONS.has(action)) {
+      if (!served.safeParse(request.query).success) {
         return reply.code(404).send({ error: 'action_not_served' })
       }
       const template = await readFile(join(dir, 'index.template.html'), 'utf8').catch(

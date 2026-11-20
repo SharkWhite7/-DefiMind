@@ -78,7 +78,10 @@ export function ownerSettingsRoutes(
     const config = applySettings(host.env, readSettings(db))
     return {
       chains: settingKeys(host.env).map((keys) => {
-        const rpcUrl = config[keys.rpcUrl]
+        // An RPC from the env goes out as its origin only: a provider's URL carries its API key, and
+        // /sign shares this origin. One the owner typed in the panel comes back as typed.
+        const env = host.env[keys.rpcUrl]
+        const rpcUrl = typeof env === 'string' ? new URL(env).origin : config[keys.rpcUrl]
         const vault = config[keys.vault]
         return {
           chain: keys.chain,

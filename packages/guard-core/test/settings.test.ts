@@ -115,6 +115,17 @@ describe('the owner settings (CR-019)', () => {
     expect(res.json()).toEqual({ error })
   })
 
+  it('answers an RPC from the env as its origin only, never its key', async () => {
+    const o = await owner({
+      SOLANA_RPC_URL: 'https://mainnet.helius-rpc.com/?api-key=operator-key',
+    })
+    const res = await o.call('GET', '/v1/owner/settings')
+    expect(res.json()).toEqual({
+      chains: [{ chain: CHAIN, rpcUrl: 'https://mainnet.helius-rpc.com' }],
+    })
+    expect(res.body).not.toContain('operator-key')
+  })
+
   it('leaves what the env sets to the env', async () => {
     const o = await owner({ SOLANA_RPC_URL: 'https://env.example' })
     const res = await put(o, [{ chain: CHAIN, rpcUrl: RPC }])

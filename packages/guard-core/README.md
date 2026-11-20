@@ -337,8 +337,9 @@ A one-click deployment starts with only `ADMIN_TOKEN` and `SETUP_CODE`, and a di
   step-up over `{ chains }` as sent, and answers like GET. A field the env sets is `409 set_by_env`,
   a chain that is off `400 chain_not_enabled`. Every chain is rebuilt from the env and the new
   settings, and a vault is adopted only if its adapter reports an active limit or allowance for this
-  hot wallet; otherwise `422 vault_not_ours` and nothing is stored. A vault without an RPC is
-  `400 settings_incomplete`. Adopted chains are swapped in for the next request, and the audit row
+  hot wallet; otherwise `422 vault_not_ours` and nothing is stored. A chain whose RPC neither the env nor the panel sets uses its
+  cluster's public RPC, the one `/sign` uses, and logs that it is rate-limited; GET still answers no
+  `rpcUrl` for it. Base has no public one, so a Base vault without an RPC is `400 settings_incomplete`. Adopted chains are swapped in for the next request, and the audit row
   `settings_changed` names fields only, since an RPC URL can carry an API key.
 - **Progress.** `GET /v1/owner/setup/progress` answers the steps passkey, vault, limit, deposit,
   agent, rules, shadow and live, each read from the database or the chain. A chain that cannot be
