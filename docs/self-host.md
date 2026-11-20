@@ -185,7 +185,8 @@ network. The agent routes listen on `127.0.0.1:8080` only.
 Any other host works if it builds from the repository root and gives guard-core:
 
 - a persistent volume at `/data`;
-- a tmpfs at `/run/defimind`, or the right to mount one;
+- when keys come in through the env, a tmpfs at `/run/defimind` or the right to mount one (with
+  no key in the env, guard-core makes its own under `/data/keys`, as on Render: see `render.yaml`);
 - the private network both apps need.
 
 We have run it on Fly and with this compose file only.
