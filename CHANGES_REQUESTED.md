@@ -1013,3 +1013,18 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   - The host costs each owner a few dollars a month.
   - Phantom may warn on each owner's own domain until it is reviewed, as it did for the hosted page
     (HUMAN-25).
+- **Amendment, from the manager's review, 2026-11-20 (waiting for the owner's acknowledgment):**
+  - **The risk.** Serving `/sign` from guard-core puts the signing page in the same trust domain as
+    the hot keys. A compromised guard-core, or a compromised host account, could serve a modified
+    page. That page could ask Phantom to sign a deposit to the attacker, an add-limit for the
+    attacker's key, or a fake kill. The worst case then grows from "today's cap" to "whatever the
+    owner signs next".
+  - **The mitigations, applied in SPEC v0.14:**
+    - deposit and kill stay on the hosted page built from `main`, which guard-core cannot change.
+      Only create and add-limit, which need this deployment's hot wallet, use `/sign`;
+    - before every Phantom prompt, both pages show in large text the destination or delegate and
+      the amount, decoded from the transaction itself. The getting-started page tells owners to
+      compare that with what Phantom shows, and to cancel if anything differs;
+    - `/sign` is served with a strict CSP, and each release publishes the build's SHA-256;
+    - Render disk snapshots hold the key files, so anyone with access to the dashboard's snapshots
+      holds the hot keys. The onchain cap still bounds that (ADR 006).

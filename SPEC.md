@@ -411,6 +411,13 @@ the daily cap on the page, at most MAX_DAILY_CAP (50 during the beta). action=de
 multisig or safe) derives the vault from the chain, signs only when the connected wallet is a member
 of that multisig or an owner of that Safe, lets the owner type the amount, and signs a plain token
 transfer into the vault; it never grants an allowance, delegate or other authority.
+Only create and add-limit need this deployment's hot wallet. Deposit and kill need no
+per-deployment value, so the panel opens them on the hosted page built from main (the default
+SIGN_PAGE_URL); a compromised guard-core cannot change that page. Before every Phantom prompt, /sign
+and the hosted page show in large text what the transaction itself carries, decoded from its bytes
+and not from the link or the server: the destination or delegate, and the amount. /sign is served
+with the same strict CSP as the panel, and each release publishes the SHA-256 of the signing-page
+build so a modified /sign can be detected.
 
 Hosting behind one public listener. ADMIN_ROUTES=false leaves /v1/admin/* unregistered, as the
 one-click deployment does. PUBLIC_URL is the https address the owner opens; on Render it defaults to
