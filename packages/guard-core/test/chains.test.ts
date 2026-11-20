@@ -3,7 +3,8 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { buildChains } from '../src/chains.js'
+import { ensureKey } from '../src/adapters/keystore.js'
+import { buildChains, publicRpc } from '../src/chains.js'
 import { loadConfig } from '../src/config.js'
 
 const KEY = `0x${'1'.repeat(64)}`
@@ -96,10 +97,22 @@ describe('buildChains', () => {
     )
   })
 
-  it('refuses Solana with its multisig but no RPC or key file', async () => {
+  it('refuses Solana with its multisig but no key file', async () => {
     await expect(
       build({ SQUADS_MULTISIG: 'Squads1111111111111111111111111111111111111' }),
-    ).rejects.toThrow('invalid configuration: SOLANA_RPC_URL, SOLANA_HOT_WALLET_KEYPAIR')
+    ).rejects.toThrow('invalid configuration: SOLANA_HOT_WALLET_KEYPAIR')
+  })
+
+  // CR-019: a one-click owner sets no RPC; the cluster's public one, as /sign uses, stands in.
+  it('builds Solana on the public RPC when neither the env nor the panel sets one', async () => {
+    const keypair = await ensureKey(dir, 'solana-hot.json', 'solana')
+    const chains = await build({
+      SQUADS_MULTISIG: 'Squads1111111111111111111111111111111111111',
+      SOLANA_HOT_WALLET_KEYPAIR: keypair,
+    })
+    expect([...chains.keys()]).toEqual([CHAINS.solanaDevnet])
+    expect(publicRpc(CHAINS.solanaDevnet)).toBe('https://api.devnet.solana.com')
+    expect(publicRpc(CHAINS.baseSepolia)).toBeUndefined()
   })
 
   // CR-019: the hot key exists before the owner has made the vault that names it.
@@ -216,14 +229,20 @@ describe('Robinhood Chain (CR-007)', () => {
     expect((await build({ ...robinhood, ROBINHOOD_SAFE_ADDRESS: '' })).size).toBe(0)
   })
 
-  it.each(['ROBINHOOD_RPC_URL', 'ROBINHOOD_HOT_WALLET_KEY_FILE'])(
-    'refuses to start Robinhood Chain without %s',
-    async (name) => {
-      await expect(build({ ...robinhood, [name]: '' })).rejects.toThrow(
-        `invalid configuration: ${name}`,
-      )
-    },
-  )
+  it('refuses to start Robinhood Chain without its key file', async () => {
+    await expect(build({ ...robinhood, ROBINHOOD_HOT_WALLET_KEY_FILE: '' })).rejects.toThrow(
+      'invalid configuration: ROBINHOOD_HOT_WALLET_KEY_FILE',
+    )
+  })
+
+  it('reads Robinhood Chain on its public RPC without one set, and on its own with one', async () => {
+    const fetchImpl = node()
+    await build({ ...robinhood, ROBINHOOD_RPC_URL: '' }, fetchImpl)
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toBe('https://rpc.testnet.chain.robinhood.com')
+    const own = node()
+    await build(robinhood, own)
+    expect(String(own.mock.calls[0]?.[0])).toBe(robinhood.ROBINHOOD_RPC_URL)
+  })
 
   it('names the Robinhood RPC when it cannot be reached', async () => {
     await expect(build(robinhood, node({ down: true }))).rejects.toThrow(

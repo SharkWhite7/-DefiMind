@@ -4,11 +4,11 @@ import {
   daysCovered,
   doneSteps,
   inPhantom,
+  mcpCommand,
   nextStep,
   signLink,
   STEPS,
 } from '../src/domain/guide.js'
-import { mcpCommand } from '../src/ui/agent-steps.js'
 
 const progress = (...done: string[]) =>
   ['passkey', 'vault', 'limit', 'deposit', 'agent', 'rules', 'shadow', 'live'].map((id) => ({
@@ -77,8 +77,24 @@ describe('guided setup', () => {
   })
 
   it('gives a setup command that never carries the token', () => {
-    const line = mcpCommand('https://dm.example', 'my-agent')
-    expect(line).toContain('--guard-url https://dm.example --agent-id my-agent')
+    const line = mcpCommand('https://dm.example', 'my-agent', [])
+    expect(line).toContain('--guard-url https://dm.example --agent-id my-agent --check')
     expect(line).not.toMatch(/token/i)
+  })
+
+  it('names the chain with a vault, so a mainnet deployment is not sent to devnet', () => {
+    const chains = [{ chain: CHAINS.robinhood }, { chain: CHAINS.solanaMainnet, vault: 'V1' }]
+    expect(mcpCommand('https://dm.example', 'a', chains)).toContain(
+      '--chain solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp --check',
+    )
+    expect(mcpCommand('https://dm.example', 'a', [{ chain: CHAINS.robinhood }])).toContain(
+      `--chain ${CHAINS.robinhood} `,
+    )
+  })
+
+  it('leaves out a chain id that is not safe on a command line', () => {
+    expect(mcpCommand('https://dm.example', 'a', [{ chain: 'solana:x; rm -rf ~' }])).not.toContain(
+      '--chain',
+    )
   })
 })

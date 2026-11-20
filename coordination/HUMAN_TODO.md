@@ -90,6 +90,20 @@ is lost: the panel's push goes out first.
 
 ---
 
+## ⬜ HUMAN-33 — Verify the one-click deploy on Render (CR-019)
+
+When GC-56 and INT-44 part 1 (#62) are on `main`, and when the owner is ready. Before the README
+shows the Deploy button, one real run must pass:
+
+1. create a Render account;
+2. deploy from the button, on a paid Starter instance with a disk;
+3. follow the panel's guide as far as it goes, and report each step that does not work.
+
+No key or token is shared with anyone: the host generates them, and only the setup code shown in
+Render's dashboard is used, by the owner, in the panel. The manager sends the exact steps then.
+
+---
+
 ## ⬜ HUMAN-26 — Publish the packages to npm
 
 Later. `create-defimind` and `@defimind/mcp-server` go to npm so users can install with one

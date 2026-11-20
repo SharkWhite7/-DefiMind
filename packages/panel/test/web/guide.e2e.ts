@@ -81,7 +81,11 @@ describe.each([390, 1280])('the guided setup at %i px', (width) => {
     await step(page, 6, 'Connect your agent')
     await page.getByLabel('A name for your agent').fill('my-agent')
     await page.getByRole('button', { name: 'Create with passkey' }).click()
-    await page.getByText(`--guard-url ${guard.origin} --agent-id my-agent`).waitFor()
+    await page
+      .getByText(
+        `--guard-url ${guard.origin} --agent-id my-agent --chain solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1 --check`,
+      )
+      .waitFor()
     expect(guard.state.tokens).toEqual([
       { agentId: 'my-agent', stepUp: { action: 'create_agent', body: { agentId: 'my-agent' } } },
     ])

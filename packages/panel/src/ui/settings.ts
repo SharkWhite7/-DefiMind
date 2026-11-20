@@ -1,6 +1,7 @@
 import { disablePush, enablePush, pushEnabled } from '../adapters/push.js'
 import type { SettingsView } from '../adapters/schemas.js'
 import { chainName } from '../domain/chains.js'
+import { changedSettings } from '../domain/settings.js'
 import type { Context, Screen } from './context.js'
 import { button, card, el, when } from './dom.js'
 
@@ -21,15 +22,6 @@ function pushSwitch(ctx: Context, on: boolean) {
       })
   })
   return el('label', { class: 'check' }, toggle, 'Notify this device of approvals and alerts')
-}
-
-/** Empty fields are left out: guard-core keeps no RPC or vault the owner did not give. */
-function chainEntry(chain: string, rpcUrl: string, vault: string): SettingsView['chains'][number] {
-  return {
-    chain,
-    ...(rpcUrl.trim() ? { rpcUrl: rpcUrl.trim() } : {}),
-    ...(vault.trim() ? { vault: vault.trim() } : {}),
-  }
 }
 
 /** CR-019: each chain's RPC and vault. guard-core adopts a vault only once it reads it on chain. */
@@ -70,9 +62,15 @@ function chainsCard(ctx: Context, current: SettingsView['chains']) {
       button(
         'Save with passkey',
         async () => {
-          await ctx.api.putSettings(
-            fields.map(({ chain, rpc, box }) => chainEntry(chain, rpc.value, box.value)),
+          const changed = changedSettings(
+            current,
+            fields.map(({ chain, rpc, box }) => ({ chain, rpcUrl: rpc.value, vault: box.value })),
           )
+          if (changed.length === 0) {
+            ctx.say('Nothing changed.')
+            return
+          }
+          await ctx.api.putSettings(changed)
           await ctx.go({ name: 'settings' }, true)
           ctx.say('Saved. Confirmed with your passkey.', 'done')
         },

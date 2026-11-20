@@ -1,6 +1,6 @@
 import { formatUsd } from '../domain/money.js'
 import { loosens } from '../domain/policy.js'
-import type { StepId } from '../domain/guide.js'
+import { mcpCommand, type StepId } from '../domain/guide.js'
 import type { Context } from './context.js'
 import { button, card, el, type Child } from './dom.js'
 
@@ -16,13 +16,8 @@ export const next = (ctx: Context, step: StepId, label = 'Next') =>
 /** The getting-started page (INT-44): connecting each MCP client, until the server is on npm. */
 const MCP_HELP = 'https://github.com/SharkWhite7/-DefiMind/blob/main/docs/getting-started.md'
 
-/** One line for Claude Code: it asks for the token at a hidden prompt, never on the command line. */
-export function mcpCommand(origin: string, agentId: string): string {
-  return `pnpm --filter @defimind/mcp-server run setup claude-code --guard-url ${origin} --agent-id ${agentId} --check`
-}
-
 export async function agent(ctx: Context): Promise<Child[]> {
-  const { agents } = await ctx.api.agents()
+  const [{ agents }, { chains }] = await Promise.all([ctx.api.agents(), ctx.api.settings()])
   const input = el('input', {
     id: 'agent-id',
     autocomplete: 'off',
@@ -47,7 +42,7 @@ export async function agent(ctx: Context): Promise<Child[]> {
           button('Copy key', () => navigator.clipboard.writeText(created.token), 'primary'),
           el('h3', {}, 'Connect it to Claude Code'),
           el('p', {}, 'Run this once in a terminal, in your DefiMind folder:'),
-          el('code', { class: 'token' }, mcpCommand(location.origin, created.agentId)),
+          el('code', { class: 'token' }, mcpCommand(location.origin, created.agentId, chains)),
           el('a', { href: MCP_HELP, rel: 'noreferrer' }, 'Step by step, and for other AI apps'),
           next(ctx, 'rules'),
         ),

@@ -1,6 +1,7 @@
 import { createEvmAdapter, createSvmAdapter, type ChainAdapter } from '@defimind/onchain'
 import type { ChainId } from '@defimind/shared'
 import { CHAINS, getAddress, requireAddress, usdSymbol } from '@defimind/shared'
+import { rpcUrls } from '@defimind/onchain/sign-page'
 import { checkContracts } from './adapters/evm-check.js'
 import { readEvmKeyFile, readKeypairFile } from './adapters/keypair.js'
 import { StubChain } from './adapters/stub.js'
@@ -25,7 +26,7 @@ export async function buildChains(
   const multisig = config.SQUADS_MULTISIG
   if (multisig !== undefined) {
     const { SOLANA_RPC_URL: rpcUrl, SOLANA_HOT_WALLET_KEYPAIR: keypair } = required({
-      SOLANA_RPC_URL: config.SOLANA_RPC_URL,
+      SOLANA_RPC_URL: config.SOLANA_RPC_URL ?? publicRpc(config.SOLANA_CHAIN),
       SOLANA_HOT_WALLET_KEYPAIR: config.SOLANA_HOT_WALLET_KEYPAIR,
     })
     const chain = config.SOLANA_CHAIN
@@ -71,7 +72,7 @@ export async function buildChains(
   if (config.ROBINHOOD_CHAIN !== undefined && config.ROBINHOOD_SAFE_ADDRESS !== undefined) {
     const chain = config.ROBINHOOD_CHAIN
     const values = required({
-      ROBINHOOD_RPC_URL: config.ROBINHOOD_RPC_URL,
+      ROBINHOOD_RPC_URL: config.ROBINHOOD_RPC_URL ?? publicRpc(chain),
       ROBINHOOD_SAFE_ADDRESS: config.ROBINHOOD_SAFE_ADDRESS,
       ROBINHOOD_HOT_WALLET_KEY_FILE: config.ROBINHOOD_HOT_WALLET_KEY_FILE,
     })
@@ -97,6 +98,23 @@ export async function buildChains(
     )
   }
   return chains
+}
+
+const CLUSTERS = new Map<ChainId, string>([
+  [CHAINS.solanaDevnet, 'devnet'],
+  [CHAINS.solanaMainnet, 'mainnet-beta'],
+  [CHAINS.robinhoodTestnet, 'robinhood-testnet'],
+  [CHAINS.robinhood, 'robinhood'],
+])
+
+/**
+ * The cluster's public RPC, the one /sign uses, for a chain whose RPC neither the env nor the panel
+ * sets (CR-019): a one-click owner need not know what an RPC is. It is rate-limited, so a busy
+ * deployment sets its own. Base has none.
+ */
+export function publicRpc(chain: ChainId): string | undefined {
+  const cluster = CLUSTERS.get(chain)
+  return cluster === undefined ? undefined : rpcUrls({})[cluster]
 }
 
 const EVM_IDS = {

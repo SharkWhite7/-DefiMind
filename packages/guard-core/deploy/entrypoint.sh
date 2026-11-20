@@ -11,13 +11,20 @@ data="${DEFIMIND_DATA_DIR:-/data}"
 uid="$(id -u "$user")"
 gid="$(id -g "$user")"
 
-mkdir -p "$dir"
-# Fail closed: if tmpfs cannot be mounted, set -e stops here before any key is written.
-if [ "$(stat -f -c %T "$dir")" != tmpfs ]; then
-  mount -t tmpfs -o size=64k,mode=0700 tmpfs "$dir"
+keys="${SOLANA_HOT_WALLET_KEYPAIR_JSON:-}${BASE_HOT_WALLET_KEY:-}${ROBINHOOD_HOT_WALLET_KEY:-}"
+keys="$keys${RECEIPT_SIGNING_KEY:-}${VAPID_PRIVATE_KEY:-}${ANCHOR_KEYPAIR_JSON:-}"
+# A one-click host (CR-019) passes no key: guard-core makes them on its disk, and a container
+# there may not be allowed to mount. With any key in the env, tmpfs stays mandatory.
+if [ -n "$keys" ]; then
+  mkdir -p "$dir"
+  # Fail closed: if tmpfs cannot be mounted, set -e stops here before any key is written.
+  if [ "$(stat -f -c %T "$dir")" != tmpfs ]; then
+    mount -t tmpfs -o size=64k,mode=0700 tmpfs "$dir"
+  fi
+  chown "$uid:$gid" "$dir"
+  chmod 700 "$dir"
 fi
-chown "$uid:$gid" "$dir"
-chmod 700 "$dir"
+unset keys
 umask 077
 
 # printf is a shell builtin, so a key never shows up in any process's argv.

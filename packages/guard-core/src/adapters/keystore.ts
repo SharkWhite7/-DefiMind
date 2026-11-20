@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path'
 import { generatePrivateKey } from 'viem/accounts'
 import type { Config } from '../config.js'
 import { dbFile } from '../db/client.js'
+import type { ChainSetting } from '../domain/settings.js'
 
 type Kind = 'solana' | 'evm' | 'ed25519' | 'p256'
 
@@ -62,11 +63,18 @@ function slug(chain: ChainId): string {
  * The config with every key file it lacks made under `dir` (CR-019). A key given by env or a file
  * always wins, so a deployment that passes its keys as secrets is unchanged.
  *
- * A hot wallet is made only for a chain whose vault the env does not name, the guided setup's case,
- * where the vault is adopted later for this key. With the vault in the env, its limit already names
+ * A hot wallet is made only for a chain with no vault in the env or `stored`, the guided setup's
+ * case, where the vault is adopted later for this key. With a vault already set, its limit names
  * some key: a missing one must stop the start, not be replaced by a wallet the limit never heard of.
  */
-export async function withKeys(config: Config, dir = keysDir(config)): Promise<Config> {
+export async function withKeys(
+  config: Config,
+  stored: ChainSetting[] = [],
+  dir = keysDir(config),
+): Promise<Config> {
+  // A vault the panel adopted names a hot wallet too: one lost from disk must stop the start.
+  const vault = (chain: ChainId | undefined, env: string | undefined) =>
+    env ?? stored.find((s) => s.chain === chain)?.vault
   const key = (given: string | undefined, name: string, kind: Kind) =>
     given === undefined ? ensureKey(dir, name, kind) : Promise.resolve(given)
   const hot = (
@@ -82,19 +90,19 @@ export async function withKeys(config: Config, dir = keysDir(config)): Promise<C
     ...config,
     SOLANA_HOT_WALLET_KEYPAIR: await hot(
       config.SOLANA_CHAIN,
-      config.SQUADS_MULTISIG,
+      vault(config.SOLANA_CHAIN, config.SQUADS_MULTISIG),
       config.SOLANA_HOT_WALLET_KEYPAIR,
       'solana',
     ),
     BASE_HOT_WALLET_KEY_FILE: await hot(
       config.BASE_CHAIN,
-      config.SAFE_ADDRESS,
+      vault(config.BASE_CHAIN, config.SAFE_ADDRESS),
       config.BASE_HOT_WALLET_KEY_FILE,
       'evm',
     ),
     ROBINHOOD_HOT_WALLET_KEY_FILE: await hot(
       config.ROBINHOOD_CHAIN,
-      config.ROBINHOOD_SAFE_ADDRESS,
+      vault(config.ROBINHOOD_CHAIN, config.ROBINHOOD_SAFE_ADDRESS),
       config.ROBINHOOD_HOT_WALLET_KEY_FILE,
       'evm',
     ),
