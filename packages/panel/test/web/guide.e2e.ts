@@ -61,7 +61,7 @@ describe.each([390, 1280])('the guided setup at %i px', (width) => {
     await step(page, 4, 'Set a daily limit')
     expect(
       await page.getByRole('link', { name: 'Set the limit on this computer' }).getAttribute('href'),
-    ).toBe(`${guard.origin}/sign/?action=add-limit&multisig=${VAULT}&cluster=devnet`)
+    ).toBe(`${guard.origin}/sign/?action=add-limit&cluster=devnet&multisig=${VAULT}`)
     await page.getByRole('button', { name: 'Save vault with passkey' }).click()
 
     await step(page, 5, 'Add money')

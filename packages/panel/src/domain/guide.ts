@@ -1,4 +1,4 @@
-import { CHAINS } from '@defimind/shared'
+import { inPhantom, signPageUrl } from '@defimind/shared'
 
 /**
  * CR-019's nine steps of the guided setup, in order. Each one says in plain words why it matters:
@@ -73,14 +73,6 @@ export function nextStep(done: Set<StepId>): StepId | undefined {
   return STEPS.find((step) => !done.has(step.id))?.id
 }
 
-/** The signing page's names for the chains it serves (packages/onchain/web). */
-const CLUSTERS = new Map<string, string>([
-  [CHAINS.solanaDevnet, 'devnet'],
-  [CHAINS.solanaMainnet, 'mainnet-beta'],
-  [CHAINS.robinhoodTestnet, 'robinhood-testnet'],
-  [CHAINS.robinhood, 'robinhood'],
-])
-
 export const isSolana = (chain: string) => chain.startsWith('solana:')
 
 /**
@@ -92,18 +84,10 @@ export function signLink(
   chain: string,
   params: Record<string, string>,
 ): string | undefined {
-  const cluster = CLUSTERS.get(chain)
-  if (cluster === undefined) {
-    return undefined
-  }
-  return `${origin}/sign/?${new URLSearchParams({ ...params, cluster })}`
+  return signPageUrl(`${origin}/sign`, chain, params)
 }
 
-/** The same page inside the Phantom app, for a phone. */
-export function inPhantom(link: string): string {
-  const { origin } = new URL(link)
-  return `https://phantom.app/ul/browse/${encodeURIComponent(link)}?ref=${encodeURIComponent(origin)}`
-}
+export { inPhantom }
 
 /** Whole days of the daily cap the balance covers; undefined without a cap. */
 export function daysCovered(balance: string, cap: string | undefined): bigint | undefined {

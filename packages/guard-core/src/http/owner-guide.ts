@@ -1,5 +1,5 @@
 import type { ChainAdapter } from '@defimind/onchain'
-import { CHAINS, type ChainId } from '@defimind/shared'
+import { signPageUrl, type ChainId } from '@defimind/shared'
 import type { FastifyInstance } from 'fastify'
 import { listAgents } from '../db/agents.js'
 import { countPasskeys } from '../db/passkeys.js'
@@ -9,14 +9,6 @@ import { readSettings } from '../db/settings.js'
 import { applySettings, settingKeys } from '../domain/settings.js'
 import type { X402Deps } from '../service/x402.js'
 import type { ChainHost } from './owner-settings.js'
-
-/** The cluster names the signing page takes, as in shared's kill links. */
-const CLUSTERS = new Map<ChainId, string>([
-  [CHAINS.solanaDevnet, 'devnet'],
-  [CHAINS.solanaMainnet, 'mainnet-beta'],
-  [CHAINS.robinhoodTestnet, 'robinhood-testnet'],
-  [CHAINS.robinhood, 'robinhood'],
-])
 
 /**
  * The guided setup's progress and the deposit screen (CR-019). Every step is read from stored state
@@ -64,16 +56,13 @@ export function ownerGuideRoutes(deps: X402Deps, host: ChainHost, signPage?: str
 
   /** The page's deposit action names the multisig or the Safe; it derives the vault itself. */
   function depositPage(chain: ChainId): string | undefined {
-    const cluster = CLUSTERS.get(chain)
     const keys = settingKeys(host.env).find((k) => k.chain === chain)
     const vault = keys && applySettings(host.env, readSettings(db))[keys.vault]
-    if (signPage === undefined || cluster === undefined || typeof vault !== 'string') {
+    if (signPage === undefined || typeof vault !== 'string') {
       return undefined
     }
-    const ref: Record<string, string> = chain.startsWith('solana:')
-      ? { multisig: vault }
-      : { safe: vault }
-    return `${signPage.replace(/\/+$/, '')}/?${new URLSearchParams({ action: 'deposit', cluster, ...ref })}`
+    const ref = { [chain.startsWith('solana:') ? 'multisig' : 'safe']: vault }
+    return signPageUrl(signPage, chain, { action: 'deposit', ...ref })
   }
 
   return async (app: FastifyInstance) => {

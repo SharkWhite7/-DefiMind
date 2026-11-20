@@ -1,6 +1,6 @@
 import { createEvmAdapter, createSvmAdapter, type ChainAdapter } from '@defimind/onchain'
 import type { ChainId } from '@defimind/shared'
-import { CHAINS, getAddress, requireAddress, usdSymbol } from '@defimind/shared'
+import { CHAINS, getAddress, requireAddress, signCluster, usdSymbol } from '@defimind/shared'
 import { rpcUrls } from '@defimind/onchain/sign-page'
 import { checkContracts } from './adapters/evm-check.js'
 import { readEvmKeyFile, readKeypairFile } from './adapters/keypair.js'
@@ -100,20 +100,13 @@ export async function buildChains(
   return chains
 }
 
-const CLUSTERS = new Map<ChainId, string>([
-  [CHAINS.solanaDevnet, 'devnet'],
-  [CHAINS.solanaMainnet, 'mainnet-beta'],
-  [CHAINS.robinhoodTestnet, 'robinhood-testnet'],
-  [CHAINS.robinhood, 'robinhood'],
-])
-
 /**
  * The cluster's public RPC, the one /sign uses, for a chain whose RPC neither the env nor the panel
  * sets (CR-019): a one-click owner need not know what an RPC is. It is rate-limited, so a busy
  * deployment sets its own. Base has none.
  */
 export function publicRpc(chain: ChainId): string | undefined {
-  const cluster = CLUSTERS.get(chain)
+  const cluster = signCluster(chain)
   return cluster === undefined ? undefined : rpcUrls({})[cluster]
 }
 
