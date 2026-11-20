@@ -110,6 +110,13 @@ payments need. guard-core's doctor warns below it.
 - **EVM:** four calls at 250,000 gas each, at the current max fee per gas. On Robinhood Chain the
   gas a transaction uses includes its L1 data cost, so this is well above an L1 draw's.
 
+### Vault (CR-019)
+
+`getVault()` returns `{ address, token, balance }`. This is the vault deposits go to: the Squads
+vault at index 0 of the multisig, or the Safe itself. `token` is the chain's stablecoin and
+`balance` is read from the chain. A vault that has never held the token reports `'0'`. The method
+is optional in `ChainAdapter` until guard-core's `StubChain` implements it.
+
 ### Anchors (CR-013)
 
 `createSvmAnchor({ chain, rpcUrl, secretKey })` returns `{ chain, publish(memo) }`. `publish`

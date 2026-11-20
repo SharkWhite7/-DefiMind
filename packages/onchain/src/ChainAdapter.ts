@@ -11,6 +11,12 @@ import type {
 } from '@defimind/shared'
 import type { PaymentRequirements, SchemeNetworkClient } from '@x402/core/types'
 
+export interface Vault {
+  address: Address
+  token: Address
+  balance: Amount
+}
+
 /** The transaction only the owner can sign: it zeroes the spend limit and removes the delegate. */
 export interface KillTx {
   /** Shown to the owner on Telegram before they sign. */
@@ -36,6 +42,11 @@ export interface ChainAdapter {
   getHotWalletBalance(token: Address): Promise<Amount>
   /** The chain's native coin in the hot wallet, and what a few draws and payments need. */
   getHotWalletGas(): Promise<HotWalletGas>
+  /**
+   * The owner's vault, where deposits go: the Squads vault at index 0, or the Safe itself, with its
+   * stablecoin balance. Optional until guard-core's StubChain has it (GC-55).
+   */
+  getVault?(): Promise<Vault>
 
   /** Pulls from the owner's multisig into the hot wallet, under the onchain cap. */
   topUpHotWallet(amount: Amount): Promise<TxId>

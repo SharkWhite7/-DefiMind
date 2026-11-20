@@ -1,5 +1,5 @@
 export { SigningRefused } from './ChainAdapter.js'
-export type { ChainAdapter, KillTx, SimulationOutcome } from './ChainAdapter.js'
+export type { ChainAdapter, KillTx, SimulationOutcome, Vault } from './ChainAdapter.js'
 export { createSvmAdapter, svmAdapter } from './svm/adapter.js'
 export type { ForeignPayment, SvmAdapter, SvmAdapterDeps } from './svm/adapter.js'
 export { inspectTransfer } from './svm/inspect.js'
