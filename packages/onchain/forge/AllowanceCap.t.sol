@@ -153,6 +153,28 @@ contract AllowanceCapTest {
         require(token.balanceOf(HOT) == 2 * CAP, "the allowance did not refill");
     }
 
+    /// getAllowanceState trusts getTokenAllowance to apply the reset on read, with no draw since: after
+    /// two idle days it reports nothing spent and a reset less than a day away.
+    function test_readsTheResetWithNoDraw() public {
+        draw(30e6);
+        vm.warp(block.timestamp + 2 days + 5 minutes);
+        uint256[5] memory allowance = MODULE.getTokenAllowance(address(safe), HOT, address(token));
+        uint256 nowMin = block.timestamp / 60;
+        require(allowance[1] == 0, "spent is still the old period's");
+        require(allowance[3] <= nowMin && allowance[3] + DAY_MIN > nowMin, "the reset is not the current period's");
+    }
+
+    /// With resetTimeMin 0 the allowance never resets, so spent stays.
+    function test_readsNoResetWhenItNeverResets() public {
+        asOwner(
+            address(MODULE), abi.encodeCall(IAllowanceModule.setAllowance, (HOT, address(token), CAP, 0, 0))
+        );
+        draw(30e6);
+        vm.warp(block.timestamp + 2 days);
+        uint256[5] memory allowance = MODULE.getTokenAllowance(address(safe), HOT, address(token));
+        require(allowance[1] == 30e6, "an allowance with no reset period was reset");
+    }
+
     /// The kill exactly as buildKillTx builds it: one Safe call, removeDelegate(hot, true).
     function test_drawsNothingAfterTheKill() public {
         draw(10e6);

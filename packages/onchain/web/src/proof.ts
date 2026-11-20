@@ -3,6 +3,7 @@ import { AccountLayout, getAssociatedTokenAddressSync } from '@solana/spl-token'
 import type { Connection, PublicKey } from '@solana/web3.js'
 import * as multisig from '@sqds/multisig'
 import { spendingLimitPda, VAULT_INDEX } from '../../src/svm/squads.js'
+import { currentPeriod } from '../../src/svm/period.js'
 import { formatUnits } from '../../src/svm/transfer.js'
 import { decode } from './plan.js'
 
@@ -69,7 +70,6 @@ export interface SolanaProofRequest {
   usdc: PublicKey
 }
 
-const DAY_S = 86_400n
 const usdcText = (amount: bigint) => `${formatUnits(amount, USDC_DECIMALS)} USDC`
 
 /**
@@ -172,18 +172,16 @@ function limitProblems({ address, limit }: Found, request: SolanaProofRequest): 
   return found.length ? [`Spending limit ${address.toBase58()}: ${found.join('; ')}.`] : []
 }
 
-/**
- * Squads refills a limit lazily, on the first draw after a period has passed, and then moves its
- * reset forward by whole periods, so the next refill is always less than a day away.
- */
 function today(limit: multisig.accounts.SpendingLimit, nowS: bigint) {
-  const lastReset = BigInt(limit.lastReset.toString())
-  const passed = nowS - lastReset
-  if (passed > DAY_S) {
-    const start = lastReset + (passed / DAY_S) * DAY_S
-    return { left: BigInt(limit.amount.toString()), resetsAt: seconds(start + DAY_S) }
-  }
-  return { left: BigInt(limit.remainingAmount.toString()), resetsAt: seconds(lastReset + DAY_S) }
+  const { left, resetsAtS } = currentPeriod(
+    {
+      cap: BigInt(limit.amount.toString()),
+      remaining: BigInt(limit.remainingAmount.toString()),
+      lastResetS: BigInt(limit.lastReset.toString()),
+    },
+    nowS,
+  )
+  return { left, resetsAt: seconds(resetsAtS) }
 }
 
 const seconds = (s: bigint) => new Date(Number(s) * 1000)

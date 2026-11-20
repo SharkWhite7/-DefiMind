@@ -119,6 +119,8 @@ export function evmAdapter(deps: EvmAdapterDeps): ChainAdapter {
     chain,
 
     async getAllowanceState(): Promise<AllowanceState> {
+      // Unlike Squads, the module applies an elapsed reset on read, so an idle allowance is already
+      // the current period's (forge test_readsTheResetWithNoDraw).
       const state = await readAllowance(client, module, safe, hot, usdc)
       if (!(await hasAllowance(client, module, safe, hot, state))) {
         return { status: 'none', delegate: hot }

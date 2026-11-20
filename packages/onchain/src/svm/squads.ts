@@ -10,6 +10,7 @@ import {
   type TransactionSignature,
 } from '@solana/web3.js'
 import type { OwnerSigner } from './owner.js'
+import { currentPeriod } from './period.js'
 
 const { Period } = multisig.generated
 
@@ -200,8 +201,6 @@ export interface SpendingLimitState {
   destinations: string[]
 }
 
-const DAY_MS = 24 * 60 * 60 * 1000
-
 /**
  * The limit, or null when its account does not exist: the kill closes it, and before the owner adds
  * one there is none. An account that exists but is not a Squads spending limit is an error, not "no
@@ -210,6 +209,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 export async function findSpendingLimit(
   connection: Connection,
   spendingLimit: PublicKey,
+  now = Date.now(),
 ): Promise<SpendingLimitState | null> {
   const info = await connection.getAccountInfo(spendingLimit)
   if (info === null) {
@@ -220,29 +220,38 @@ export async function findSpendingLimit(
       `not_a_spending_limit: ${spendingLimit.toBase58()} is owned by ${info.owner.toBase58()}`,
     )
   }
-  return spendingLimitState(multisig.accounts.SpendingLimit.fromAccountInfo(info)[0])
+  return spendingLimitState(multisig.accounts.SpendingLimit.fromAccountInfo(info)[0], now)
 }
 
 export async function readSpendingLimit(
   connection: Connection,
   spendingLimit: PublicKey,
+  now = Date.now(),
 ): Promise<SpendingLimitState> {
   const account = await multisig.accounts.SpendingLimit.fromAccountAddress(
     connection,
     spendingLimit,
   )
-  return spendingLimitState(account)
+  return spendingLimitState(account, now)
 }
 
-function spendingLimitState(account: multisig.accounts.SpendingLimit): SpendingLimitState {
+function spendingLimitState(
+  account: multisig.accounts.SpendingLimit,
+  now: number,
+): SpendingLimitState {
   const cap = BigInt(account.amount.toString())
-  const remaining = BigInt(account.remainingAmount.toString())
-  const lastReset = Number(account.lastReset.toString()) * 1000
-
+  const { left, resetsAtS } = currentPeriod(
+    {
+      cap,
+      remaining: BigInt(account.remainingAmount.toString()),
+      lastResetS: BigInt(account.lastReset.toString()),
+    },
+    BigInt(Math.floor(now / 1000)),
+  )
   return {
     cap: cap.toString(),
-    spent: (cap - remaining).toString(),
-    resetsAt: new Date(lastReset + DAY_MS).toISOString(),
+    spent: (cap - left).toString(),
+    resetsAt: new Date(Number(resetsAtS) * 1000).toISOString(),
     members: account.members.map((m) => m.toBase58()),
     destinations: account.destinations.map((d) => d.toBase58()),
   }

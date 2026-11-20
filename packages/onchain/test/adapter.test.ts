@@ -15,7 +15,7 @@ import {
   VersionedTransaction,
 } from '@solana/web3.js'
 import * as multisig from '@sqds/multisig'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MEMO_PROGRAM_ID } from '../src/svm/inspect.js'
 import { spendingLimitPda } from '../src/svm/squads.js'
 import { chain, plantMultisig, plantSpendingLimit, USDC, type Chain } from './fixture.js'
@@ -222,14 +222,27 @@ describe('checkPayment, for an x402 transaction guard-core did not build', () =>
 })
 
 describe('getAllowanceState', () => {
+  const lastReset = 1_793_664_000 // 2026-11-03T00:00:00Z
+  afterEach(() => vi.useRealTimers())
+
   it('reads cap, spent and the next reset from the spending limit', async () => {
-    plantSpendingLimit(c, 100n * USDC, 70n * USDC, 1_793_664_000)
+    vi.useFakeTimers({ now: (lastReset + 3600) * 1000, toFake: ['Date'] })
+    plantSpendingLimit(c, 100n * USDC, 70n * USDC, lastReset)
     expect(await c.adapter.getAllowanceState()).toEqual({
       status: 'active',
       cap: '100000000',
       spent: '30000000',
       resetsAt: '2026-11-04T00:00:00.000Z',
       delegate: c.hotWallet.publicKey.toBase58(),
+    })
+  })
+
+  it('counts nothing spent after idle days, as the next draw will see it', async () => {
+    vi.useFakeTimers({ now: (lastReset + 2 * 86_400 + 3600) * 1000, toFake: ['Date'] })
+    plantSpendingLimit(c, 100n * USDC, 70n * USDC, lastReset)
+    expect(await c.adapter.getAllowanceState()).toMatchObject({
+      spent: '0',
+      resetsAt: '2026-11-06T00:00:00.000Z',
     })
   })
 
