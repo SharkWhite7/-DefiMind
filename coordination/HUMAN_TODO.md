@@ -71,8 +71,22 @@ is the owner's decision: which firm, what scope, what cost. Until then, the publ
 ## ⏳ HUMAN-31 — Run the infrastructure migration
 
 CR-012, CR-013 and CR-016 are complete in code, so the move of the live deployment to this repository
-can start. The runbook is [`docs/migration.md`](../docs/migration.md) (Parts A to F, with a rollback); the manager walks the owner through it one step at a time, and the integrator helps when a check fails; HUMAN-24, HUMAN-27, HUMAN-28 and HUMAN-30 were done in Parts A and B (2026-11-19). Progress: A and B1–B5 passed; B6 next. One rule from CR-016: the new bot app gets `BOT_TOKEN` only, never
+can start. The runbook is [`docs/migration.md`](../docs/migration.md) (Parts A to F, with a rollback); the manager walks the owner through it one step at a time, and the integrator helps when a check fails; HUMAN-24, HUMAN-27, HUMAN-28 and HUMAN-30 were done in Parts A and B (2026-11-19). Progress: A, B and C1–C4 passed (the old apps are stopped, not destroyed; the database is on `defimind-guard-core`). The owner decided on 2026-11-20 to drop Telegram and use the web panel only, so C5 (the bot deploy) is skipped. D1 (passkey enrolment) next. One rule from CR-016: the new bot app gets `BOT_TOKEN` only, never
 `GUARD_ADMIN_TOKEN`. The signing page stays at `agentguard-onchain.vercel.app`; the migration creates no new domain.
+
+---
+
+## ⬜ HUMAN-32 — Retire the Telegram bot
+
+The owner dropped Telegram on 2026-11-20: approvals and alerts go through the web panel only. At
+HUMAN-31 F2, together with the old apps:
+
+1. destroy the `defimind-bot` Fly app, which has staged secrets and no machine;
+2. revoke the bot's token in BotFather, so the old token cannot be used by anyone.
+
+Until CR-017 lands, guard-core still tries the bot hook on each event: it logs a warning, writes an
+`approval_request_failed` audit row on each approval, and `doctor` reports the bot as down. Nothing
+is lost: the panel's push goes out first.
 
 ---
 
