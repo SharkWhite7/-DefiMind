@@ -94,7 +94,7 @@ is lost: the panel's push goes out first.
 
 On 2026-11-20 the owner chose to ship the Deploy to Render button without a verified run, in his
 words: "o render tá testado vamos usar mesmo assim eu aceito o risco ja deixa implementado se der
-algum problema nos testamos novamente". The button is in the README (#72), and
+algum problema nos testamos novamente". The button is in the README (#73), and
 `docs/getting-started.md` says the route is new and asks people to report a failing step. No
 complete run on Render has been recorded yet.
 
