@@ -469,7 +469,7 @@ detail: <first 8 characters of the credential id>, sentAt }`, so the owner hears
 - `GET /owner/approve/:intentId`, on the public listener, is a small page that runs WebAuthn for
   this origin. Its challenge is bound to that one intent, single-use, and expires with it.
   `POST /v1/owner/approve { intentId, assertion }` verifies the assertion and approves; a transfer
-  is then sent, and an x402 payment waits for the agent's repeat, as after a Telegram approval. The
+  is then sent, and an x402 payment waits for the agent's repeat, as after any approval. The
   receipt says `approvedBy: "passkey"`.
 - The page shows the amount in dollars with the chain's symbol ("3.00 USDC"). Its CSP allows only
   its own script (no inline code) and its own API, the agent's text is shown as text, and it is

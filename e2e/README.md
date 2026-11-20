@@ -21,8 +21,9 @@ pnpm --filter @defimind/e2e test
 ## End-to-end flows, `test/solana-flows.test.ts`
 
 1. Under the threshold: paid without asking the owner, and the body comes back fenced as untrusted.
-2. Over the threshold: the owner approves on Telegram, the agent repeats the request, and the
-   approval is redeemed once.
+2. Over the threshold: the owner approves (in these runs through the recorded bot, with
+   `TELEGRAM_APPROVALS=true`; `panel-flows` covers the passkey approval), the agent repeats the
+   request, and the approval is redeemed once.
 3. The owner rejects: nothing is paid, and the buttons are removed.
 4. Left unanswered: `APPROVAL_TIMEOUT`, and a late press is told it is too late.
 5. `/kill`: the agent is paused, and the owner receives the chain's kill transaction.
@@ -80,7 +81,7 @@ after a plain transfer on devnet works.
    transfer from the hot wallet.
 
 5. The approval path: restart the paywall with `PAYWALL_AMOUNT=1500000`. Run step 4 and expect
-   `"status":"pending_approval"`. Approve on Telegram, then run step 4 again: it redeems the
+   `"status":"pending_approval"`. Approve it in the panel with your passkey, then run step 4 again: it redeems the
    approval and returns `"status":"executed"`.
 
 ## The x402 path on Base Sepolia (owner's machine) and Robinhood Chain testnet
@@ -117,7 +118,7 @@ On Robinhood Chain testnet the steps are the same with `paywall:robinhood`, port
    sepolia.basescan.org shows as a USDC `transferWithAuthorization` from the hot wallet.
 
 5. For the approval path, restart it with `PAYWALL_AMOUNT=1500000`: the first call is
-   `pending_approval`, you approve on Telegram, and the second call is `executed`.
+   `pending_approval`, you approve it in the panel, and the second call is `executed`.
 
 ## Base attacks, `test/base-attacks.test.ts`
 

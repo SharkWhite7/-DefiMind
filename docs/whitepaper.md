@@ -14,8 +14,8 @@ spend everything the key controls, and nothing stands between the model's output
 
 DefiMind puts a layer between the two. The agent never holds a key. It asks to pay through the
 Model Context Protocol (MCP). guard-core checks each request against the owner's policy, simulates
-the exact transfer, and asks the owner on Telegram when the amount is above a threshold or something
-looks wrong. Only then does it sign, with a hot wallet that the chain itself limits to a daily cap
+the exact transfer, and asks the owner in the owner panel, with a passkey, when the amount is above a
+threshold or something looks wrong. Only then does it sign, with a hot wallet that the chain itself limits to a daily cap
 drawn from the owner's vault. The cap uses audited onchain components, the Squads v4 spending limit
 on Solana and the Safe Allowance Module on EVM chains, so there is no custom contract to trust.
 
@@ -64,14 +64,15 @@ Owner vault: a Squads multisig (Solana) or a Safe (EVM), owned by the owner's Ph
             └─ pays x402 APIs and transfers, after policy, simulation and, when needed, the owner
 ```
 
-| Component        | Role                                                                                                                                              |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Vault**        | Holds the funds. Only the owner's wallet controls it. Squads v4 on Solana, Safe 1.4.1 on EVM.                                                     |
-| **Onchain cap**  | Lets the hot wallet draw at most the daily cap from the vault. On Solana the hot wallet is the limit's only member and only destination.          |
-| **guard-core**   | The policy engine, the simulation, the signer and the x402 client, with an HTTP API and a SQLite database. The only holder of the hot wallet key. |
-| **mcp-server**   | Exposes payment tools to any MCP client: Claude Code, Claude Desktop, Cursor and others. Holds an agent token, never a key.                       |
-| **Telegram bot** | The owner's console: approvals, alerts, reports, the doctor, agent and policy commands, and the kill switch. Answers only listed owners.          |
-| **Signing page** | A static page the owner deploys. Phantom signs the vault's setup and its kill there, and the page reads each result back from the chain.          |
+| Component        | Role                                                                                                                                                                  |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Vault**        | Holds the funds. Only the owner's wallet controls it. Squads v4 on Solana, Safe 1.4.1 on EVM.                                                                         |
+| **Onchain cap**  | Lets the hot wallet draw at most the daily cap from the vault. On Solana the hot wallet is the limit's only member and only destination.                              |
+| **guard-core**   | The policy engine, the simulation, the signer and the x402 client, with an HTTP API and a SQLite database. The only holder of the hot wallet key.                     |
+| **mcp-server**   | Exposes payment tools to any MCP client: Claude Code, Claude Desktop, Cursor and others. Holds an agent token, never a key.                                           |
+| **Owner panel**  | The owner's console in the browser, served by guard-core: passkey approvals, agents and rules, push alerts, reports, the doctor, the setup guide and the kill switch. |
+| **Telegram bot** | Optional (CR-017): alerts, reports, read-only commands and the kill in Telegram. Answers only listed owners, and cannot approve or loosen anything by default.        |
+| **Signing page** | A static page the owner deploys. Phantom signs the vault's setup and its kill there, and the page reads each result back from the chain.                              |
 
 Supported chains at v0.1.0-beta:
 
@@ -104,9 +105,10 @@ guard-core takes through these steps in order and stops at the first refusal:
    token approvals, permits and EIP-7702 delegations are refused. On Solana, guard-core inspects
    every instruction and refuses new delegates, authority changes, account closes, calls into
    programs that are not on the allowlist, and address lookup tables that hide accounts.
-8. **Approval.** At or above the approval threshold, or with a pinning flag, the owner decides on
-   Telegram before a deadline. An approval expires and can be redeemed once. Above an optional
-   passkey threshold, Telegram can only reject; approving needs the owner's passkey.
+8. **Approval.** At or above the approval threshold, or with a pinning flag, the owner decides in the
+   panel before a deadline, and approving needs the owner's passkey. An approval expires and can be
+   redeemed once. With the bot, Telegram can reject; it can approve only if the owner turns
+   `TELEGRAM_APPROVALS` on, and never above the passkey threshold.
 9. **Sign and execute.** guard-core draws what the payment needs from the vault through the onchain
    cap, signs and submits. The intent ends as `executed` or `failed`.
 10. **Record.** The decision and its reasons go to the audit log. When configured, a signed receipt
@@ -119,17 +121,17 @@ An intent's status is one of `pending_approval`, `approved`, `rejected`, `execut
 
 Each agent has its own policy, and a new agent's policy denies everything:
 
-| Field                                 | Meaning                                                                 |
-| ------------------------------------- | ----------------------------------------------------------------------- |
-| `chains`, `tokens`                    | Where and in what the agent may pay.                                    |
-| `perTxMax`, `dailyMax`                | The most per payment and per day, in base units.                        |
-| `approvalThreshold`                   | At or above this amount, the owner approves on Telegram.                |
-| `allowedRecipients`, `allowedDomains` | Who the agent may pay directly, and which x402 sites. Empty means none. |
-| `paused`                              | Stops every payment from this agent.                                    |
-| `mode`                                | `live`, or `shadow`: evaluate and simulate everything, sign nothing.    |
-| `priceIncreaseMaxPct`                 | How far above its pinned price an x402 site may go without the owner.   |
-| `maxPaymentsPerMinute`                | The circuit breaker's limit.                                            |
-| `requireMandate`                      | When true, every payment must belong to an open task budget.            |
+| Field                                 | Meaning                                                                   |
+| ------------------------------------- | ------------------------------------------------------------------------- |
+| `chains`, `tokens`                    | Where and in what the agent may pay.                                      |
+| `perTxMax`, `dailyMax`                | The most per payment and per day, in base units.                          |
+| `approvalThreshold`                   | At or above this amount, the owner approves in the panel, with a passkey. |
+| `allowedRecipients`, `allowedDomains` | Who the agent may pay directly, and which x402 sites. Empty means none.   |
+| `paused`                              | Stops every payment from this agent.                                      |
+| `mode`                                | `live`, or `shadow`: evaluate and simulate everything, sign nothing.      |
+| `priceIncreaseMaxPct`                 | How far above its pinned price an x402 site may go without the owner.     |
+| `maxPaymentsPerMinute`                | The circuit breaker's limit.                                              |
+| `requireMandate`                      | When true, every payment must belong to an open task budget.              |
 
 A refusal always names its reasons. There are 24 reject codes: 16 shared by every chain (such as
 `DOMAIN_NOT_ALLOWED`, `DAILY_EXCEEDED`, `SIM_UNEXPECTED_EFFECT` and `BREAKER_TRIPPED`), 3 specific
@@ -169,10 +171,11 @@ The cap bounds the worst day. These layers make a bad payment inside that bound 
 - **Task budgets (mandates).** An agent asks for one budget per task: an amount, the sites and
   recipients it needs, and a lifetime of one minute to one day. A budget only narrows the policy,
   never widens it, and above the threshold the owner approves it like a payment.
-- **Passkey approvals.** Above an amount the owner sets, a Telegram tap can only reject. Approval
-  needs a WebAuthn passkey with user verification, on a page guard-core serves. The first passkey is
+- **Passkey approvals.** Approving in the panel needs a WebAuthn passkey with user verification, on
+  the panel guard-core serves; with the bot, a Telegram tap can only reject unless the owner allows
+  it, and never above the passkey threshold. The first passkey is
   enrolled with a one-time code; every later one needs an assertion from an enrolled passkey, and
-  every enrolment alerts the owner. A stolen Telegram account can stop a payment but never send one.
+  every enrolment alerts the owner. A stolen Telegram account can stop a payment but not send one.
 - **Signed receipts.** Each executed payment can carry an Ed25519 receipt over the intent, the hash
   of the policy in force, the simulation and who approved it, verifiable with a public key.
 - **Paid content is data.** What `paid_fetch` returns is marked to the model as data, not
@@ -180,11 +183,14 @@ The cap bounds the worst day. These layers make a bad payment inside that bound 
 
 ## 8. The owner's controls
 
-- **Telegram.** Approvals with the chain, amount, recipient and explorer links in every message;
-  `/status`, `/budget`, `/report` and a weekly report; `/doctor`, which checks the database, each
-  chain's cap, each hot wallet's gas and balance, the bot and backups; `/agent`, `/policy`, `/allow`,
-  `/deny` and `/mode` to run agents without a terminal.
-- **The kill switch.** `/kill` pauses guard-core at once, including payments already queued. One
+- **The owner panel.** Approvals with the chain, amount, recipient and explorer links, each confirmed
+  with a passkey; agents, their rules and their mode; push alerts; reports, executions and their
+  proofs; the doctor, which checks the database, each chain's cap, each hot wallet's gas and balance
+  and backups; and the setup guide.
+- **Telegram, optional.** The same alerts, `/status`, `/budget`, `/report` and a weekly report, and
+  commands that only tighten: pause, deny, the kill.
+- **The kill switch.** **Stop everything** in the panel (or `/kill` with the bot) pauses guard-core at
+  once, including payments already queued. One
   Phantom signature per chain then removes the onchain cap. Kill links expire after 15 minutes, so an
   old button cannot fire later.
 - **The signing page.** Phantom cannot run scripts, so the owner signs vault changes on a static page
@@ -207,17 +213,17 @@ images run on any server with Docker Compose.
 
 ## 10. Threat model
 
-| Threat                                 | What stops it                                                                                  | What is left                                                                                |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| Prompt injection asks the agent to pay | Policy allowlists, limits, the simulation, owner approval above the threshold                  | A payment that fits the policy and is below the threshold goes through                      |
-| Runaway loop                           | Circuit breaker, daily limit, onchain cap                                                      | Up to the breaker's limit before the pause                                                  |
-| Malicious or compromised x402 API      | Domain allowlist, recipient and price pinning, simulation of the exact transfer                | A first payment to a newly allowed site has no pin yet                                      |
-| Stolen agent token                     | It can only ask; the same checks apply; tokens are revocable                                   | The attacker can spend what that agent's policy allows                                      |
-| Stolen hot wallet key                  | The onchain cap                                                                                | Up to the day's cap; on EVM chains to any address, on Solana only into the hot wallet       |
-| guard-core compromised                 | The onchain cap                                                                                | Up to the day's cap plus the hot wallet's balance                                           |
-| Stolen Telegram account                | Owner allowlist; with passkeys on, it can reject but not approve above the passkey threshold   | Below that threshold, it can approve                                                        |
-| Malicious signing-page deploy          | Each owner deploys their own page from their own protected `main`; the page reads results back | Whoever can redeploy the page can show a harmless summary of a harmful transaction          |
-| Owner wallet compromised               | Nothing in DefiMind: this key controls the vault                                               | The whole vault, which is why the vault holds only what the agents need for the coming days |
+| Threat                                 | What stops it                                                                                     | What is left                                                                                |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Prompt injection asks the agent to pay | Policy allowlists, limits, the simulation, owner approval above the threshold                     | A payment that fits the policy and is below the threshold goes through                      |
+| Runaway loop                           | Circuit breaker, daily limit, onchain cap                                                         | Up to the breaker's limit before the pause                                                  |
+| Malicious or compromised x402 API      | Domain allowlist, recipient and price pinning, simulation of the exact transfer                   | A first payment to a newly allowed site has no pin yet                                      |
+| Stolen agent token                     | It can only ask; the same checks apply; tokens are revocable                                      | The attacker can spend what that agent's policy allows                                      |
+| Stolen hot wallet key                  | The onchain cap                                                                                   | Up to the day's cap; on EVM chains to any address, on Solana only into the hot wallet       |
+| guard-core compromised                 | The onchain cap                                                                                   | Up to the day's cap plus the hot wallet's balance                                           |
+| Stolen Telegram account (with the bot) | Owner allowlist; the bot can only tighten, and approves nothing unless `TELEGRAM_APPROVALS` is on | With that setting on, it can approve below the passkey threshold                            |
+| Malicious signing-page deploy          | Each owner deploys their own page from their own protected `main`; the page reads results back    | Whoever can redeploy the page can show a harmless summary of a harmful transaction          |
+| Owner wallet compromised               | Nothing in DefiMind: this key controls the vault                                                  | The whole vault, which is why the vault holds only what the agents need for the coming days |
 
 Further known limits are listed in [`docs/final-report.md`](./final-report.md): rate limits count
 per socket address, guard-core is a single process with SQLite, and one high-severity advisory sits

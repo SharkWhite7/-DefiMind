@@ -76,7 +76,7 @@ interface Policy {
   tokens: string[]                 // allowed mints / token addresses
   perTxMax: Amount
   dailyMax: Amount                 // offchain daily max (<= onchain dailyCap)
-  approvalThreshold: Amount        // >= this requires Telegram approval
+  approvalThreshold: Amount        // >= this requires the owner's approval (CR-012: the panel)
   allowedRecipients: string[]      // empty = deny all direct transfers
   allowedDomains: string[]         // for x402, e.g. ["api.example.com"]; empty = deny all
   paused: boolean
