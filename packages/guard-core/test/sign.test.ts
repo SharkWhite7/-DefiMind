@@ -59,7 +59,12 @@ describe('the signing page at /sign (CR-019)', () => {
   it('serves create and add-limit only; deposit and kill stay on the hosted page', async () => {
     const app = await page()
     expect((await app.inject({ url: '/sign/?action=create&cluster=devnet' })).statusCode).toBe(200)
-    for (const url of ['/sign/', '/sign/?action=deposit', '/sign/?action=kill']) {
+    for (const url of [
+      '/sign/',
+      '/sign/?action=deposit',
+      '/sign/?action=kill',
+      '/sign/?action=create&action=kill',
+    ]) {
       const res = await app.inject({ url })
       expect(res.statusCode).toBe(404)
       expect(res.json()).toEqual({ error: 'action_not_served' })

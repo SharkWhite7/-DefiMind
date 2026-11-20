@@ -9,6 +9,7 @@ import { publicKeys } from '../src/adapters/public-keys.js'
 import { readVapidKeyFile } from '../src/adapters/push.js'
 import { buildChains } from '../src/chains.js'
 import { loadConfig } from '../src/config.js'
+import { applySettings } from '../src/domain/settings.js'
 import { ADMIN_TOKEN, harness, PASSKEY_RP, type Harness } from './harness.js'
 import { PANEL, signedIn } from './owner.js'
 import { softAuthenticator } from './webauthn.js'
@@ -23,6 +24,7 @@ describe('keys made on the server (CR-019)', () => {
     const dir = join(fresh(), 'keys')
     const config = await withKeys(
       loadConfig({ ADMIN_TOKEN, BASE_CHAIN: 'eip155:84532', ROBINHOOD_CHAIN: 'eip155:46630' }),
+      [],
       dir,
     )
     expect(mode(dir)).toBe(0o700)
@@ -51,9 +53,9 @@ describe('keys made on the server (CR-019)', () => {
   it('keeps the first key on every later start', async () => {
     const dir = fresh()
     const config = loadConfig({ ADMIN_TOKEN })
-    const first = await withKeys(config, dir)
+    const first = await withKeys(config, [], dir)
     const before = readFileSync(String(first.SOLANA_HOT_WALLET_KEYPAIR), 'utf8')
-    const second = await withKeys(config, dir)
+    const second = await withKeys(config, [], dir)
     expect(readFileSync(String(second.SOLANA_HOT_WALLET_KEYPAIR), 'utf8')).toBe(before)
   })
 
@@ -61,6 +63,7 @@ describe('keys made on the server (CR-019)', () => {
     const dir = fresh()
     const config = await withKeys(
       loadConfig({ ADMIN_TOKEN, RECEIPT_SIGNING_KEY_FILE: '/run/defimind/receipt.pem' }),
+      [],
       dir,
     )
     expect(config.RECEIPT_SIGNING_KEY_FILE).toBe('/run/defimind/receipt.pem')
@@ -76,7 +79,7 @@ describe('keys made on the server (CR-019)', () => {
       BASE_CHAIN: 'eip155:84532',
       SAFE_ADDRESS: `0x${'11'.repeat(20)}`,
     }
-    const config = await withKeys(loadConfig(vaults), fresh())
+    const config = await withKeys(loadConfig(vaults), [], fresh())
     expect(config.SOLANA_HOT_WALLET_KEYPAIR).toBeUndefined()
     expect(config.BASE_HOT_WALLET_KEY_FILE).toBeUndefined()
     await expect(buildChains(config)).rejects.toThrow(
@@ -87,8 +90,24 @@ describe('keys made on the server (CR-019)', () => {
     )
   })
 
+  it('makes no hot wallet for a vault the panel adopted, so a lost key file stops the start', async () => {
+    const env = loadConfig({ ADMIN_TOKEN, SOLANA_RPC_URL: 'https://api.devnet.solana.com' })
+    const stored = [
+      { chain: env.SOLANA_CHAIN, vault: 'Squads1111111111111111111111111111111111111' },
+    ]
+    const config = await withKeys(env, stored, fresh())
+    expect(config.SOLANA_HOT_WALLET_KEYPAIR).toBeUndefined()
+    await expect(buildChains(applySettings(config, stored))).rejects.toThrow(
+      'invalid configuration: SOLANA_HOT_WALLET_KEYPAIR',
+    )
+  })
+
   it('makes the hot wallet for a chain still waiting for its vault', async () => {
-    const config = await withKeys(loadConfig({ ADMIN_TOKEN, BASE_CHAIN: 'eip155:84532' }), fresh())
+    const config = await withKeys(
+      loadConfig({ ADMIN_TOKEN, BASE_CHAIN: 'eip155:84532' }),
+      [],
+      fresh(),
+    )
     expect(config.SOLANA_HOT_WALLET_KEYPAIR).toBeDefined()
     expect(config.BASE_HOT_WALLET_KEY_FILE).toBeDefined()
     expect((await buildChains(config)).size).toBe(0)
@@ -102,7 +121,11 @@ describe('keys made on the server (CR-019)', () => {
   })
 
   it('answers the public halves only', async () => {
-    const config = await withKeys(loadConfig({ ADMIN_TOKEN, BASE_CHAIN: 'eip155:84532' }), fresh())
+    const config = await withKeys(
+      loadConfig({ ADMIN_TOKEN, BASE_CHAIN: 'eip155:84532' }),
+      [],
+      fresh(),
+    )
     const keys = await publicKeys(config)
     const base = await readEvmKeyFile(String(config.BASE_HOT_WALLET_KEY_FILE))
     expect(keys.hotWallets).toEqual([
