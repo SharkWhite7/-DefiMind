@@ -14,9 +14,10 @@ const squads = fileURLToPath(new URL('../../test/fixtures/squads_v4.so', import.
 
 /**
  * A chain with the real Squads program and its config, an owner with SOL, and the page built for a
- * local server whose stand-in Phantom signs with whichever key `connected` names.
+ * local server whose stand-in Phantom signs with whichever key `connected` names. `hosted` builds it
+ * as the one hosted page is built, with no hot wallet.
  */
-export async function stage() {
+export async function stage({ hosted = false } = {}) {
   const c = chain()
   c.svm.addProgramFromFile(multisig.PROGRAM_ID, squads)
   plantProgramConfig(c)
@@ -34,7 +35,8 @@ export async function stage() {
   await buildPage(server.dist, {
     SOLANA_LOCALNET_RPC: `${server.origin}/rpc`,
     SOLANA_LOCALNET_USDC: c.mint.toBase58(),
-    SOLANA_HOT_WALLET_LOCALNET: c.hotWallet.publicKey.toBase58(),
+    // The hosted page (CR-020) is built with no hot wallet.
+    ...(hosted ? {} : { SOLANA_HOT_WALLET_LOCALNET: c.hotWallet.publicKey.toBase58() }),
     MAX_DAILY_CAP: '100000000',
   })
 

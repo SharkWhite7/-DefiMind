@@ -313,8 +313,29 @@ design is in [ADR 003](../../docs/adr/003-phantom-owner.md).
   - the RPC endpoints, where `SOLANA_MAINNET_RPC` and `SOLANA_DEVNET_RPC` override the public
     defaults;
   - the hot wallet per cluster, `SOLANA_HOT_WALLET_MAINNET` and `SOLANA_HOT_WALLET_DEVNET`;
-    add-limit refuses on a cluster with none;
   - `MAX_DAILY_CAP`, in base units, 50 USDC unless set (D1).
+
+- **Hot wallets per cluster (CR-020).**
+  - **A build with a hot wallet for the cluster** acts for that one only. A link naming any other
+    hot wallet is refused.
+  - **A build with none for the cluster** serves only create, deposit and kill there. This is the
+    case of the one hosted page, `HOSTED_SIGN_PAGE` in shared, which serves every deployment:
+    - A kill takes the hot wallet from the link, which must name it. It can only remove authority:
+      the limit is derived from the multisig and that key, or the delegate is removed from that
+      Safe.
+    - If the link's hot wallet has no limit or allowance, the page says "No limit found for this
+      hot wallet. Check Spending limits in your vault's app.", never "Already killed".
+    - add-limit and enable are refused ("Open this from your DefiMind panel: it needs your
+      deployment's own page").
+  - **The wallet checks stay on both kinds of build.** The connected wallet must be the config
+    authority, or the Safe's only owner. The decoded-bytes stop also stays.
+  - **A link naming another key's limit on the owner's own multisig** removes that limit only. That
+    can stop an agent, but it cannot move funds.
+- **Building the hosted page.** Run `pnpm --filter @defimind/onchain build:web` with no
+  `*_HOT_WALLET_*` variable set. On Vercel this is its own project, `defimind-sign`:
+  - root `packages/onchain/web`, so `web/vercel.json` applies, with no environment variables at all;
+  - production branch `main`, with preview deployments off;
+  - public RPCs and USDC/USDG from shared, and no hot wallet.
 
   The CSP allows scripts and styles from the page's own origin and connections to those endpoints
   only. Its one relaxation is `'unsafe-eval'` in `script-src`: Phantom's injected provider compiles
