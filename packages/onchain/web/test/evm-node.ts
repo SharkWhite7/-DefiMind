@@ -58,7 +58,7 @@ const reverts = (reason: string) =>
  * allowance. The Safe runs only the kill and enable this suite expects, from its owner, as the real one would
  * with a pre-validated signature; the real contracts are exercised by forge (SigningPage.t.sol).
  */
-export async function stageEvm() {
+export async function stageEvm({ hosted = false } = {}) {
   const state = {
     safe: getAddress('0x5afe00000000000000000000000000000000cafe'),
     /** Whether the Safe exists yet: create makes it, at `safe`, for whoever sends it. */
@@ -222,7 +222,7 @@ export async function stageEvm() {
   const server = await serve(dist, { '/evm-rpc': rpc, '/evm-wallet': send })
   await buildPage(dist, {
     EVM_LOCALNET_RPC: `${server.origin}/evm-rpc`,
-    EVM_HOT_WALLET_LOCALNET: state.hot,
+    ...(hosted ? {} : { EVM_HOT_WALLET_LOCALNET: state.hot }),
   })
   return { state, sent, server, dist }
 }

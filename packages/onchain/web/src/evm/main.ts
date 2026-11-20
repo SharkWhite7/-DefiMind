@@ -3,6 +3,7 @@ import {
   getAddress,
   http,
   isAddress,
+  isAddressEqual,
   type Address,
   type PublicClient,
 } from 'viem'
@@ -16,6 +17,7 @@ import { cannotRead, NOT_ASKED } from '../decoded.js'
 import { decodeEvm } from './decoded.js'
 import { prepareEvmDeposit } from './deposit.js'
 import { prepareEvmEnable } from './enable.js'
+import { whichHot } from '../hot.js'
 import { prepareEvmKill } from './kill.js'
 import type { EvmPlan } from './plan.js'
 import { proveEvm } from './proof.js'
@@ -131,20 +133,20 @@ async function prepare(
       () => askDeposit(symbol, request.amount),
     )
   }
-  const hot = chain.hot && getAddress(chain.hot)
-  if (!hot) {
-    return refuse(`This page knows no hot wallet for ${chain.name}.`)
-  }
-  if (request.hot && request.hot !== hot) {
-    return refuse(
-      `The link names ${request.hot} as the hot wallet, but this page only acts for ${hot}. ` +
-        'Do not sign anything from this link.',
-    )
+  const hot = whichHot(
+    chain.hot && getAddress(chain.hot),
+    request.hot,
+    request.action === 'kill',
+    (a, b) => isAddressEqual(a, b),
+    (key) => key,
+  )
+  if (typeof hot === 'string') {
+    return refuse(hot)
   }
   const { module, usd, symbol } = chain
-  const known = { cluster: chain.name, safe: request.safe, hot, module, usd }
+  const known = { cluster: chain.name, safe: request.safe, hot: hot.key, module, usd }
   if (request.action === 'kill') {
-    return prepareEvmKill(client, known, owner)
+    return prepareEvmKill(client, { ...known, fromLink: hot.fromLink }, owner)
   }
   const amount = request.amount ?? (await askCap(symbol))
   return prepareEvmEnable(client, { ...known, symbol, amount }, owner)

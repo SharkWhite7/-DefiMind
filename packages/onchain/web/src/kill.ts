@@ -1,12 +1,15 @@
 import type { Connection, PublicKey } from '@solana/web3.js'
 import * as multisig from '@sqds/multisig'
 import { removeSpendingLimitInstruction, spendingLimitPda } from '../../src/svm/squads.js'
+import { NO_LIMIT } from './hot.js'
 import { controlled, decode, program, refused, type Plan } from './plan.js'
 
 export interface KillRequest {
   cluster: string
   multisig: PublicKey
   hotWallet: PublicKey
+  /** Named by the link on a page built without one, so a missing limit says nothing of the kill. */
+  fromLink: boolean
 }
 
 /**
@@ -27,6 +30,9 @@ export async function prepareKill(
     return refused(ms)
   }
   const sl = decode(limitInfo, multisig.accounts.SpendingLimit)
+  if (!sl && request.fromLink) {
+    return refused(NO_LIMIT)
+  }
   if (!sl) {
     return {
       kind: 'done',
