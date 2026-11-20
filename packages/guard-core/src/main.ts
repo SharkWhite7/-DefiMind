@@ -92,8 +92,10 @@ if (config.GUARD_STUB_CHAINS === 'true') {
   app.log.warn('stub chains: nothing is signed and no money moves')
 } else if (chains.size === 0) {
   // With no adapter the policy has no chain to clear a payment on, so every payment is refused:
-  // default deny, not a degraded mode.
-  app.log.warn('no chain adapter configured: every payment will be refused')
+  // default deny, not a degraded mode. A guided deployment starts here, with every chain waiting
+  // for the owner to adopt a vault, which the line below says; anything else is a misconfiguration.
+  const waiting = keys.hotWallets.length > 0
+  app.log[waiting ? 'info' : 'warn']('no chain adapter configured: every payment will be refused')
 }
 for (const { chain } of keys.hotWallets) {
   const rpc = settingKeys(effective).find((k) => k.chain === chain)?.rpcUrl

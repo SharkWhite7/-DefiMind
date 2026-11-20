@@ -222,6 +222,7 @@ async function serve(
           ownerPanelRoutes(deps, rp, {
             ...(config.BOT_URL === undefined ? {} : { botUrl: config.BOT_URL }),
             databaseUrl: config.DATABASE_URL,
+            hosted: config.ADMIN_ROUTES === 'false',
             ...(pushKey === undefined ? {} : { pushKey }),
             ...(keys === undefined ? {} : { keys }),
             ...(host === undefined ? {} : { host }),
