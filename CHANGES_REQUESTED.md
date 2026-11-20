@@ -1028,3 +1028,88 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     - `/sign` is served with a strict CSP, and each release publishes the build's SHA-256;
     - Render disk snapshots hold the key files, so anyone with access to the dashboard's snapshots
       holds the hot keys. The onchain cap still bounds that (ADR 006).
+
+### CR-020 — One hosted kill and deposit page for every deployment
+
+- **From:** integrator
+- **Date:** 2026-11-20
+- **Status:** proposed. The owner asked for this draft ("cr020 escreve", relayed by the manager);
+  that is not an approval of the change.
+- **What breaks today:**
+  - A one-click deployment (CR-019) sets no `SIGN_PAGE_URL`. The owner kill then pauses every
+    agent, but `POST /v1/owner/kill` returns the owner transactions without `link` or `pageLink`.
+    The panel can only show the raw payload, which a non-technical owner cannot sign. The onchain
+    daily limit stays in place.
+  - The deposit screen has the same gap. The QR code works, but there is no Phantom deposit button.
+  - SPEC v0.14 says deposit and kill use "the hosted page built from main (the default
+    SIGN_PAGE_URL)". No such default exists. The only hosted page today is the owner's own, and it
+    refuses any hot wallet but his (`builtHot`).
+- **What:**
+  1. **onchain, the signing page.** A build with no hot wallet for a cluster serves only `kill`,
+     `deposit` and `create` there:
+     - Solana kill: the link's `multisig` and `hot` are required, and the limit is derived from
+       them as today.
+     - EVM kill: the link's `safe` and `hot` are required.
+     - `add-limit` and `enable` need a configured hot wallet and are refused with "use your
+       DefiMind's /sign".
+     - A build that has a hot wallet for the cluster keeps today's rule: a link naming any other hot
+       wallet is refused. The owner's own page is unchanged.
+  2. **shared.** `HOSTED_SIGN_PAGE`, the fixed URL from the HUMAN item below. The EVM `KillTarget`
+     carries `hot` too.
+  3. **guard-core.** Kill and deposit links use `SIGN_PAGE_URL` when set, and `HOSTED_SIGN_PAGE`
+     otherwise. Kill targets are built from guard-core's own hot wallets. `/sign` is unchanged and
+     still never serves kill or deposit.
+  4. **SPEC.** The "Signing page" section names the default and the rule in point 1.
+- **(a) The wallet is checked before Phantom opens.** Every action already checks the connected
+  wallet against the chain before any transaction is built, and refuses early. CR-020 keeps every
+  one of these checks:
+  - Solana kill: `controlled()` reads the multisig and requires the connected wallet to be its
+    config authority.
+  - EVM kill: `notSoleOwner()` requires the connected account to be the Safe's only owner, with
+    threshold 1.
+  - Deposit: the wallet must be a member of the multisig (Solana) or an owner of the Safe (EVM).
+    The vault is derived from the chain, and only a plain token transfer is built.
+  - Before every prompt, the decoded-bytes check (ON-23) refuses any instruction other than
+    `removeSpendingLimit`, `removeDelegate` or the deposit transfer. Nothing it cannot read
+    reaches Phantom.
+
+  A crafted link that names someone else's multisig or Safe therefore fails on the page, with the
+  reason, before Phantom opens.
+
+- **(b) A link naming another limit on the owner's own vault.** It is possible:
+  - On Solana, the limit address is derived from the multisig and the link's `hot`. A link with
+    another key derives that key's limit, and if the owner's multisig has one, the kill removes it.
+  - On EVM, `removeDelegate` removes whichever delegate the link names.
+
+  Both can only remove authority from a vault the connected wallet controls. They cannot add a
+  limit, move funds or change owners. The worst case is griefing: an agent stops being able to pay
+  until the owner adds its limit again. The page shows the key and the limit before the prompt.
+  **Proposed as accepted.**
+
+- **(c) HUMAN item: the fixed URL.**
+  1. A new Vercel project, `defimind-sign`, with no hot-wallet variables. The owner's existing
+     project, which carries his hot wallets, is not reused.
+  2. It is connected to `SharkWhite7/-DefiMind`, with root `packages/onchain/web`, production branch
+     `main` only, and preview deployments off. Nothing but `main` ever reaches the URL.
+  3. The URL is `https://defimind-sign.vercel.app`, or a domain the owner prefers. The integrator
+     puts it in shared as `HOSTED_SIGN_PAGE`.
+  4. The check: opening `https://defimind-sign.vercel.app/?action=kill` shows "This link is not
+     valid". The deployed `app.js`, `style.css` and `index.template.html` match the release's
+     `SHA256SUMS` (ON-23).
+- **Why:** without it, the panel's Kill on a one-click deployment stops the guard but leaves the
+  onchain limit. Without the page, the vault's last line of defense needs the raw transaction
+  signed by hand.
+- **Blast radius:**
+  - **onchain:** the rule in point 1, tests for each refusal and for (b);
+  - **shared:** `HOSTED_SIGN_PAGE`, `KillTarget.hot` on EVM;
+  - **guard-core:** the default page for the kill and deposit links;
+  - **panel:** none, since the links come from guard-core;
+  - **integrator:** SPEC v0.15, `docs/getting-started.md` once it works, and e2e for a kill on a
+    deployment with no `SIGN_PAGE_URL`;
+  - **owner:** the HUMAN item above.
+- **Risks for the owner to accept:**
+  - One page serves every deployment. If it were compromised, it could ask any owner who opens a
+    kill or deposit link to sign something else. The decoded bytes and Phantom's own screen are the
+    checks against that, as for the owner's own page today.
+  - The page is only as safe as `main` and the Vercel project. Only `main` deploys, and each release
+    publishes the build's SHA-256.
