@@ -13,12 +13,20 @@ import { formatUnits } from '../../src/svm/transfer.js'
 const g = multisig.generated
 const TRANSFER_CHECKED = 12
 const CREATE_IDEMPOTENT = 1
+/** One decoded line, and whether the page can vouch for it: it asks Phantom nothing otherwise. */
+export interface Line {
+  text: string
+  readable: boolean
+}
+export const read = (text: string): Line => ({ text, readable: true })
+export const refuse = (text: string): Line => ({ text, readable: false })
+
 export const REJECT = ': reject this transaction.'
 const UNKNOWN = (program: PublicKey) =>
-  `An instruction for ${program.toBase58()} this page cannot read${REJECT}`
+  refuse(`An instruction for ${program.toBase58()} this page cannot read${REJECT}`)
 
 /** Whether any decoded line is one the page cannot vouch for: then it asks Phantom nothing. */
-export const cannotRead = (lines: string[]) => lines.some((line) => line.endsWith(REJECT))
+export const cannotRead = (lines: Line[]) => lines.some((line) => !line.readable)
 
 export const NOT_ASKED = [
   'This transaction carries something this page cannot read, so it does not ask Phantom to sign ' +
@@ -40,7 +48,7 @@ const is = (data: Buffer, discriminator: number[]) =>
 export async function decodeSolana(
   connection: Connection,
   message: VersionedMessage,
-): Promise<string[]> {
+): Promise<Line[]> {
   const { instructions } = TransactionMessage.decompile(message)
   const created = new Map(
     instructions
@@ -56,42 +64,44 @@ async function line(
   connection: Connection,
   ix: TransactionInstruction,
   created: Map<string, PublicKey>,
-): Promise<string> {
+): Promise<Line> {
   const { programId, data } = ix
   const account = (i: number) => ix.keys[i]!.pubkey
   if (programId.equals(multisig.PROGRAM_ID)) return squads(ix)
   if (programId.equals(ASSOCIATED_TOKEN_PROGRAM_ID) && data[0] === CREATE_IDEMPOTENT) {
-    return `Create the token account of ${account(2).toBase58()} for token ${account(3).toBase58()}.`
+    return read(
+      `Create the token account of ${account(2).toBase58()} for token ${account(3).toBase58()}.`,
+    )
   }
   if (programId.equals(TOKEN_PROGRAM_ID) && data[0] === TRANSFER_CHECKED && data.length === 10) {
     const destination = account(2)
     const owner = created.get(destination.toBase58()) ?? (await ownerOf(connection, destination))
-    return (
+    return read(
       `Send ${units(data.readBigUInt64LE(1), data[9])} of token ${account(1).toBase58()} to ` +
-      `${owner ? `the token account of ${owner.toBase58()}` : `token account ${destination.toBase58()}`}.`
+        `${owner ? `the token account of ${owner.toBase58()}` : `token account ${destination.toBase58()}`}.`,
     )
   }
   return UNKNOWN(programId)
 }
 
-function squads(ix: TransactionInstruction): string {
+function squads(ix: TransactionInstruction): Line {
   const { data } = ix
   if (is(data, g.multisigAddSpendingLimitInstructionDiscriminator)) {
     const { args } = g.multisigAddSpendingLimitStruct.deserialize(data)[0]
-    return (
+    return read(
       `Let ${keys(args.members)} draw ${units(BigInt(args.amount.toString()))} of token ` +
-      `${args.mint.toBase58()} from vault ${args.vaultIndex} every ${g.Period[args.period]}, ` +
-      `into ${keys(args.destinations)}.`
+        `${args.mint.toBase58()} from vault ${args.vaultIndex} every ${g.Period[args.period]}, ` +
+        `into ${keys(args.destinations)}.`,
     )
   }
   if (is(data, g.multisigRemoveSpendingLimitInstructionDiscriminator)) {
-    return `Remove spending limit ${ix.keys[2]!.pubkey.toBase58()}.`
+    return read(`Remove spending limit ${ix.keys[2]!.pubkey.toBase58()}.`)
   }
   if (is(data, g.multisigCreateV2InstructionDiscriminator)) {
     const { args } = g.multisigCreateV2Struct.deserialize(data)[0]
-    return (
+    return read(
       `Create a multisig run by ${args.configAuthority?.toBase58() ?? 'its members'}, members ` +
-      `${keys(args.members.map((m) => m.key))}, threshold ${args.threshold}.`
+        `${keys(args.members.map((m) => m.key))}, threshold ${args.threshold}.`,
     )
   }
   return UNKNOWN(ix.programId)

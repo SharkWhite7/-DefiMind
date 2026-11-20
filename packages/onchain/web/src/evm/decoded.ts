@@ -13,7 +13,7 @@ import {
   type Hex,
 } from 'viem'
 import { allowanceModuleAbi } from '../../../src/evm/safe.js'
-import { REJECT } from '../decoded.js'
+import { read, REJECT, refuse, type Line } from '../decoded.js'
 import { FALLBACK_HANDLER, MULTI_SEND_CALL_ONLY, PROXY_FACTORY, SAFE_L2, safeAbi } from './calls.js'
 
 const abi = [
@@ -36,7 +36,7 @@ const zero = (...values: (bigint | number)[]) => values.every((value) => BigInt(
 
 const units = (amount: bigint) =>
   `${formatUnits(amount, USDC_DECIMALS)} (${amount} base units at ${USDC_DECIMALS} decimals)`
-const UNKNOWN = `A call this page cannot read${REJECT}`
+const UNKNOWN = refuse(`A call this page cannot read${REJECT}`)
 
 /**
  * What the call Phantom is about to send does, read from its bytes alone and not from the link or
@@ -44,7 +44,7 @@ const UNKNOWN = `A call this page cannot read${REJECT}`
  * show must hold the value the page's own builders put there (calls.ts); anything else, like
  * anything it cannot read, is named as such, for the owner to reject.
  */
-export function decodeEvm(to: Address, data: Hex): string[] {
+export function decodeEvm(to: Address, data: Hex): Line[] {
   let call
   try {
     call = decodeFunctionData({ abi, data })
@@ -55,7 +55,7 @@ export function decodeEvm(to: Address, data: Hex): string[] {
   switch (functionName) {
     case 'transfer': {
       const [recipient, amount] = args
-      return [`Send ${units(amount)} of token ${to} to ${recipient}.`]
+      return [read(`Send ${units(amount)} of token ${to} to ${recipient}.`)]
     }
     case 'createProxyWithNonce': {
       const [singleton, initializer] = args
@@ -73,7 +73,7 @@ export function decodeEvm(to: Address, data: Hex): string[] {
         payment === 0n &&
         isAddressEqual(receiver, zeroAddress)
       if (!plain) return [UNKNOWN]
-      return [`Create a Safe owned by ${owners.join(', ')}, threshold ${threshold}.`]
+      return [read(`Create a Safe owned by ${owners.join(', ')}, threshold ${threshold}.`)]
     }
     case 'execTransaction': {
       const [target, value, inner, operation, safeTxGas, baseGas, gasPrice, gasToken, refund] = args
@@ -83,14 +83,14 @@ export function decodeEvm(to: Address, data: Hex): string[] {
         isAddressEqual(gasToken, zeroAddress) &&
         isAddressEqual(refund, zeroAddress)
       if (!noRefund) return [UNKNOWN]
-      if (value !== 0n) return [`The Safe sends ${value} wei of its own coin${REJECT}`]
+      if (value !== 0n) return [refuse(`The Safe sends ${value} wei of its own coin${REJECT}`)]
       const calls =
         operation === 1
           ? isAddressEqual(target, MULTI_SEND_CALL_ONLY)
             ? batch(to, inner)
             : [UNKNOWN]
           : inside(to, target, inner)
-      return [`On Safe ${to}:`, ...calls]
+      return [read(`On Safe ${to}:`), ...calls]
     }
     default:
       return [UNKNOWN]
@@ -98,7 +98,7 @@ export function decodeEvm(to: Address, data: Hex): string[] {
 }
 
 /** A call the Safe makes itself. */
-function inside(safe: Address, to: Address, data: Hex): string[] {
+function inside(safe: Address, to: Address, data: Hex): Line[] {
   let call
   try {
     call = decodeFunctionData({ abi, data })
@@ -108,20 +108,22 @@ function inside(safe: Address, to: Address, data: Hex): string[] {
   const { functionName, args } = call
   if (functionName === 'enableModule') {
     return isAddressEqual(to, safe) && known(args[0])
-      ? [`Enable the Safe Allowance Module ${args[0]} on the Safe.`]
+      ? [read(`Enable the Safe Allowance Module ${args[0]} on the Safe.`)]
       : [UNKNOWN]
   }
   // The module's own calls count only when they go to the known module.
   if (!known(to)) return [UNKNOWN]
   switch (functionName) {
     case 'addDelegate':
-      return [`Make ${args[0]} a delegate of the Allowance Module.`]
+      return [read(`Make ${args[0]} a delegate of the Allowance Module.`)]
     case 'removeDelegate':
-      return [`Remove ${args[0]} as a delegate of the Allowance Module, with its allowances.`]
+      return [read(`Remove ${args[0]} as a delegate of the Allowance Module, with its allowances.`)]
     case 'setAllowance': {
       const [delegate, token, amount, resetMin, resetBaseMin] = args
       if (resetBaseMin !== 0) return [UNKNOWN]
-      return [`Let ${delegate} draw ${units(amount)} of token ${token}, every ${resetMin} minutes.`]
+      return [
+        read(`Let ${delegate} draw ${units(amount)} of token ${token}, every ${resetMin} minutes.`),
+      ]
     }
     default:
       return [UNKNOWN]
@@ -129,11 +131,11 @@ function inside(safe: Address, to: Address, data: Hex): string[] {
 }
 
 /** MultiSend's packed list: operation, to, value, data length, data. */
-function batch(safe: Address, data: Hex): string[] {
+function batch(safe: Address, data: Hex): Line[] {
   const call = decodeFunctionData({ abi, data })
   if (call.functionName !== 'multiSend') return [UNKNOWN]
   const packed = call.args[0] as Hex
-  const lines: string[] = []
+  const lines: Line[] = []
   for (let at = 0; at < size(packed);) {
     const operation = Number(slice(packed, at, at + 1))
     const to = getAddress(slice(packed, at + 1, at + 21))

@@ -24,7 +24,7 @@ const units = '2.5 (2500000 base units at 6 decimals)'
 /** A chain where no token account exists yet. */
 const empty = { getAccountInfo: async () => null } as unknown as Connection
 
-const decode = (instructions: TransactionInstruction[], connection = empty) =>
+const lines = (instructions: TransactionInstruction[], connection = empty) =>
   decodeSolana(
     connection,
     new TransactionMessage({
@@ -33,6 +33,8 @@ const decode = (instructions: TransactionInstruction[], connection = empty) =>
       instructions,
     }).compileToV0Message(),
   )
+const decode = async (instructions: TransactionInstruction[]) =>
+  (await lines(instructions)).map((line) => line.text)
 
 describe('the Solana transaction, read from its bytes', () => {
   it('names who may draw, how much, in which token, how often and into what, on add-limit', async () => {
@@ -92,13 +94,13 @@ describe('the Solana transaction, read from its bytes', () => {
   it('flags a transaction with any unreadable line, on either chain, and none of ours', async () => {
     const program = key()
     const ix = { programId: program, keys: [], data: Buffer.from([1]) } as TransactionInstruction
-    expect(cannotRead(await decode([ix]))).toBe(true)
+    expect(cannotRead(await lines([ix]))).toBe(true)
     expect(cannotRead(decodeEvm('0x0000000000000000000000000000000000000001', '0xdeadbeef'))).toBe(
       true,
     )
     const limit = spendingLimitPda(multisigPda, hot)
     expect(
-      cannotRead(await decode([removeSpendingLimitInstruction(multisigPda, owner, limit)])),
+      cannotRead(await lines([removeSpendingLimitInstruction(multisigPda, owner, limit)])),
     ).toBe(false)
   })
 })

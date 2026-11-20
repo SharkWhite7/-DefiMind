@@ -23,7 +23,7 @@ import {
   SAFE_L2,
   safeAbi,
 } from '../web/src/evm/calls.js'
-import { decodeEvm } from '../web/src/evm/decoded.js'
+import { decodeEvm as lines } from '../web/src/evm/decoded.js'
 
 const owner = getAddress('0x0000000000000000000000000000000000000E0E')
 const hot = getAddress('0x0000000000000000000000000000000000000B0b')
@@ -33,6 +33,7 @@ const usd = getAddress('0x7E955252E15c84f5768B83c41a71F9eba181802F')
 const stranger = getAddress('0x00000000000000000000000000000000000a11ce')
 const allowance = { module, hot, usd, cap: 5_000_000n }
 const units = '5 (5000000 base units at 6 decimals)'
+const decode = (to: Address, data: Hex) => lines(to, data).map((line) => line.text)
 const UNKNOWN = 'A call this page cannot read: reject this transaction.'
 
 const factoryAbi = parseAbi([
@@ -129,7 +130,7 @@ const setAllowance = (resetBaseMin: number) =>
 
 describe('the EVM call, read from its bytes', () => {
   it('names the Safe, and who may draw, how much, in which token and how often, on enable', () => {
-    expect(decodeEvm(safe, enableData(owner, safe, allowance, false))).toEqual([
+    expect(decode(safe, enableData(owner, safe, allowance, false))).toEqual([
       `On Safe ${safe}:`,
       `Enable the Safe Allowance Module ${module} on the Safe.`,
       `Make ${hot} a delegate of the Allowance Module.`,
@@ -138,31 +139,31 @@ describe('the EVM call, read from its bytes', () => {
   })
 
   it('names the delegate the kill removes', () => {
-    expect(decodeEvm(safe, killData(owner, module, hot))).toEqual([
+    expect(decode(safe, killData(owner, module, hot))).toEqual([
       `On Safe ${safe}:`,
       `Remove ${hot} as a delegate of the Allowance Module, with its allowances.`,
     ])
   })
 
   it('names the recipient and amount of a deposit', () => {
-    expect(decodeEvm(usd, depositData(safe, 5_000_000n))).toEqual([
+    expect(decode(usd, depositData(safe, 5_000_000n))).toEqual([
       `Send ${units} of token ${usd} to ${safe}.`,
     ])
   })
 
   it('names the owners of a new Safe', () => {
-    expect(decodeEvm(PROXY_FACTORY, createData(owner, 1n))).toEqual([
+    expect(decode(PROXY_FACTORY, createData(owner, 1n))).toEqual([
       `Create a Safe owned by ${owner}, threshold 1.`,
     ])
   })
 
   it('reads every call the page itself builds without a line it cannot read', () => {
     const built = [
-      decodeEvm(PROXY_FACTORY, createData(owner, 1n)),
-      decodeEvm(safe, enableData(owner, safe, allowance, false)),
-      decodeEvm(safe, enableData(owner, safe, allowance, true)),
-      decodeEvm(safe, killData(owner, module, hot)),
-      decodeEvm(usd, depositData(safe, 1n)),
+      decode(PROXY_FACTORY, createData(owner, 1n)),
+      decode(safe, enableData(owner, safe, allowance, false)),
+      decode(safe, enableData(owner, safe, allowance, true)),
+      decode(safe, killData(owner, module, hot)),
+      decode(usd, depositData(safe, 1n)),
     ]
     expect(built.flat()).not.toContain(UNKNOWN)
   })
@@ -173,7 +174,7 @@ describe('the EVM call, read from its bytes', () => {
     ['a refund receiver', exec({ refund: stranger })],
     ['a module call to another module', exec({ to: stranger })],
   ])('refuses an execTransaction with %s', (_case, data) => {
-    expect(decodeEvm(safe, data)).toContain(UNKNOWN)
+    expect(decode(safe, data)).toContain(UNKNOWN)
   })
 
   it.each([
@@ -182,11 +183,11 @@ describe('the EVM call, read from its bytes', () => {
     ['another fallback handler', { handler: stranger }],
     ['a setup payment', { payment: 1n }],
   ])('refuses a Safe creation with %s', (_case, change) => {
-    expect(decodeEvm(PROXY_FACTORY, create(change))).toEqual([UNKNOWN])
+    expect(decode(PROXY_FACTORY, create(change))).toEqual([UNKNOWN])
   })
 
   it('refuses a creation sent anywhere but the proxy factory', () => {
-    expect(decodeEvm(stranger, createData(owner, 1n))).toEqual([UNKNOWN])
+    expect(decode(stranger, createData(owner, 1n))).toEqual([UNKNOWN])
   })
 
   it.each([
@@ -195,10 +196,10 @@ describe('the EVM call, read from its bytes', () => {
     ['sets an allowance through another contract', [{ to: stranger, data: setAllowance(0) }]],
     ['sets an allowance with a reset base', [{ to: module, data: setAllowance(5) }]],
   ])('refuses a batch that %s', (_case, calls) => {
-    expect(decodeEvm(safe, batch(calls))).toContain(UNKNOWN)
+    expect(decode(safe, batch(calls))).toContain(UNKNOWN)
   })
 
   it('says it cannot read anything else', () => {
-    expect(decodeEvm(safe, '0xdeadbeef')).toEqual([UNKNOWN])
+    expect(decode(safe, '0xdeadbeef')).toEqual([UNKNOWN])
   })
 })
