@@ -29,9 +29,19 @@ development.
 > cap small: the default is 20, and the signing page refuses more than 50. The known risks are in
 > [`docs/final-report.md`](./docs/final-report.md), "Known risks".
 
-## Install the beta
+## Start here: one click
 
-You need Node 20+, pnpm 10, git, [flyctl](https://fly.io/docs/flyctl/install/), accounts on Fly.io
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/SharkWhite7/-DefiMind)
+
+Render builds your own DefiMind from this repository, and the owner panel guides you through the
+passkey, the vault, the daily limit, the deposit and your first agent. It needs a paid Render
+instance with a disk. No terminal is needed until you connect the agent. Step by step, in plain
+words: [`docs/getting-started.md`](./docs/getting-started.md). The one-click route is new: report a
+step that fails.
+
+## Install the beta on Fly.io
+
+The technical route, with the setup wizard. You need Node 20+, pnpm 10, git, [flyctl](https://fly.io/docs/flyctl/install/), accounts on Fly.io
 and Vercel, and a new Phantom wallet used for nothing else. A Telegram bot token from @BotFather is
 needed only if you also want the bot; the wizard asks.
 On Windows, use WSL2 with Ubuntu.

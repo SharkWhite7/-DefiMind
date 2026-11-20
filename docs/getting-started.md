@@ -6,9 +6,10 @@ the panel walks you through the rest. You never edit a file or paste a key.
 > **Public beta.** DefiMind moves real money, it is new, and it has had no external audit. Put in
 > only what you can afford to lose. The signing page refuses a daily limit above 50 dollars.
 
-> **Status of the one-click deployment.** It is new and has not yet completed a verified run on
-> Render. The CHANGELOG will say when it has. Until then, use the Fly.io route in the
-> [README](../README.md); step 4 below, connecting your agent, is the same for both.
+> **The one-click deployment is new.** If a step does not work as described here, stop and open an
+> issue with the step's number and what you saw, never a key or the setup code. The Fly.io route in
+> the [README](../README.md) is the other way in; step 4 below, connecting your agent, is the same
+> for both.
 
 ## What you need
 
@@ -92,8 +93,10 @@ More detail, including what an agent can and cannot do:
 
 - **Approvals.** Payments above your threshold wait for you in the panel. Turn on notifications in
   the panel to hear about them.
-- **Stop everything.** The panel's **Kill** removes the daily limit from your vault with one
-  Phantom signature. After that nothing can draw from it, whatever happens to DefiMind.
+- **Stop everything.** The panel's **Kill** pauses every agent at once: DefiMind signs no more
+  payments. On a one-click deployment the panel cannot yet open the Phantom step that also removes
+  the daily limit from your vault. Until it can, the limit stays, so keep the limit and the vault
+  balance small: the most a day can cost is the limit plus what DefiMind's own wallet holds.
 - **Updates.** Your service never updates by itself, because it holds keys. To update, read the
   [CHANGELOG](../CHANGELOG.md), then in Render click **Manual Deploy**, then **Deploy latest
   commit**.

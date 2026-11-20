@@ -90,17 +90,17 @@ is lost: the panel's push goes out first.
 
 ---
 
-## ⬜ HUMAN-33 — Verify the one-click deploy on Render (CR-019)
+## ⬜ HUMAN-33 — Verify the one-click deploy on Render (CR-019) — risk accepted, run optional
 
-When GC-56 and INT-44 part 1 (#62) are on `main`, and when the owner is ready. Before the README
-shows the Deploy button, one real run must pass:
+On 2026-11-20 the owner chose to ship the Deploy to Render button without a verified run, in his
+words: "o render tá testado vamos usar mesmo assim eu aceito o risco ja deixa implementado se der
+algum problema nos testamos novamente". The button is in the README (#73), and
+`docs/getting-started.md` says the route is new and asks people to report a failing step. No
+complete run on Render has been recorded yet.
 
-1. create a Render account;
-2. deploy from the button, on a paid Starter instance with a disk;
-3. follow the panel's guide as far as it goes, and report each step that does not work.
-
-No key or token is shared with anyone: the host generates them, and only the setup code shown in
-Render's dashboard is used, by the owner, in the panel. The manager sends the exact steps then.
+Still useful, whenever the owner wants: one run from the button on a paid Starter instance with a
+disk, or panel's free devnet variant (no disk), which proves every step up to "live" except
+persistence. A failed step comes back through panel. No key is shared either way.
 
 ---
 
