@@ -103,8 +103,10 @@ function guardSecrets(setup: Setup): Entry[] {
   })
   return [
     [SECRETS.admin, secret(setup, SECRETS.admin)],
+    // The bot's three, all or none (CR-017). The wizard deploys the bot, so it gives all three.
     [SECRETS.bot, secret(setup, SECRETS.bot)],
     [SECRETS.webhook, secret(setup, SECRETS.webhook)],
+    ['BOT_URL', { value: `http://${appNames(setup.answers.prefix).bot}.internal:8788` }],
     // SOLANA_CHAIN is set even on mainnet: without it guard-core runs on devnet.
     ...forFamily(setup, 'solana', (network) => [
       ['SOLANA_CHAIN', { value: NETWORKS[network].chain }],
