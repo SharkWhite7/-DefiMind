@@ -11,7 +11,7 @@ import { requirePersistentDb } from './db/placement.js'
 import { buildServers } from './http/server.js'
 import type { ChainHost } from './http/owner-settings.js'
 import { readSettings } from './db/settings.js'
-import { applySettings } from './domain/settings.js'
+import { applySettings, settingKeys } from './domain/settings.js'
 import { killTargets } from './kill-targets.js'
 
 const env = loadConfig()
@@ -96,6 +96,13 @@ if (config.GUARD_STUB_CHAINS === 'true') {
   app.log.warn('no chain adapter configured: every payment will be refused')
 }
 for (const { chain } of keys.hotWallets) {
+  const rpc = settingKeys(effective).find((k) => k.chain === chain)?.rpcUrl
+  if (chains.has(chain) && rpc !== undefined && effective[rpc] === undefined) {
+    app.log.info(
+      { chain },
+      'using the public RPC, which is rate-limited: set your own in the panel',
+    )
+  }
   if (!chains.has(chain)) {
     app.log.info({ chain }, 'no vault yet: the chain waits for the owner to adopt one in the panel')
   }
