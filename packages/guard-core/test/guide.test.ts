@@ -1,3 +1,4 @@
+import { HOSTED_SIGN_PAGE } from '@defimind/shared'
 import { describe, expect, it } from 'vitest'
 import { CHAIN, harness, MERCHANT, MINT, type Harness } from './harness.js'
 import { signedIn } from './owner.js'
@@ -112,6 +113,13 @@ describe('the deposit screen (CR-019)', () => {
       cluster: 'devnet',
       multisig: MULTISIG,
     })
+  })
+
+  it('links the hosted page deposit without SIGN_PAGE_URL (CR-020)', async () => {
+    const o = await owner({ env: { SQUADS_MULTISIG: MULTISIG } })
+    const [row] = (await o.call('GET', '/v1/owner/deposit')).json().chains
+    expect(new URL(row.depositPage).origin).toBe(HOSTED_SIGN_PAGE)
+    expect(new URL(row.depositPage).searchParams.get('multisig')).toBe(MULTISIG)
   })
 
   it('leaves out a chain whose adapter has no vault to read', async () => {

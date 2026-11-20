@@ -56,15 +56,13 @@ const anchorPublisher =
         secretKey: await readKeypairFile(config.ANCHOR_KEY_FILE),
       })
 
-const targets = config.SIGN_PAGE_URL === undefined ? [] : await killTargets(effective)
+const targets = await killTargets(effective)
 const host: ChainHost = {
   env: config,
   build: (next) => buildChains(next),
   // In place: the owner kill route holds this array.
   changed: async (next) => {
-    if (config.SIGN_PAGE_URL !== undefined) {
-      targets.splice(0, targets.length, ...(await killTargets(next)))
-    }
+    targets.splice(0, targets.length, ...(await killTargets(next)))
   },
 }
 

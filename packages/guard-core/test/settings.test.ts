@@ -1,5 +1,17 @@
 import type { ChainAdapter } from '@defimind/onchain'
-import type { AllowanceState, ChainId } from '@defimind/shared'
+import {
+  HOSTED_SIGN_PAGE,
+  type AllowanceState,
+  type ChainId,
+  type KillTarget,
+} from '@defimind/shared'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { readKeypairFile } from '../src/adapters/keypair.js'
+import { ensureKey } from '../src/adapters/keystore.js'
+import { base58 } from '../src/domain/base58.js'
+import { killTargets } from '../src/kill-targets.js'
 import { describe, expect, it, vi } from 'vitest'
 import { StubChain } from '../src/adapters/stub.js'
 import { loadConfig, type Config } from '../src/config.js'
@@ -134,6 +146,27 @@ describe('the owner settings (CR-019)', () => {
     expect((await o.call('GET', '/v1/owner/settings')).json()).toEqual({
       chains: [{ chain: CHAIN, rpcUrl: 'https://env.example' }],
     })
+  })
+
+  // CR-020: the kill links follow an adopted vault, on the hosted page when there is no own one.
+  it('links the owner kill for an adopted vault to the hosted page', async () => {
+    const keypair = await ensureKey(mkdtempSync(join(tmpdir(), 'kp-')), 'hot.json', 'solana')
+    const targets: KillTarget[] = []
+    const h = await harness({
+      build,
+      env: { SOLANA_HOT_WALLET_KEYPAIR: keypair },
+      killTargets: targets,
+      changed: async (config) => {
+        targets.splice(0, targets.length, ...(await killTargets(config)))
+      },
+    })
+    const o = { h, ...(await signedIn(h)) }
+    await put(o, [{ chain: CHAIN, rpcUrl: RPC, vault: OURS }])
+    const [tx] = (await o.call('POST', '/v1/owner/kill', {})).json().ownerTransactions
+    const page = new URL(tx.pageLink)
+    expect(page.origin).toBe(HOSTED_SIGN_PAGE)
+    expect(page.searchParams.get('multisig')).toBe(OURS)
+    expect(page.searchParams.get('hot')).toBe(base58((await readKeypairFile(keypair)).slice(32)))
   })
 
   it('needs a session', async () => {

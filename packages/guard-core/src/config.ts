@@ -122,7 +122,10 @@ const settings = z
     ANCHOR_CHAIN: optional(z.enum([CHAINS.solanaDevnet, CHAINS.solanaMainnet])),
     ANCHOR_RPC_URL: optional(z.url({ protocol: /^https?$/ })),
     ANCHOR_KEY_FILE: optional(z.string().min(1)),
-    /** CR-014. The onchain signing page; with it, the owner kill links each chain's kill there. */
+    /**
+     * CR-014. The signing page the owner kill and deposit links open; HOSTED_SIGN_PAGE when unset
+     * (CR-020).
+     */
     SIGN_PAGE_URL: optional(z.url({ protocol: /^https$/ })),
     /** CR-019. The signing page's build, served at /sign. Defaults to packages/onchain/web/dist. */
     SIGN_DIR: optional(z.string().min(1)),

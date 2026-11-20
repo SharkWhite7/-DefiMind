@@ -68,6 +68,7 @@ export async function harness(
     keys?: PublicKeys
     /** Turns the owner's settings on (CR-019), rebuilding the chains with this. */
     build?: ChainHost['build']
+    changed?: ChainHost['changed']
   } = {},
 ): Promise<Harness> {
   const db = openDb(':memory:')
@@ -124,7 +125,15 @@ export async function harness(
     ...(options.killTargets === undefined ? {} : { killTargets: options.killTargets }),
     ...(options.push === undefined ? {} : { push: options.push }),
     ...(options.keys === undefined ? {} : { keys: options.keys }),
-    ...(options.build === undefined ? {} : { host: { env: config, build: options.build } }),
+    ...(options.build === undefined
+      ? {}
+      : {
+          host: {
+            env: config,
+            build: options.build,
+            ...(options.changed === undefined ? {} : { changed: options.changed }),
+          },
+        }),
   })
 
   return {

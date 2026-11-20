@@ -344,8 +344,8 @@ A one-click deployment starts with only `ADMIN_TOKEN` and `SETUP_CODE`, and a di
 - **Progress.** `GET /v1/owner/setup/progress` answers the steps passkey, vault, limit, deposit,
   agent, rules, shadow and live, each read from the database or the chain. A chain that cannot be
   read counts as not done.
-- **Deposit.** `GET /v1/owner/deposit` answers each chain's vault, token, balance and daily cap, and,
-  with `SIGN_PAGE_URL`, the signing page's deposit link, which names the multisig or the Safe only.
+- **Deposit.** `GET /v1/owner/deposit` answers each chain's vault, token, balance and daily cap, and
+  the signing page's deposit link, which names the multisig or the Safe only.
 - **Signing page.** `/sign/` serves onchain's build (`SIGN_DIR`, default
   `packages/onchain/web/dist`) with this deployment's hot wallets filled into the page's config at
   serve time. A link never names them, so a crafted one cannot make the page grant another key. The
@@ -422,12 +422,14 @@ cannot drift. The audit says which one a change came through (`via: "admin" | "p
     longer requiring a mandate) plus three more: unpausing (otherwise a resume without its passkey),
     and a raised `maxPaymentsPerMinute` or `priceIncreaseMaxPct`. A change that only tightens
     needs the session only.
-- `POST /v1/owner/kill` returns what the admin kill returns. With `SIGN_PAGE_URL` set, each
-  entry for a chain the signing page can kill also carries `link` (the Phantom universal link) and
-  `pageLink` (the page itself), stamped now, since the page refuses a link more than 15 minutes old
-  (CR-014). On Solana the target is `SQUADS_MULTISIG` with the hot wallet's public key, read from
-  its own keypair file. On Robinhood Chain it is `ROBINHOOD_SAFE_ADDRESS`. The admin kill never
-  carries links.
+- `POST /v1/owner/kill` returns what the admin kill returns. Each entry for a chain the signing
+  page can kill also carries `link` (the Phantom universal link) and `pageLink` (the page itself),
+  stamped now, since the page refuses a link more than 15 minutes old (CR-014). The page is
+  `SIGN_PAGE_URL`, or the hosted page built from main, `HOSTED_SIGN_PAGE` in `@defimind/shared`, when
+  it is unset (CR-020). The target names the vault and the hot wallet, which the hosted page does
+  not know: on Solana `SQUADS_MULTISIG` and the hot wallet's public key, on Robinhood Chain
+  `ROBINHOOD_SAFE_ADDRESS` and the hot wallet's address, each read from its own key file. Kill
+  targets follow a vault adopted in the panel. The admin kill never carries links.
 - Session only: `GET /v1/owner/report`, `/receipts` (as `GET /v1/admin/receipts`), `/doctor`, `/budget/:agentId`, `/agents`,
   `/policy/:agentId`, `/passkeys`; `POST /v1/owner/agents/:id/revoke`, `/pause` and `/kill`.
 
