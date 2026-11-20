@@ -131,7 +131,10 @@ abstract contract SigningPageFlows {
         for (uint256 i = 0; i < reads.length; i++) {
             bytes32 before = vm.load(usd, reads[i]);
             vm.store(usd, reads[i], bytes32(amount));
-            if (PageToken(usd).balanceOf(who) == amount) return;
+            // A low-level call: overwriting the proxy's implementation slot makes balanceOf revert,
+            // which must only mean "not this slot".
+            (bool ok, bytes memory out) = usd.staticcall(abi.encodeCall(PageToken.balanceOf, (who)));
+            if (ok && out.length == 32 && abi.decode(out, (uint256)) == amount) return;
             vm.store(usd, reads[i], before);
         }
         revert("no balance slot found for USDG");

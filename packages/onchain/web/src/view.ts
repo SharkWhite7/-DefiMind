@@ -1,3 +1,5 @@
+import { USDC_DECIMALS } from '@defimind/shared'
+import { formatUnits } from '../../src/svm/transfer.js'
 import { amountProblem, parseAmount } from './amount.js'
 
 const app = document.getElementById('app')!
@@ -59,6 +61,8 @@ export function askAmount(ask: {
   label: string
   symbol: string
   max?: bigint
+  /** From the link, for the owner to confirm or change: never used without the owner's say. */
+  initial?: bigint
 }): Promise<bigint> {
   show(ask.title, ask.lines)
   const form = document.createElement('form')
@@ -69,6 +73,7 @@ export function askAmount(ask: {
   input.inputMode = 'decimal'
   input.autocomplete = 'off'
   input.required = true
+  if (ask.initial !== undefined) input.value = formatUnits(ask.initial, USDC_DECIMALS)
   label.append(input)
   const problem = document.createElement('p')
   problem.setAttribute('role', 'alert')

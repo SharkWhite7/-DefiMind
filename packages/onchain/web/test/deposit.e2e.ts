@@ -57,8 +57,12 @@ describe('the deposit page on Solana', () => {
     expect(await lines(page)).toEqual([`Vault ${vault.toBase58()} now holds 12.5 USDC.`])
   })
 
-  it('shows the vault and the amount before Phantom asks, for a link that carries one', async () => {
+  it('puts a link amount in the field for the owner to confirm, then shows it before Phantom asks', async () => {
     const page = await s.open(browser, depositLink('5000000'), { rejects: true })
+    await settled(page, 'Deposit into the vault')
+    expect(await page.inputValue('input[name=amount]')).toBe('5')
+    expect(s.server.signed).toEqual([])
+    await page.click('text=Continue')
     await expect.poll(() => page.locator('button').textContent()).toBe('Ask Phantom again')
     expect(await lines(page)).toContain(`Deposit: 5 USDC into vault ${vault.toBase58()}.`)
   })
@@ -73,6 +77,8 @@ describe('the deposit page on Solana', () => {
 
   it('refuses more than the wallet holds', async () => {
     const page = await s.open(browser, depositLink('41000000'))
+    await settled(page, 'Deposit into the vault')
+    await page.click('text=Continue')
     await settled(page, 'Nothing to sign')
     expect(await lines(page)).toEqual(['Your wallet holds 40 USDC, less than 41 USDC.'])
     expect(s.server.signed).toEqual([])
@@ -82,5 +88,12 @@ describe('the deposit page on Solana', () => {
     const page = await s.open(browser, { ...depositLink(), multisig: vault.toBase58() })
     await settled(page, 'Nothing to sign')
     expect(s.server.signed).toEqual([])
+  })
+
+  it('says it is not configured, and offers nothing, when served without a config', async () => {
+    const page = await browser.newPage()
+    await page.goto(`${s.server.origin}/index.template.html?action=deposit`)
+    await settled(page, 'This page is not configured')
+    expect(await page.locator('input').count()).toBe(0)
   })
 })

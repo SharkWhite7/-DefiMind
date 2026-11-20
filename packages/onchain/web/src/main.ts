@@ -81,9 +81,8 @@ async function prepare(
   const usdc = built(USDC_MINTS, request.cluster)
   if (request.action === 'deposit') {
     if (!usdc) return refuse(`This page knows no USDC for ${request.cluster}.`)
-    const { amount } = request
     return prepareDeposit(connection, { ...request, usdc: new PublicKey(usdc) }, owner, () =>
-      amount === undefined ? askDeposit('USDC') : Promise.resolve(amount),
+      askDeposit('USDC', request.amount),
     )
   }
   const hotWallet = builtHot(request.cluster, request.hot)

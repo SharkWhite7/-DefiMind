@@ -121,13 +121,12 @@ async function prepare(
     return refuse(EXPIRED)
   }
   if (request.action === 'deposit') {
-    const { amount } = request
     const { usd, symbol } = chain
     return prepareEvmDeposit(
       client,
       { cluster: chain.name, safe: request.safe, usd, symbol },
       owner,
-      () => (amount === undefined ? askDeposit(symbol) : Promise.resolve(amount)),
+      () => askDeposit(symbol, request.amount),
     )
   }
   const hot = chain.hot && getAddress(chain.hot)

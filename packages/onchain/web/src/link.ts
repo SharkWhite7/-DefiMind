@@ -45,8 +45,9 @@ export const cap = baseUnits
 /** A deposit in base units: no ceiling, since it moves the owner's own money into their own vault. */
 export const deposit = baseUnits.optional()
 
-export const askDeposit = (symbol: string) =>
+export const askDeposit = (symbol: string, initial?: bigint) =>
   askAmount({
+    initial,
     title: 'Deposit into the vault',
     lines: ['How much to move from your wallet into the vault the agent draws on.'],
     label: 'Amount',

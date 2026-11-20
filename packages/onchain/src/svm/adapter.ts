@@ -111,7 +111,6 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
     }
   }
 
-  /** Reasons this adapter cannot pay the intent at all, before any transaction exists. */
   async function balanceOf(token: PublicKey, owner: PublicKey): Promise<Amount> {
     // The vault is a PDA, so its token account sits off the curve.
     const address = getAssociatedTokenAddressSync(token, owner, true)
@@ -126,6 +125,7 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
     }
   }
 
+  /** Reasons this adapter cannot pay the intent at all, before any transaction exists. */
   function refuse(intent: PayIntent): RejectCode[] {
     if (intent.chain !== chain) {
       return ['CHAIN_NOT_ALLOWED']

@@ -59,6 +59,9 @@ describe('the deposit page on an EVM chain', () => {
 
   it('refuses more than the account holds', async () => {
     const page = await open({ amount: '41000000' })
+    await settled(page, 'Deposit into the vault')
+    expect(await page.inputValue('input[name=amount]')).toBe('41')
+    await page.click('text=Continue')
     await settled(page, 'Nothing to sign')
     expect(await lines(page)).toEqual(['Your account holds 40 USDG, less than 41 USDG.'])
     expect(s.sent).toEqual([])
