@@ -19,7 +19,14 @@ export function setupMock() {
   }
 
   const settings = () => ({
-    chains: [{ chain, ...(state.vault === undefined ? {} : { vault: state.vault }) }],
+    // The RPC comes from the env, shown as its origin only, as GC-56 does.
+    chains: [
+      {
+        chain,
+        rpcUrl: 'https://rpc.example',
+        ...(state.vault === undefined ? {} : { vault: state.vault }),
+      },
+    ],
   })
 
   function route(
@@ -49,6 +56,10 @@ export function setupMock() {
         return true
       }
       state.saved.push({ chains: body['chains'], stepUp: bound })
+      if ((body['chains'] as { rpcUrl?: string }[]).some((c) => c.rpcUrl !== undefined)) {
+        send(409, { error: 'set_by_env' })
+        return true
+      }
       const vault = (body['chains'] as { vault?: string }[])[0]?.vault
       if (vault !== VAULT) {
         send(422, { error: 'vault_not_ours' })

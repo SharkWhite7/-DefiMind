@@ -112,3 +112,21 @@ export function daysCovered(balance: string, cap: string | undefined): bigint | 
   }
   return BigInt(balance) / BigInt(cap)
 }
+
+/** A CAIP-2 id, the only shape safe to put on a command line unquoted. */
+const CHAIN_ID = /^[-a-z0-9]{3,8}:[-_a-zA-Z0-9]{1,32}$/
+
+/**
+ * One line for Claude Code. It asks for the token at a hidden prompt, never on the command line.
+ * --chain names a chain this deployment runs, the first with a vault: without it the MCP server
+ * defaults to Solana devnet, which a mainnet guard-core refuses.
+ */
+export function mcpCommand(
+  origin: string,
+  agentId: string,
+  chains: { chain: string; vault?: string | undefined }[],
+): string {
+  const chain = (chains.find((c) => c.vault !== undefined) ?? chains[0])?.chain
+  const flag = chain !== undefined && CHAIN_ID.test(chain) ? ` --chain ${chain}` : ''
+  return `pnpm --filter @defimind/mcp-server run setup claude-code --guard-url ${origin} --agent-id ${agentId}${flag} --check`
+}
