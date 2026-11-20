@@ -13,9 +13,8 @@ export const PRESETS = {
 export const next = (ctx: Context, step: StepId, label = 'Next') =>
   button(label, () => ctx.go({ name: 'guide', step }), 'primary')
 
-/** How to connect each MCP client, until the server is on npm (HUMAN-26). */
-const MCP_HELP =
-  'https://github.com/SharkWhite7/-DefiMind/blob/main/packages/mcp-server/README.md#quick-setup'
+/** The getting-started page (INT-44): connecting each MCP client, until the server is on npm. */
+const MCP_HELP = 'https://github.com/SharkWhite7/-DefiMind/blob/main/docs/getting-started.md'
 
 /** One line for Claude Code: it asks for the token at a hidden prompt, never on the command line. */
 export function mcpCommand(origin: string, agentId: string): string {
