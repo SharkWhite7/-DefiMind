@@ -71,7 +71,7 @@ is the owner's decision: which firm, what scope, what cost. Until then, the publ
 ## ⏳ HUMAN-31 — Run the infrastructure migration
 
 CR-012, CR-013 and CR-016 are complete in code, so the move of the live deployment to this repository
-can start. The runbook is [`docs/migration.md`](../docs/migration.md) (Parts A to F, with a rollback); the manager walks the owner through it one step at a time, and the integrator helps when a check fails; HUMAN-24, HUMAN-27, HUMAN-28 and HUMAN-30 were done in Parts A and B (2026-11-19). Progress: A, B and C1–C4 passed (the old apps are stopped, not destroyed; the database is on `defimind-guard-core`). The owner decided on 2026-11-20 to drop Telegram and use the web panel only, so C5 (the bot deploy) is skipped. D1 (passkey enrolment) next. One rule from CR-016: the new bot app gets `BOT_TOKEN` only, never
+can start. The runbook is [`docs/migration.md`](../docs/migration.md) (Parts A to F, with a rollback); the manager walks the owner through it one step at a time, and the integrator helps when a check fails; HUMAN-24, HUMAN-27, HUMAN-28 and HUMAN-30 were done in Parts A and B (2026-11-19). Progress: A, B and C1–C4 passed (the old apps are stopped, not destroyed; the database is on `defimind-guard-core`). The owner decided on 2026-11-20 to drop Telegram and use the web panel only, so C5 (the bot deploy) is skipped. D1 passed on 2026-11-20: the owner's passkey for `defimind-guard-core.fly.dev` is on his iPhone (the first one, made in Edge on Windows, was removed). D2 (the panel on the phone) next. One rule from CR-016: the new bot app gets `BOT_TOKEN` only, never
 `GUARD_ADMIN_TOKEN`. The signing page stays at `agentguard-onchain.vercel.app`; the migration creates no new domain.
 
 ---
@@ -112,13 +112,6 @@ the packages are ready.
 
 ---
 
-## ⬜ HUMAN-23 — Enroll a passkey for payment approvals (CR-010, phase 3)
-
-When phase 3 is on `main`, larger approvals ask for a passkey (fingerprint or Face ID) on top of the
-Telegram button. The manager sends the steps then.
-
----
-
 ## ⬜ HUMAN-6 — Tenderly account (optional)
 
 Only if simulation needs a second provider. Not needed so far.
@@ -155,3 +148,4 @@ Only if simulation needs a second provider. Not needed so far.
 | HUMAN-30 | Anchoring keypair created, funded with 2 devnet SOL, set on `defimind-guard-core` | 2026-11-19 | fee-only, never the hot wallet                                       |
 | HUMAN-27 | Web Push (VAPID) key created and set on `defimind-guard-core`                     | 2026-11-19 | HUMAN-31 A4, B3                                                      |
 | HUMAN-28 | `SIGN_PAGE_URL` set on `defimind-guard-core` from the bot's live value            | 2026-11-19 | `agentguard-onchain.vercel.app`                                      |
+| HUMAN-23 | Passkey enrolled for the panel, on the owner's iPhone (HUMAN-31 D1)               | 2026-11-20 | `defimind-guard-core.fly.dev`; link carried by QR, never pasted      |
