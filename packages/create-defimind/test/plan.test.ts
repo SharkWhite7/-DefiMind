@@ -82,6 +82,7 @@ describe('flyTasks', () => {
     expect(bot['OWNER_TELEGRAM_IDS']).toEqual({ value: '111,222' })
     expect(bot['SOLANA_HOT_WALLET_PUBKEY']).toEqual({ value: SOL_HOT })
     expect(bot['ROBINHOOD_CHAIN']).toEqual({ value: CHAINS.robinhood })
+    expect(bot['ROBINHOOD_HOT_WALLET_ADDRESS']).toEqual({ value: RH_HOT })
   })
 
   it('leaves out a chain that was not chosen', () => {
