@@ -34,10 +34,9 @@ const draft = {
 }
 
 /** The chain the guide sets up: Solana when it is on, as the signing page creates vaults there. */
-async function setupChain(ctx: Context): Promise<{ chain: Chain; all: Chain[] } | undefined> {
+async function setupChain(ctx: Context): Promise<Chain | undefined> {
   const { chains } = await ctx.api.settings()
-  const chain = chains.find((c) => isSolana(c.chain)) ?? chains[0]
-  return chain && { chain, all: chains }
+  return chains.find((c) => isSolana(c.chain)) ?? chains[0]
 }
 
 function walletLinks(link: string | undefined, what: string): Child[] {
@@ -55,9 +54,9 @@ async function vault(ctx: Context): Promise<Child[]> {
   if (setup === undefined) {
     return [el('p', { class: 'flag' }, 'No chain is turned on in this DefiMind.')]
   }
-  const { chain } = setup.chain
+  const { chain } = setup
   const input = el('input', { id: 'vault', autocomplete: 'off', spellcheck: 'false' })
-  input.value = setup.chain.vault ?? draft.get(chain)
+  input.value = setup.vault ?? draft.get(chain)
   return [
     el(
       'p',
@@ -85,11 +84,11 @@ async function vault(ctx: Context): Promise<Child[]> {
 
 async function limit(ctx: Context): Promise<Child[]> {
   const setup = await setupChain(ctx)
-  const address = setup && (setup.chain.vault ?? draft.get(setup.chain.chain))
+  const address = setup && (setup.vault ?? draft.get(setup.chain))
   if (setup === undefined || !address) {
     return [el('p', {}, 'First create your vault.'), next(ctx, 'vault', 'Back to the vault')]
   }
-  const { chain } = setup.chain
+  const { chain } = setup
   const link = isSolana(chain)
     ? signLink(location.origin, chain, { action: 'add-limit', multisig: address })
     : signLink(location.origin, chain, { action: 'enable', safe: address })
@@ -108,8 +107,8 @@ async function limit(ctx: Context): Promise<Child[]> {
     button(
       'Save vault with passkey',
       async () => {
-        const chains = setup.all.map((c) => (c.chain === chain ? { ...c, vault: address } : c))
-        await ctx.api.putSettings(chains)
+        // The vault only: an RPC the env sets would be refused with set_by_env.
+        await ctx.api.putSettings([{ chain, vault: address }])
         await ctx.go({ name: 'guide', step: 'deposit' })
         ctx.say('Vault saved.', 'done')
       },
