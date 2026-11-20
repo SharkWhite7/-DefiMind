@@ -13,6 +13,10 @@ export const PRESETS = {
 export const next = (ctx: Context, step: StepId, label = 'Next') =>
   button(label, () => ctx.go({ name: 'guide', step }), 'primary')
 
+/** How to connect each MCP client, until the server is on npm (HUMAN-26). */
+const MCP_HELP =
+  'https://github.com/SharkWhite7/-DefiMind/blob/main/packages/mcp-server/README.md#quick-setup'
+
 /** One line for Claude Code: it asks for the token at a hidden prompt, never on the command line. */
 export function mcpCommand(origin: string, agentId: string): string {
   return `pnpm --filter @defimind/mcp-server run setup claude-code --guard-url ${origin} --agent-id ${agentId} --check`
@@ -45,6 +49,7 @@ export async function agent(ctx: Context): Promise<Child[]> {
           el('h3', {}, 'Connect it to Claude Code'),
           el('p', {}, 'Run this once in a terminal, in your DefiMind folder:'),
           el('code', { class: 'token' }, mcpCommand(location.origin, created.agentId)),
+          el('a', { href: MCP_HELP, rel: 'noreferrer' }, 'Step by step, and for other AI apps'),
           next(ctx, 'rules'),
         ),
       )

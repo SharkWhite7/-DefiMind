@@ -58,14 +58,13 @@ async function vault(ctx: Context): Promise<Child[]> {
   const { chain } = setup.chain
   const input = el('input', { id: 'vault', autocomplete: 'off', spellcheck: 'false' })
   input.value = setup.chain.vault ?? draft.get(chain)
-  const how = isSolana(chain)
-    ? 'Open the signing page with Phantom and approve. It creates your vault and shows its address.'
-    : 'Create a Safe with your wallet at app.safe.global, then copy its address.'
   return [
-    el('p', {}, how),
-    ...(isSolana(chain)
-      ? walletLinks(signLink(location.origin, chain, { action: 'create' }), 'Create')
-      : []),
+    el(
+      'p',
+      {},
+      'Open the signing page with Phantom and approve. It creates your vault and shows its address.',
+    ),
+    ...walletLinks(signLink(location.origin, chain, { action: 'create' }), 'Create'),
     el('label', { for: 'vault' }, `Your vault address on ${chainName(chain)}`),
     input,
     button(
