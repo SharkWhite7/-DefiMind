@@ -9,9 +9,11 @@ import {
 import { z } from 'zod'
 import { askCap, askDeposit, cap, deposit, EXPIRED, expired, issued, problems } from '../link.js'
 import { unreadable } from '../proof.js'
-import { button, link, show, waitFor } from '../view.js'
+import { button, decoded, link, show, waitFor } from '../view.js'
 import { openInPhantom } from '../wallet.js'
 import { prepareEvmCreate } from './create.js'
+import { cannotRead, NOT_ASKED } from '../decoded.js'
+import { decodeEvm } from './decoded.js'
 import { prepareEvmDeposit } from './deposit.js'
 import { prepareEvmEnable } from './enable.js'
 import { prepareEvmKill } from './kill.js'
@@ -157,6 +159,12 @@ async function run(client: PublicClient, wallet: Eip1193, owner: Address, plan: 
     show(plan.title, plan.summary, 'done')
     return
   }
+  const what = decodeEvm(plan.to, plan.data)
+  if (cannotRead(what)) {
+    show('Nothing to sign', NOT_ASKED, 'stop')
+    decoded(what)
+    return
+  }
   // The exact call Phantom will send, from the owner: the Safe takes its approval only from them.
   try {
     await client.call({ account: owner, to: plan.to, data: plan.data })
@@ -166,6 +174,7 @@ async function run(client: PublicClient, wallet: Eip1193, owner: Address, plan: 
     return
   }
   show(plan.title, plan.summary)
+  decoded(what)
   try {
     await wallet.request({
       method: 'eth_sendTransaction',
@@ -173,6 +182,7 @@ async function run(client: PublicClient, wallet: Eip1193, owner: Address, plan: 
     })
   } catch (error) {
     show(plan.title, [...plan.summary, `Not sent: ${String(error)}`], 'stop')
+    decoded(what)
     button('Ask Phantom again', () => void run(client, wallet, owner, plan))
     return
   }

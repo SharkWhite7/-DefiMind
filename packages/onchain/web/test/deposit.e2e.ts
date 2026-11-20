@@ -6,7 +6,7 @@ import { keypairOwner } from '../../src/svm/owner.js'
 import { createMultisig } from '../../src/svm/squads.js'
 import { transferInstructions } from '../../src/svm/transfer.js'
 import { USDC } from '../../test/fixture.js'
-import { heading, lines, sentInstructions, shape, stage } from './harness.js'
+import { decodedLines, heading, lines, sentInstructions, shape, stage } from './harness.js'
 
 /** The deposit page: a plain USDC transfer from a member into the multisig's vault. */
 let browser: Browser
@@ -65,6 +65,12 @@ describe('the deposit page on Solana', () => {
     await page.click('text=Continue')
     await expect.poll(() => page.locator('button').textContent()).toBe('Ask Phantom again')
     expect(await lines(page)).toContain(`Deposit: 5 USDC into vault ${vault.toBase58()}.`)
+    const mint = s.c.mint.toBase58()
+    expect(await decodedLines(page)).toEqual([
+      `Create the token account of ${vault.toBase58()} for token ${mint}.`,
+      `Send 5 (5000000 base units at 6 decimals) of token ${mint} to the token account of ` +
+        `${vault.toBase58()}.`,
+    ])
   })
 
   it('refuses a wallet that is not a member, before asking for an amount', async () => {

@@ -1,9 +1,11 @@
+import { readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { decodeFunctionData, getAddress, parseAbi, type Hex } from 'viem'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { enableData, PROXY_FACTORY } from '../src/evm/calls.js'
 import { MODULE, mockPhantomEvm, stageEvm, USDG } from './evm-node.js'
-import { heading, lines } from './harness.js'
+import { decodedLines, heading, lines } from './harness.js'
 
 /** Creating the Safe and setting its allowance on Robinhood, with stand-ins for Phantom and the chain. */
 let browser: Browser
@@ -110,6 +112,24 @@ describe('the enable page on an EVM chain', () => {
     const owner = s.state.owners[0]!
     const allowance = { module: MODULE, hot: s.state.hot, usd: USDG, cap: 20_000_000n }
     expect(s.sent.map((tx) => tx.data)).toEqual([enableData(owner, s.state.safe, allowance, false)])
+  })
+
+  it('asks Phantom nothing when the bytes name a module it does not know, as a tampered /sign would', async () => {
+    const index = join(s.dist, 'index.html')
+    await writeFile(index, (await readFile(index, 'utf8')).replaceAll(MODULE, alice))
+    const page = await open(enable())
+    await settled(page, 'Nothing to sign')
+    expect((await lines(page))[0]).toMatch(
+      /^This transaction carries something this page cannot read/,
+    )
+    expect(await decodedLines(page)).toContain(
+      'A call this page cannot read: reject this transaction.',
+    )
+    const requests = await page.evaluate(
+      () => (window as never as { __requests: string[] }).__requests,
+    )
+    expect(requests).not.toContain('eth_sendTransaction')
+    expect(s.sent).toEqual([])
   })
 
   it('leaves the module alone when it is on already, as after a kill', async () => {

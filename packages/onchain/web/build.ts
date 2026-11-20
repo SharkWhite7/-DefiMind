@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
@@ -32,8 +33,23 @@ export async function buildPage(outdir = here('./dist'), env = process.env) {
   await writeFile(`${outdir}/index.template.html`, template)
   await writeFile(`${outdir}/index.html`, pageHtml(template, configFromEnv(env)))
   await copyFile(here('./public/style.css'), `${outdir}/style.css`)
+  await writeFile(`${outdir}/SHA256SUMS`, await sums(outdir))
+}
+
+/** The same for every deployment, since no file holds a config: what a release publishes. */
+export const HASHED = ['app.js', 'style.css', 'index.template.html']
+
+async function sums(outdir: string) {
+  const lines = await Promise.all(
+    HASHED.map(async (file) => {
+      const digest = createHash('sha256').update(await readFile(`${outdir}/${file}`))
+      return `${digest.digest('hex')}  ${file}\n`
+    }),
+  )
+  return lines.join('')
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   await buildPage()
+  process.stdout.write(await readFile(here('./dist/SHA256SUMS'), 'utf8'))
 }

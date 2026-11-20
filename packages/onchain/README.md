@@ -114,8 +114,7 @@ payments need. guard-core's doctor warns below it.
 
 `getVault()` returns `{ address, token, balance }`. This is the vault deposits go to: the Squads
 vault at index 0 of the multisig, or the Safe itself. `token` is the chain's stablecoin and
-`balance` is read from the chain. A vault that has never held the token reports `'0'`. The method
-is optional in `ChainAdapter` until guard-core's `StubChain` implements it.
+`balance` is read from the chain. A vault that has never held the token reports `'0'`.
 
 ### Anchors (CR-013)
 
@@ -328,6 +327,24 @@ pnpm test:web    # Chromium, against the real Squads program in LiteSVM, with a 
 
 `web/vercel.json` deploys it as its own project, separate from the landing site, only from `main` (its `ignoreCommand` skips every other branch, previews included), with the security
 headers. The owner creates that project and protects its deploys.
+
+**What the transaction itself does (CR-019).** Before every Phantom prompt, the page shows the
+transaction decoded from its own bytes, in large text under its summary. It shows who gains a right
+or receives tokens, and how much:
+
+- the members, destinations, token and amount of a spending limit;
+- the delegate and allowance of a Safe call;
+- the recipient of a transfer.
+
+None of it is taken from the link or from whoever served the page. For a transfer, the bytes name
+only the token account, so the page reads that account's owner from the chain, or from the
+account-creating instruction in the same transaction. An instruction it cannot read says so, and
+says to reject. Compare these lines with Phantom's screen before you approve.
+
+**Build hash.** `pnpm build:web` writes `SHA256SUMS` next to the build and prints it. It covers
+`app.js`, `style.css` and `index.template.html`, which are the same for every deployment because
+none of them holds a config. A release publishes these hashes. To check a `/sign`, compare
+`curl -s https://<guard-core>/sign/app.js | sha256sum` with them.
 
 **Served by guard-core at `/sign` (CR-019).** `app.js` holds no address. Everything the page acts for
 is a JSON config inside `index.html`, which the page reads once at load:

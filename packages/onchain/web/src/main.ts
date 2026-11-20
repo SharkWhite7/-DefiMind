@@ -4,6 +4,7 @@ import { getAddress } from 'viem'
 import { z } from 'zod'
 import { config, configured } from './config.js'
 import { prepareCreate } from './create.js'
+import { decodeSolana, cannotRead, NOT_ASKED } from './decoded.js'
 import { prepareDeposit } from './deposit.js'
 import { evmMain } from './evm/main.js'
 import { prepareKill } from './kill.js'
@@ -11,7 +12,7 @@ import { prepareLimit } from './limit.js'
 import { askCap, askDeposit, cap, deposit, EXPIRED, expired, issued, problems } from './link.js'
 import { isPublicKey, type Plan } from './plan.js'
 import { proveSolana, unreadable } from './proof.js'
-import { button, link, show, waitFor } from './view.js'
+import { button, decoded, link, show, waitFor } from './view.js'
 import { openInPhantom, phantom, type Wallet } from './wallet.js'
 
 const { rpc: RPC_URLS, usdc: USDC_MINTS, hot: HOT_WALLETS } = config
@@ -177,10 +178,18 @@ async function run(connection: Connection, wallet: Wallet, owner: PublicKey, pla
   if (plan.coSigners.length > 0) {
     tx.sign(plan.coSigners)
   }
+  const what = await decodeSolana(connection, tx.message)
+  if (cannotRead(what)) {
+    show('Nothing to sign', NOT_ASKED, 'stop')
+    decoded(what)
+    return
+  }
+  decoded(what)
   try {
     await wallet.signAndSendTransaction(tx)
   } catch (error) {
     show(plan.title, [...plan.summary, `Not signed: ${String(error)}`], 'stop')
+    decoded(what)
     button('Ask Phantom again', () => void run(connection, wallet, owner, plan))
     return
   }

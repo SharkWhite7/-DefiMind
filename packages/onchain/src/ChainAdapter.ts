@@ -44,9 +44,9 @@ export interface ChainAdapter {
   getHotWalletGas(): Promise<HotWalletGas>
   /**
    * The owner's vault, where deposits go: the Squads vault at index 0, or the Safe itself, with its
-   * stablecoin balance. Optional until guard-core's StubChain has it (GC-55).
+   * stablecoin balance.
    */
-  getVault?(): Promise<Vault>
+  getVault(): Promise<Vault>
 
   /** Pulls from the owner's multisig into the hot wallet, under the onchain cap. */
   topUpHotWallet(amount: Amount): Promise<TxId>

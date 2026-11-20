@@ -9,7 +9,7 @@ import {
   readSpendingLimit,
   spendingLimitPda,
 } from '../../src/svm/squads.js'
-import { heading, lines, sentInstructions, shape, stage } from './harness.js'
+import { decodedLines, heading, lines, sentInstructions, shape, stage } from './harness.js'
 
 /** The add-limit page: the daily cap, exactly as add-spending-limit sets it. */
 let browser: Browser
@@ -79,6 +79,10 @@ describe('the add-limit page', () => {
       "Phantom should show only a little SOL leaving your wallet, the limit account's rent. " +
         'Reject anything else.',
       'Not signed: Error: User rejected the request.',
+    ])
+    expect(await decodedLines(page)).toEqual([
+      `Let ${hot} draw 2.5 (2500000 base units at 6 decimals) of token ${s.c.mint.toBase58()} ` +
+        `from vault 0 every Day, into ${hot}.`,
     ])
   })
 
