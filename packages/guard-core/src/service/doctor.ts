@@ -22,6 +22,8 @@ export interface DoctorDeps {
   botUrl?: string | undefined
   databaseUrl: string
   passkeyAbove?: Amount | undefined
+  /** A one-click host with no admin routes (CR-019): its owner may have no shell to run a script. */
+  hosted?: boolean
 }
 
 /**
@@ -176,7 +178,9 @@ async function backup(deps: DoctorDeps): Promise<DoctorCheck> {
     id: 'backup',
     status: 'warn',
     message: 'No database backup was found.',
-    fix: 'Run the database backup, and schedule it daily.',
+    fix: deps.hosted
+      ? "Turn on your host's daily disk snapshots, or run the database backup daily from its shell."
+      : 'Run the database backup, and schedule it daily.',
   }
   if (file === ':memory:') {
     return none
@@ -198,7 +202,9 @@ async function backup(deps: DoctorDeps): Promise<DoctorCheck> {
         id: 'backup',
         status: 'warn',
         message: 'The newest database backup is more than two days old.',
-        fix: 'Run the database backup, and check the daily schedule.',
+        fix: deps.hosted
+          ? "Check your host's disk snapshots, or run the database backup from its shell."
+          : 'Run the database backup, and check the daily schedule.',
       }
     : { id: 'backup', status: 'ok', message: 'A database backup from the last two days exists.' }
 }

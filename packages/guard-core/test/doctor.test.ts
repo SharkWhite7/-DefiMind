@@ -148,5 +148,14 @@ describe('the doctor', () => {
         fix: expect.any(String),
       })
     })
+
+    // CR-019: a one-click owner has the host's dashboard, not a terminal for a cron job.
+    it('points a one-click host at its disk snapshots', async () => {
+      const hosted = { ...withBackup(), hosted: true }
+      expect((await byId(hosted))['backup']?.fix).toMatch(/host's daily disk snapshots/)
+      expect((await byId(withBackup()))['backup']?.fix).toBe(
+        'Run the database backup, and schedule it daily.',
+      )
+    })
   })
 })
