@@ -151,6 +151,8 @@ function botSecrets(setup: Setup): Entry[] {
     ]),
     ...forFamily(setup, 'robinhood', (network) => [
       ['ROBINHOOD_CHAIN', { value: NETWORKS[network].chain }],
+      // Named in each kill link, so the kill works on the hosted page too (CR-020).
+      ['ROBINHOOD_HOT_WALLET_ADDRESS', { value: known(setup.hot, network, 'hot wallet') }],
     ]),
   ]
 }
