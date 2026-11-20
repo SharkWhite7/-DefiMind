@@ -93,8 +93,10 @@ More detail, including what an agent can and cannot do:
 
 - **Approvals.** Payments above your threshold wait for you in the panel. Turn on notifications in
   the panel to hear about them.
-- **Stop everything.** The panel's **Kill** removes the daily limit from your vault with one
-  Phantom signature. After that nothing can draw from it, whatever happens to DefiMind.
+- **Stop everything.** The panel's **Kill** pauses every agent at once: DefiMind signs no more
+  payments. On a one-click deployment the panel cannot yet open the Phantom step that also removes
+  the daily limit from your vault. Until it can, the limit stays, so keep the limit and the vault
+  balance small: the most a day can cost is the limit plus what DefiMind's own wallet holds.
 - **Updates.** Your service never updates by itself, because it holds keys. To update, read the
   [CHANGELOG](../CHANGELOG.md), then in Render click **Manual Deploy**, then **Deploy latest
   commit**.
