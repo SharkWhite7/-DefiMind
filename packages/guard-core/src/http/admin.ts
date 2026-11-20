@@ -22,7 +22,7 @@ import {
 
 export function adminRoutes(
   deps: PaymentDeps & { fetch: typeof fetch },
-  setup: { botUrl: string; databaseUrl: string; passkeyRpId?: string; passkeyOrigin?: string },
+  setup: { botUrl?: string; databaseUrl: string; passkeyRpId?: string; passkeyOrigin?: string },
 ) {
   const { db, now } = deps
   const control = controls(deps, 'admin')

@@ -11,8 +11,8 @@ import Fastify, {
 import type { KeyObject } from 'node:crypto'
 import { isIP } from 'node:net'
 import { z } from 'zod'
-import { httpBotNotifier, type BotNotifier } from '../adapters/bot.js'
-import type { Config } from '../config.js'
+import { botNotifier, type BotNotifier } from '../adapters/bot.js'
+import { botSettings, type Config } from '../config.js'
 import type { Db } from '../db/client.js'
 import { usdcFor } from '../chains.js'
 import { parseBearer, tokenMatches } from '../domain/auth.js'
@@ -137,7 +137,7 @@ function paymentDeps(options: ServerDeps, log: FastifyBaseLogger): X402Deps {
     db: options.db,
     chains,
     usdc,
-    bot: options.bot ?? httpBotNotifier(options.config),
+    bot: options.bot ?? botNotifier(options.config),
     fetch: options.fetch ?? fetch,
     now: options.now ?? (() => new Date()),
     serial: serial(),
@@ -221,7 +221,7 @@ async function serve(
           deps,
           rp,
           ownerPanelRoutes(deps, rp, {
-            botUrl: config.BOT_URL,
+            ...(config.BOT_URL === undefined ? {} : { botUrl: config.BOT_URL }),
             databaseUrl: config.DATABASE_URL,
             ...(pushKey === undefined ? {} : { pushKey }),
             ...(config.SIGN_PAGE_URL === undefined
@@ -246,7 +246,7 @@ async function serve(
         admin.addHook('preHandler', requireToken(config.ADMIN_TOKEN))
         await admin.register(
           adminRoutes(deps, {
-            botUrl: config.BOT_URL,
+            ...(config.BOT_URL === undefined ? {} : { botUrl: config.BOT_URL }),
             databaseUrl: config.DATABASE_URL,
             ...(config.PASSKEY_RP_ID === undefined ? {} : { passkeyRpId: config.PASSKEY_RP_ID }),
             ...(config.PASSKEY_ORIGIN === undefined
@@ -257,18 +257,22 @@ async function serve(
       },
       { prefix: '/v1/admin' },
     )
-    app.register(
-      async (bot) => {
-        bot.addHook('preHandler', requireToken(config.BOT_TOKEN))
-        await bot.register(
-          botRoutes(deps, config.TELEGRAM_APPROVALS === 'true', {
-            botUrl: config.BOT_URL,
-            databaseUrl: config.DATABASE_URL,
-          }),
-        )
-      },
-      { prefix: '/v1/bot' },
-    )
+    // Without a bot (CR-017) its routes do not exist: nothing holds a token that could call them.
+    const telegram = botSettings(config)
+    if (telegram !== undefined) {
+      app.register(
+        async (bot) => {
+          bot.addHook('preHandler', requireToken(telegram.token))
+          await bot.register(
+            botRoutes(deps, config.TELEGRAM_APPROVALS === 'true', {
+              botUrl: telegram.url,
+              databaseUrl: config.DATABASE_URL,
+            }),
+          )
+        },
+        { prefix: '/v1/bot' },
+      )
+    }
   }
 
   app.get('/health', async () => ({ status: 'ok' }))

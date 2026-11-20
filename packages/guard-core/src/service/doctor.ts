@@ -18,7 +18,8 @@ export interface DoctorDeps {
   usdc: ReadonlyMap<ChainId, string>
   fetch: typeof fetch
   now: () => Date
-  botUrl: string
+  /** Unset when there is no Telegram bot (CR-017): nothing to check then. */
+  botUrl?: string | undefined
   databaseUrl: string
   passkeyAbove?: Amount | undefined
 }
@@ -35,7 +36,7 @@ export async function doctor(deps: DoctorDeps): Promise<DoctorCheck[]> {
     database(deps),
     ...chains.flat(),
     ...passkeyChecks(deps),
-    await bot(deps),
+    ...(deps.botUrl === undefined ? [] : [await bot(deps.botUrl, deps.fetch)]),
     await backup(deps),
   ]
 }
@@ -150,9 +151,9 @@ function passkeyChecks(deps: DoctorDeps): DoctorCheck[] {
   })
 }
 
-async function bot(deps: DoctorDeps): Promise<DoctorCheck> {
+async function bot(url: string, fetchImpl: typeof fetch): Promise<DoctorCheck> {
   try {
-    const response = await deps.fetch(`${deps.botUrl}/health`, {
+    const response = await fetchImpl(`${url}/health`, {
       signal: AbortSignal.timeout(5_000),
     })
     if (response.ok) {

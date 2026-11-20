@@ -304,6 +304,18 @@ VAPID, by the pinned `web-push` library.
 - On Fly, set the key as the secret `VAPID_PRIVATE_KEY` (the PEM). The entrypoint moves it to tmpfs
   with the hot keys and sets `VAPID_PRIVATE_KEY_FILE`.
 
+### Without a Telegram bot (CR-017)
+
+The bot is optional. `BOT_URL`, `BOT_TOKEN` and `BOT_WEBHOOK_SECRET` are all set or all unset. A
+partial set stops the start, naming the missing variables. With none set:
+
+- no webhook goes out, so there is no failed-webhook log or `approval_request_failed` audit row. The
+  owner hears through the panel's Web Push, which always goes first.
+- the `/v1/bot/*` routes are not registered, and answer 404.
+- the doctor leaves out its bot check instead of failing it.
+
+With all three set, everything is as before.
+
 ### Bot routes that only tighten or read (CR-016)
 
 The bot holds `BOT_TOKEN` only, never the admin token. Under `/v1/bot`, with that token alone:
@@ -507,7 +519,7 @@ and region (`gru`) as the bot (`defimind-bot`, see its README):
     address, so a client off Fly cannot pick a fresh address per request.
   - **private**, `fly-local-6pn:8787`: `/v1/admin/*`, `/v1/bot/*` and `/health`. No Fly service
     exposes it. The bot reaches it at `http://defimind-guard-core.internal:8787`, and guard-core
-    calls the bot at `http://defimind-bot.internal:8788` (`BOT_URL` in `fly.toml`).
+    calls the bot, when there is one, at `http://defimind-bot.internal:8788` (`BOT_URL` in `fly.toml`).
 
   Both listeners share one set of deps, so the per-agent lock covers an agent's request and the
   owner's approval alike. Without `PUBLIC_PORT`, as in a local run, one listener on `HOST:PORT`

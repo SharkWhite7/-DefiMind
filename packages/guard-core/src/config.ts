@@ -26,10 +26,13 @@ export const configSchema = z
     DATABASE_URL: z.string().min(1).default('file:./data/guard.db'),
 
     ADMIN_TOKEN: secret,
-    BOT_TOKEN: secret,
-
-    BOT_URL: z.string().min(1),
-    BOT_WEBHOOK_SECRET: secret,
+    /**
+     * CR-017. The Telegram bot is optional: all three or none. Without them guard-core sends no
+     * webhook and has no /v1/bot routes; the owner is reached through the panel's Web Push alone.
+     */
+    BOT_TOKEN: optional(secret),
+    BOT_URL: optional(z.string().min(1)),
+    BOT_WEBHOOK_SECRET: optional(secret),
 
     SOLANA_CHAIN: z.enum([CHAINS.solanaDevnet, CHAINS.solanaMainnet]).default(CHAINS.solanaDevnet),
     SOLANA_RPC_URL: optional(z.string().min(1)),
@@ -133,6 +136,23 @@ export const configSchema = z
   .refine((c) => (c.VAPID_PRIVATE_KEY_FILE === undefined) === (c.VAPID_SUBJECT === undefined), {
     path: ['VAPID_SUBJECT'],
   })
+  .superRefine((c, ctx) => {
+    const bot = {
+      BOT_URL: c.BOT_URL,
+      BOT_TOKEN: c.BOT_TOKEN,
+      BOT_WEBHOOK_SECRET: c.BOT_WEBHOOK_SECRET,
+    }
+    const missing = Object.entries(bot).filter(([, value]) => value === undefined)
+    if (missing.length > 0 && missing.length < 3) {
+      for (const [key] of missing) {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: 'the bot needs all three of BOT_URL, BOT_TOKEN and BOT_WEBHOOK_SECRET',
+        })
+      }
+    }
+  })
   // A passkey is bound to an address, so turning them on without one would approve nothing.
   .refine(
     (c) =>
@@ -160,4 +180,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(`invalid configuration: ${fields}`)
   }
   return parsed.data
+}
+
+/** The Telegram bot's settings, when it is configured (CR-017). */
+export function botSettings(config: Config) {
+  const { BOT_URL: url, BOT_TOKEN: token, BOT_WEBHOOK_SECRET: secret } = config
+  return url === undefined || token === undefined || secret === undefined
+    ? undefined
+    : { url, token, secret }
 }
