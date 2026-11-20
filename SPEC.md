@@ -387,7 +387,7 @@ First access. GET /v1/owner/setup -> { needsSetup: boolean } (public). While no 
 POST /v1/owner/setup { setupCode } -> { enrolLink } issues the same one-time enrol code as
 passkey-code; the code is compared in constant time and rate-limited per IP. Once a passkey exists
 it answers 410 { error: "setup_done" } and SETUP_CODE is never accepted again. A wrong code is
-401 { error: "invalid_setup_code" }; too many tries is 429.
+401 { error: "setup_code_invalid" }; too many tries is 429.
 
 Keys. At start, each key not given by env or file is generated once and stored under
 /data/keys (directory 0700, files 0600): a hot wallet per enabled chain, the receipt key, the VAPID
