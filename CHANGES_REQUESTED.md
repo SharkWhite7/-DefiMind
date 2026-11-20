@@ -915,3 +915,35 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   - SPEC v0.12.
 - **Rollout:** with the infrastructure migration. A deployment that still gives the bot
   `ADMIN_TOKEN` keeps working, but `doctor` warns about it.
+
+### CR-017 — Telegram optional: the panel alone reaches the owner
+
+- **From:** integrator, after the owner's decision during the infrastructure migration (HUMAN-31)
+- **Date:** 2026-11-20
+- **Status:** approved by the owner on 2026-11-20 ("cr017 aprovado"). Applied as SPEC v0.13. The
+  manager added making the bot's two secrets optional too.
+- **Why:**
+  - The owner runs DefiMind from the web panel only. The panel already approves with a passkey,
+    pauses, kills, edits policy and receives Web Push, which goes out before the bot webhook.
+  - Without a bot, guard-core still posts every webhook: a warn log per event, an
+    `approval_request_failed` audit row per approval, and a doctor check that reports the bot as
+    down. A self-hoster without Telegram also has to invent `BOT_TOKEN` and `BOT_WEBHOOK_SECRET`.
+  - Every bot route left registered is a credential to guard for no use.
+- **What:**
+  1. `BOT_URL`, `BOT_TOKEN` and `BOT_WEBHOOK_SECRET` become optional, all three or none. A
+     partial set fails at startup, naming the missing variables.
+  2. With none set:
+     - guard-core uses a notifier that sends nothing, so there is no webhook, no warn log and no
+       `approval_request_failed` audit row;
+     - the `/v1/bot/*` routes are not registered at all, so they answer 404;
+     - doctor skips its bot check instead of failing it.
+  3. With all three set, nothing changes from v0.12.
+  4. The docs lead with the panel. Telegram is described as an optional add-on, and the
+     migration's bot steps (B6, C5) become optional.
+- **Blast radius:**
+  - guard-core: config, the no-op notifier, route registration, doctor, tests;
+  - integrator: e2e `dev:all` and its env check without a bot, the wizard's "no Telegram" choice,
+    the docs, SPEC v0.13;
+  - telegram-bot: none. It still works for those who set it up.
+- **Rollout:** the live deployment already runs without a bot since the migration's C4 (C5 was
+  skipped). Once this lands, the owner unsets the three secrets on `defimind-guard-core`.

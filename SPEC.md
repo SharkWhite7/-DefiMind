@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.12 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.13 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -200,6 +200,7 @@ guard-core even for x402 signing.
 
 ## guard-core HTTP API (port 8787). Auth: header `Authorization: Bearer <token>`
 Agent token (per agent) for /v1/agent/*; admin token for /v1/admin/*; bot token for /v1/bot/*.
+The /v1/bot/* routes exist only when the Telegram bot is configured (CR-017).
 
 POST /v1/agent/x402/fetch   { agentId, url, method, headers?, body?, maxAmount? }
   -> 200 { intentId?, status?, response?: { status, headers, body } , rejectReasons }
@@ -373,6 +374,10 @@ receipt hash, the Merkle path and the root in the anchor tx, and, given a run of
 has no gap and every prevHash links. Prints pass or fail per check; trusts no DefiMind server.
 
 ## Webhook guard-core -> telegram-bot
+The Telegram bot is optional (CR-017). BOT_URL, BOT_TOKEN and BOT_WEBHOOK_SECRET are all set or all
+unset; a partial set is a configuration error. With none set, guard-core sends no webhook, registers
+no /v1/bot/* route, and doctor does not check a bot: the owner is reached through the panel and its
+Web Push only. Push always goes out before the webhook, so a bot that is down never delays the panel.
 POST {BOT_URL}/hooks/approval-request  (header X-Guard-Signature: HMAC-SHA256 of body with BOT_WEBHOOK_SECRET)
 { intent: PayIntent, simulation: { summary: string, balanceChanges: {token, delta}[] }, approveBefore: string }
 Pending intents expire after 10 minutes -> status "expired", reason APPROVAL_TIMEOUT.
@@ -412,6 +417,8 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.13 (2026-11-20): CR-017, approved by the owner. The Telegram bot is optional: BOT_URL,
+  BOT_TOKEN and BOT_WEBHOOK_SECRET all or none; without them no webhook and no /v1/bot/* route.
 - v0.12 (2026-11-19): CR-016, approved by the owner. The bot loses the admin token: tightening-only
   and read-only /v1/bot/* routes under BOT_TOKEN, audited via "bot".
 - v0.11 (2026-11-19): CR-015, approved by the owner. Three more policy changes need the step-up
