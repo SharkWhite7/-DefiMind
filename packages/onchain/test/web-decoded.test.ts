@@ -65,6 +65,15 @@ describe('the Solana transaction, read from its bytes', () => {
     ])
   })
 
+  it('formats a transfer with the decimals its own bytes carry', async () => {
+    const vault = key()
+    const pay = { feePayer: owner, hotWallet: owner, recipient: vault, mint, amount: 2_500_000n }
+    const [, transfer] = transferInstructions({ ...pay, decimals: 9 }, true)
+    expect((await decode([transfer!]))[0]).toMatch(
+      /^Send 0\.0025 \(2500000 base units at 9 decimals\)/,
+    )
+  })
+
   it('names the multisig a create makes', async () => {
     expect(await decode([createMultisigInstruction(owner, key(), key())])).toEqual([
       `Create a multisig run by ${owner.toBase58()}, members ${owner.toBase58()}, threshold 1.`,

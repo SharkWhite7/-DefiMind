@@ -1,4 +1,4 @@
-import { USDC_DECIMALS } from '@defimind/shared'
+import { ADDRESSES, USDC_DECIMALS } from '@defimind/shared'
 import {
   decodeFunctionData,
   erc20Abi,
@@ -8,11 +8,12 @@ import {
   parseAbi,
   size,
   slice,
+  zeroAddress,
   type Address,
   type Hex,
 } from 'viem'
 import { allowanceModuleAbi } from '../../../src/evm/safe.js'
-import { MULTI_SEND_CALL_ONLY, safeAbi } from './calls.js'
+import { FALLBACK_HANDLER, MULTI_SEND_CALL_ONLY, PROXY_FACTORY, SAFE_L2, safeAbi } from './calls.js'
 
 const abi = [
   ...safeAbi,
@@ -25,14 +26,22 @@ const abi = [
   ]),
 ]
 
+/** The Allowance Module from the verified addresses in shared, built into the page: never from a link or a config. */
+const MODULES = Object.values(ADDRESSES).flatMap((chain) =>
+  chain.allowanceModule ? [chain.allowanceModule as Address] : [],
+)
+const known = (module: Address) => MODULES.some((m) => isAddressEqual(m, module))
+const zero = (...values: (bigint | number)[]) => values.every((value) => BigInt(value) === 0n)
+
 const units = (amount: bigint) =>
   `${formatUnits(amount, USDC_DECIMALS)} (${amount} base units at ${USDC_DECIMALS} decimals)`
 const UNKNOWN = 'A call this page cannot read: reject this transaction.'
 
 /**
  * What the call Phantom is about to send does, read from its bytes alone and not from the link or
- * whoever served the page: who gains a right or receives tokens, and how much. Anything it cannot
- * read is named as such, for the owner to reject.
+ * whoever served the page: who gains a right or receives tokens, and how much. A field it does not
+ * show must hold the value the page's own builders put there (calls.ts); anything else, like
+ * anything it cannot read, is named as such, for the owner to reject.
  */
 export function decodeEvm(to: Address, data: Hex): string[] {
   let call
@@ -48,19 +57,39 @@ export function decodeEvm(to: Address, data: Hex): string[] {
       return [`Send ${units(amount)} of token ${to} to ${recipient}.`]
     }
     case 'createProxyWithNonce': {
-      const [, initializer] = args
+      const [singleton, initializer] = args
+      if (!isAddressEqual(to, PROXY_FACTORY) || !isAddressEqual(singleton, SAFE_L2))
+        return [UNKNOWN]
       const setup = decodeFunctionData({ abi: safeAbi, data: initializer })
       if (setup.functionName !== 'setup') return [UNKNOWN]
-      const [owners, threshold] = setup.args
+      const [owners, threshold, target, call, handler, paymentToken, payment, receiver] = setup.args
+      // setup's to/data is a delegatecall the new Safe runs, and the payment a fee it pays out.
+      const plain =
+        isAddressEqual(target, zeroAddress) &&
+        call === '0x' &&
+        isAddressEqual(handler, FALLBACK_HANDLER) &&
+        isAddressEqual(paymentToken, zeroAddress) &&
+        payment === 0n &&
+        isAddressEqual(receiver, zeroAddress)
+      if (!plain) return [UNKNOWN]
       return [`Create a Safe owned by ${owners.join(', ')}, threshold ${threshold}.`]
     }
     case 'execTransaction': {
-      const [target, value, inner, operation] = args
+      const [target, value, inner, operation, safeTxGas, baseGas, gasPrice, gasToken, refund] = args
+      // A refund pays gasPrice × gas in gasToken to refundReceiver, out of the Safe.
+      const noRefund =
+        zero(safeTxGas, baseGas, gasPrice) &&
+        isAddressEqual(gasToken, zeroAddress) &&
+        isAddressEqual(refund, zeroAddress)
+      if (!noRefund) return [UNKNOWN]
       if (value !== 0n) return [`The Safe sends ${value} wei of its own coin: reject this.`]
-      if (operation === 1) {
-        return isAddressEqual(target, MULTI_SEND_CALL_ONLY) ? batch(inner) : [UNKNOWN]
-      }
-      return inside(target, inner)
+      const calls =
+        operation === 1
+          ? isAddressEqual(target, MULTI_SEND_CALL_ONLY)
+            ? batch(to, inner)
+            : [UNKNOWN]
+          : inside(to, target, inner)
+      return [`On Safe ${to}:`, ...calls]
     }
     default:
       return [UNKNOWN]
@@ -68,7 +97,7 @@ export function decodeEvm(to: Address, data: Hex): string[] {
 }
 
 /** A call the Safe makes itself. */
-function inside(to: Address, data: Hex): string[] {
+function inside(safe: Address, to: Address, data: Hex): string[] {
   let call
   try {
     call = decodeFunctionData({ abi, data })
@@ -76,15 +105,21 @@ function inside(to: Address, data: Hex): string[] {
     return [UNKNOWN]
   }
   const { functionName, args } = call
+  if (functionName === 'enableModule') {
+    return isAddressEqual(to, safe) && known(args[0])
+      ? [`Enable the Safe Allowance Module ${args[0]} on the Safe.`]
+      : [UNKNOWN]
+  }
+  // The module's own calls count only when they go to the known module.
+  if (!known(to)) return [UNKNOWN]
   switch (functionName) {
-    case 'enableModule':
-      return [`Enable module ${args[0]} on the Safe.`]
     case 'addDelegate':
-      return [`Make ${args[0]} a delegate of module ${to}.`]
+      return [`Make ${args[0]} a delegate of the Allowance Module.`]
     case 'removeDelegate':
-      return [`Remove ${args[0]} as a delegate of module ${to}, with its allowances.`]
+      return [`Remove ${args[0]} as a delegate of the Allowance Module, with its allowances.`]
     case 'setAllowance': {
-      const [delegate, token, amount, resetMin] = args
+      const [delegate, token, amount, resetMin, resetBaseMin] = args
+      if (resetBaseMin !== 0) return [UNKNOWN]
       return [`Let ${delegate} draw ${units(amount)} of token ${token}, every ${resetMin} minutes.`]
     }
     default:
@@ -93,7 +128,7 @@ function inside(to: Address, data: Hex): string[] {
 }
 
 /** MultiSend's packed list: operation, to, value, data length, data. */
-function batch(data: Hex): string[] {
+function batch(safe: Address, data: Hex): string[] {
   const call = decodeFunctionData({ abi, data })
   if (call.functionName !== 'multiSend') return [UNKNOWN]
   const packed = call.args[0] as Hex
@@ -104,7 +139,7 @@ function batch(data: Hex): string[] {
     const value = BigInt(slice(packed, at + 21, at + 53))
     const length = Number(BigInt(slice(packed, at + 53, at + 85)))
     const inner = length ? slice(packed, at + 85, at + 85 + length) : '0x'
-    lines.push(...(operation !== 0 || value !== 0n ? [UNKNOWN] : inside(to, inner)))
+    lines.push(...(operation !== 0 || value !== 0n ? [UNKNOWN] : inside(safe, to, inner)))
     at += 85 + length
   }
   return lines

@@ -16,8 +16,8 @@ const CREATE_IDEMPOTENT = 1
 const UNKNOWN = (program: PublicKey) =>
   `An instruction for ${program.toBase58()} this page cannot read: reject this transaction.`
 
-const units = (amount: bigint) =>
-  `${formatUnits(amount, USDC_DECIMALS)} (${amount} base units at ${USDC_DECIMALS} decimals)`
+const units = (amount: bigint, decimals = USDC_DECIMALS) =>
+  `${formatUnits(amount, decimals)} (${amount} base units at ${decimals} decimals)`
 const keys = (list: PublicKey[]) => list.map((key) => key.toBase58()).join(', ') || '(none)'
 const is = (data: Buffer, discriminator: number[]) =>
   data.subarray(0, 8).equals(Buffer.from(discriminator))
@@ -58,7 +58,7 @@ async function line(
     const destination = account(2)
     const owner = created.get(destination.toBase58()) ?? (await ownerOf(connection, destination))
     return (
-      `Send ${units(data.readBigUInt64LE(1))} of token ${account(1).toBase58()} to ` +
+      `Send ${units(data.readBigUInt64LE(1), data[9])} of token ${account(1).toBase58()} to ` +
       `${owner ? `the token account of ${owner.toBase58()}` : `token account ${destination.toBase58()}`}.`
     )
   }

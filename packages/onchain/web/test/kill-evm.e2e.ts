@@ -66,7 +66,8 @@ describe('the kill page on an EVM chain', () => {
     expect(text).toContain(`Safe ${s.state.safe}, on evm-localnet.`)
     expect(text).toContain('50000000 base units')
     expect(await decodedLines(page)).toEqual([
-      `Remove ${s.state.hot} as a delegate of module ${MODULE}, with its allowances.`,
+      `On Safe ${s.state.safe}:`,
+      `Remove ${s.state.hot} as a delegate of the Allowance Module, with its allowances.`,
     ])
     expect(s.sent).toEqual([])
     await page.locator('button').click()
