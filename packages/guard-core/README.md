@@ -188,8 +188,8 @@ every refusal counted by code, and the spend per x402 domain, biggest first.
 
 ### Receipts
 
-With `RECEIPT_SIGNING_KEY_FILE` set, an Ed25519 private key in PEM that is separate from every hot
-wallet key, each executed payment gets a signed receipt: the intent, the SHA-256 of the canonical
+With `RECEIPT_SIGNING_KEY_FILE`, an Ed25519 private key in PEM that is separate from every hot
+wallet key and made at start when unset (CR-019), each executed payment gets a signed receipt: the intent, the SHA-256 of the canonical
 JSON of the policy it cleared under, the simulation summary, who approved it (`policy`, `owner` or
 `passkey`) and the time. The signature covers the canonical JSON of all of that: keys sorted at
 every depth, no whitespace. The policy, simulation and approver are recorded when the payment
@@ -249,8 +249,8 @@ With the receipt key (`RECEIPT_SIGNING_KEY_FILE`), guard-core keeps one hash cha
   - The memo is `defimind:anchor:v1:<fromSeq>-<toSeq>:<rootHex>`, published in one transaction.
   - The anchor `{ fromSeq, toSeq, root, chain, txId, anchoredAt }` is stored in `anchors`. A
     failed publication stores nothing and is tried again on the next tick.
-  - Turned on by `ANCHOR_CHAIN` (a Solana cluster), `ANCHOR_RPC_URL` and `ANCHOR_KEY_FILE` together,
-    with the receipt key. The anchor key is a Solana keypair of its own: funded for fees only, never
+  - Turned on by `ANCHOR_CHAIN` (a Solana cluster) and `ANCHOR_RPC_URL` together, with
+    `ANCHOR_KEY_FILE`, which is made when unset (CR-019). The anchor key is a Solana keypair of its own: funded for fees only, never
     the hot wallet. On Fly, set it as the secret `ANCHOR_KEYPAIR_JSON`, and the entrypoint moves it
     to tmpfs.
   - **Limit:** the local `anchors` table lives in the same database as the receipts. Someone who
@@ -274,8 +274,8 @@ With the receipt key (`RECEIPT_SIGNING_KEY_FILE`), guard-core keeps one hash cha
 
 ### Web Push
 
-With `VAPID_PRIVATE_KEY_FILE` (a P-256 private key in PEM) and `VAPID_SUBJECT` (`mailto:` or
-`https:`), guard-core pushes to the owner's browsers. Messages use RFC 8291 encryption and RFC 8292
+With `VAPID_PRIVATE_KEY_FILE` (a P-256 private key in PEM, made at start when unset) and
+`VAPID_SUBJECT` (`mailto:` or `https:`, defaulting to `PUBLIC_URL`), guard-core pushes to the owner's browsers. Messages use RFC 8291 encryption and RFC 8292
 VAPID, by the pinned `web-push` library.
 
 - `GET /v1/owner/push/key` returns `{ publicKey }`, the uncompressed P-256 point in base64url
@@ -315,6 +315,27 @@ partial set stops the start, naming the missing variables. With none set:
 - the doctor leaves out its bot check instead of failing it.
 
 With all three set, everything is as before.
+
+### Guided setup (CR-019)
+
+A one-click deployment starts with only `ADMIN_TOKEN` and `SETUP_CODE`, and a disk at `/data`.
+
+- **Keys.** Each key file that the env leaves unset is made once under `KEYS_DIR` (default: `keys/`
+  next to the database), directory 0700 and files 0600. That covers a hot wallet per enabled chain,
+  the receipt key, the VAPID key and the anchor keypair. A file is never replaced, so a restart keeps
+  the hot wallet its onchain limit names. A key given by env always wins, so Fly deployments are
+  unchanged. `GET /v1/owner/keys` (session) answers the public halves only.
+- **A chain without its vault waits.** It has a hot wallet but no adapter until the owner adopts a
+  vault, so it pays nothing. With the vault set, a missing RPC or key still stops the start.
+- **First access.** `GET /v1/owner/setup` answers `{ needsSetup }`. While no passkey exists,
+  `POST /v1/owner/setup { setupCode }` answers `{ enrolLink, expiresAt }`, the same one-time link as
+  `pnpm passkey-code`. The code is compared in constant time, five tries per address per 15 minutes,
+  and every wrong one is audited (`setup_code_refused`). Once a passkey exists it answers
+  `410 setup_done`.
+- **One public listener.** `ADMIN_ROUTES=false` leaves `/v1/admin/*` unregistered. `PUBLIC_URL`
+  defaults to `RENDER_EXTERNAL_URL`, and `PASSKEY_RP_ID`, `PASSKEY_ORIGIN` and `VAPID_SUBJECT` default
+  from it. `TRUST_FORWARDED_FOR=true` takes the client's address for rate limits from the last
+  `X-Forwarded-For` hop, the one the host's proxy appends.
 
 ### Bot routes that only tighten or read (CR-016)
 

@@ -129,6 +129,8 @@ export const passkeyEnrolment = z.object({ response: webAuthnResponse })
 export const ownerApproval = z.object({ intentId: z.uuid(), assertion: webAuthnResponse })
 export const ownerSignIn = z.object({ assertion: webAuthnResponse })
 
+export const ownerSetup = z.object({ setupCode: z.string().min(1).max(256) })
+
 const enrolCode = z.string().regex(/^[A-Za-z0-9_-]{32}$/, 'not an enrolment code')
 export const enrolCodeBody = z.object({ code: enrolCode })
 export const ownerEnrolment = z.object({

@@ -72,7 +72,7 @@ describe('buildChains', () => {
     expect(typeof adapter?.x402Scheme).toBe('function')
   })
 
-  it.each(['BASE_RPC_URL', 'SAFE_ADDRESS', 'BASE_HOT_WALLET_KEY_FILE', 'BASE_USDC'])(
+  it.each(['BASE_RPC_URL', 'BASE_HOT_WALLET_KEY_FILE', 'BASE_USDC'])(
     'refuses to start Base without %s, naming it and never the key',
     async (name) => {
       const error = await build({ ...mainnet, [name]: '' }).catch((e: unknown) => e)
@@ -96,10 +96,16 @@ describe('buildChains', () => {
     )
   })
 
-  it('refuses Solana with its key file but no RPC or multisig', async () => {
-    await expect(build({ SOLANA_HOT_WALLET_KEYPAIR: '/nowhere.json' })).rejects.toThrow(
-      'invalid configuration: SOLANA_RPC_URL, SQUADS_MULTISIG',
-    )
+  it('refuses Solana with its multisig but no RPC or key file', async () => {
+    await expect(
+      build({ SQUADS_MULTISIG: 'Squads1111111111111111111111111111111111111' }),
+    ).rejects.toThrow('invalid configuration: SOLANA_RPC_URL, SOLANA_HOT_WALLET_KEYPAIR')
+  })
+
+  // CR-019: the hot key exists before the owner has made the vault that names it.
+  it('leaves a chain without its vault waiting, with no adapter and no error', async () => {
+    expect((await build({ SOLANA_HOT_WALLET_KEYPAIR: '/nowhere.json' })).size).toBe(0)
+    expect((await build({ ...mainnet, SAFE_ADDRESS: '' })).size).toBe(0)
   })
 
   it('treats KEY= in the env file as unset', () => {
@@ -206,7 +212,11 @@ describe('Robinhood Chain (CR-007)', () => {
     )
   })
 
-  it.each(['ROBINHOOD_RPC_URL', 'ROBINHOOD_SAFE_ADDRESS', 'ROBINHOOD_HOT_WALLET_KEY_FILE'])(
+  it('leaves Robinhood Chain waiting without its Safe', async () => {
+    expect((await build({ ...robinhood, ROBINHOOD_SAFE_ADDRESS: '' })).size).toBe(0)
+  })
+
+  it.each(['ROBINHOOD_RPC_URL', 'ROBINHOOD_HOT_WALLET_KEY_FILE'])(
     'refuses to start Robinhood Chain without %s',
     async (name) => {
       await expect(build({ ...robinhood, [name]: '' })).rejects.toThrow(

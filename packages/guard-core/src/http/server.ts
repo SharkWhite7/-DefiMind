@@ -9,7 +9,6 @@ import Fastify, {
   type FastifyRequest,
 } from 'fastify'
 import type { KeyObject } from 'node:crypto'
-import { isIP } from 'node:net'
 import { z } from 'zod'
 import { botNotifier, type BotNotifier } from '../adapters/bot.js'
 import { botSettings, type Config } from '../config.js'
@@ -34,6 +33,9 @@ import { integrityMonitor } from '../service/integrity.js'
 import type { AnchorPublisher } from '../service/anchor.js'
 import { startTimers } from './timers.js'
 import { ownerSessionRoutes } from './owner-session.js'
+import { ownerSetupRoutes } from './owner-setup.js'
+import { clientIp } from './client-ip.js'
+import type { PublicKeys } from '../adapters/public-keys.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -58,6 +60,8 @@ export interface ServerDeps {
   anchorPublisher?: AnchorPublisher
   /** The chains the owner kill links to the signing page for, with SIGN_PAGE_URL (CR-014). */
   killTargets?: KillTarget[]
+  /** The public keys GET /v1/owner/keys answers (CR-019). */
+  keys?: PublicKeys
 }
 
 /**
@@ -110,6 +114,7 @@ export async function buildServers(
       config,
       options.killTargets ?? [],
       options.push?.publicKey,
+      options.keys,
     )
   }
 
@@ -157,21 +162,6 @@ function paymentDeps(options: ServerDeps, log: FastifyBaseLogger): X402Deps {
   }
 }
 
-/**
- * Behind Fly's proxy every request comes from the proxy, so the per-IP limit would be one limit
- * for the whole internet. Fly sets Fly-Client-IP to the real address. Only the public listener
- * sits behind that proxy, so only there is the header believed.
- */
-function clientIp(surface: Surface, trustFly: boolean): (request: FastifyRequest) => string {
-  if (surface !== 'public' || !trustFly) {
-    return (request) => request.ip
-  }
-  return (request) => {
-    const header = request.headers['fly-client-ip']
-    return typeof header === 'string' && isIP(header) !== 0 ? header : request.ip
-  }
-}
-
 async function serve(
   app: FastifyInstance,
   surface: Surface,
@@ -179,8 +169,9 @@ async function serve(
   config: Config,
   killTargets: KillTarget[],
   pushKey: string | undefined,
+  keys: PublicKeys | undefined,
 ) {
-  const ipOf = clientIp(surface, config.TRUST_FLY_CLIENT_IP === 'true')
+  const ipOf = clientIp(surface, config)
   await app.register(rateLimit, {
     max: config.RATE_LIMIT_PER_IP,
     timeWindow: '1 minute',
@@ -216,6 +207,7 @@ async function serve(
     app.register(ownerRoutes(deps, rp))
     app.register(panelRoutes(config.PANEL_DIR ?? DEFAULT_PANEL_DIR))
     if (rp !== undefined) {
+      app.register(ownerSetupRoutes(deps, rp.origin, config.SETUP_CODE))
       app.register(
         ownerSessionRoutes(
           deps,
@@ -224,6 +216,7 @@ async function serve(
             ...(config.BOT_URL === undefined ? {} : { botUrl: config.BOT_URL }),
             databaseUrl: config.DATABASE_URL,
             ...(pushKey === undefined ? {} : { pushKey }),
+            ...(keys === undefined ? {} : { keys }),
             ...(config.SIGN_PAGE_URL === undefined
               ? {}
               : { signing: { page: config.SIGN_PAGE_URL, targets: killTargets } }),
@@ -240,7 +233,7 @@ async function serve(
       { prefix: '/v1/agent' },
     )
   }
-  if (surface !== 'public') {
+  if (surface !== 'public' && config.ADMIN_ROUTES === 'true') {
     app.register(
       async (admin) => {
         admin.addHook('preHandler', requireToken(config.ADMIN_TOKEN))

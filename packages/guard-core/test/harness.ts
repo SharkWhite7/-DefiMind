@@ -1,6 +1,7 @@
 import type { LightMyRequestResponse } from 'fastify'
 import type { KillTarget, Policy } from '@defimind/shared'
 import type { PushService } from '../src/adapters/push.js'
+import type { PublicKeys } from '../src/adapters/public-keys.js'
 import { CHAINS } from '@defimind/shared'
 import { encodePaymentRequiredHeader, encodePaymentResponseHeader } from '@x402/core/http'
 import type { PaymentRequirements } from '@x402/core/types'
@@ -61,6 +62,9 @@ export async function harness(
     push?: { service: PushService; publicKey: string }
     /** Turns passkey approvals on at this amount, for the relying party in PASSKEY_RP. */
     passkeyAbove?: string
+    /** More settings, over the defaults above. */
+    env?: Record<string, string>
+    keys?: PublicKeys
   } = {},
 ): Promise<Harness> {
   const db = openDb(':memory:')
@@ -105,6 +109,7 @@ export async function harness(
       PASSKEY_RP_ID: PASSKEY_RP.id,
       PASSKEY_ORIGIN: PASSKEY_RP.origin,
       ...(options.passkeyAbove === undefined ? {} : { PASSKEY_ABOVE: options.passkeyAbove }),
+      ...options.env,
     }),
     chains: new Map([[CHAIN, chain]]),
     bot,
@@ -114,6 +119,7 @@ export async function harness(
     ...(options.receiptKey === undefined ? {} : { receiptKey: options.receiptKey }),
     ...(options.killTargets === undefined ? {} : { killTargets: options.killTargets }),
     ...(options.push === undefined ? {} : { push: options.push }),
+    ...(options.keys === undefined ? {} : { keys: options.keys }),
   })
 
   return {
