@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CHAINS } from '../src/constants.js'
-import { inPhantom, signCluster, signPageUrl } from '../src/sign-links.js'
+import { killPageUrl } from '../src/kill-links.js'
+import { HOSTED_SIGN_PAGE, inPhantom, signCluster, signPageUrl } from '../src/sign-links.js'
 
 describe('signing-page links', () => {
   it('names each chain the page serves by its cluster, and Base by none', () => {
@@ -34,5 +35,26 @@ describe('signing-page links', () => {
     expect(inPhantom(link)).toBe(
       `https://phantom.app/ul/browse/${encodeURIComponent(link)}?ref=${encodeURIComponent('https://g.example')}`,
     )
+  })
+
+  it('names the hot wallet in an EVM kill link for the hosted page, and only when given', () => {
+    const issued = new Date('2026-11-20T00:00:00Z')
+    const safe = '0x' + '5'.repeat(40)
+    const hot = '0x' + 'a'.repeat(40)
+    const withHot = new URL(
+      killPageUrl(HOSTED_SIGN_PAGE, { chain: CHAINS.robinhood, safe, hot }, issued),
+    )
+    expect(withHot.origin).toBe('https://defimind-sign.vercel.app')
+    expect(Object.fromEntries(withHot.searchParams)).toEqual({
+      action: 'kill',
+      cluster: 'robinhood',
+      safe,
+      hot,
+      issued: String(issued.getTime() / 1000),
+    })
+    const without = new URL(
+      killPageUrl(HOSTED_SIGN_PAGE, { chain: CHAINS.robinhood, safe }, issued),
+    )
+    expect(without.searchParams.has('hot')).toBe(false)
   })
 })

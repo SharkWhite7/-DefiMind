@@ -1,8 +1,13 @@
 import { inPhantom, signPageUrl } from './sign-links.js'
 import type { ChainId } from './types.js'
 
-/** Solana names the Squads multisig and the hot wallet. On EVM the page knows its hot wallet: only the Safe. */
-export type KillTarget = { chain: ChainId } & ({ multisig: string; hot: string } | { safe: string })
+/**
+ * Solana names the Squads multisig and the hot wallet. On EVM the Safe, and the hot wallet for the
+ * hosted page, which knows none of its own (CR-020); a page built with one refuses any other.
+ */
+export type KillTarget = { chain: ChainId } & (
+  { multisig: string; hot: string } | { safe: string; hot?: string }
+)
 
 /** One chain's onchain kill, as a link the bot stamps with the time it posts it. */
 export interface PhantomKill {
@@ -30,7 +35,9 @@ export function phantomKillUrl(signPage: string, target: KillTarget, issued: Dat
  */
 export function killPageUrl(signPage: string, target: KillTarget, issued: Date): string {
   const keys: Record<string, string> =
-    'safe' in target ? { safe: target.safe } : { multisig: target.multisig, hot: target.hot }
+    'safe' in target
+      ? { safe: target.safe, ...(target.hot === undefined ? {} : { hot: target.hot }) }
+      : { multisig: target.multisig, hot: target.hot }
   const url = signPageUrl(signPage, target.chain, {
     action: 'kill',
     ...keys,
