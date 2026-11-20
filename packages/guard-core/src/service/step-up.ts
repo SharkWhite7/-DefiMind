@@ -5,7 +5,12 @@ import { canonicalJson } from '../domain/canonical.js'
 import { assertionOptions, type PasskeySetup, verifyAssertion } from './passkeys.js'
 
 export type OwnerAction =
-  'approve_intent' | 'approve_mandate' | 'loosen_policy' | 'resume' | 'create_agent'
+  | 'approve_intent'
+  | 'approve_mandate'
+  | 'loosen_policy'
+  | 'resume'
+  | 'create_agent'
+  | 'change_settings'
 
 const STEP_UP_MS = 5 * 60_000
 type Address = Pick<PasskeySetup, 'rpId' | 'origin'>

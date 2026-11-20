@@ -10,6 +10,8 @@ export class StubChain implements ChainAdapter {
   balance: bigint
   readonly sent: PayIntent[] = []
   readonly topUps: Amount[] = []
+  /** What the owner has deposited in the stub's vault. */
+  vaultBalance = 0n
 
   constructor(
     readonly chain: ChainId,
@@ -25,6 +27,14 @@ export class StubChain implements ChainAdapter {
       spent: '0',
       resetsAt: '1970-01-01T00:00:00.000Z',
       delegate: 'stub',
+    }
+  }
+
+  async getVault(): Promise<{ address: string; token: string; balance: Amount }> {
+    return {
+      address: `stub-vault-${this.chain}`,
+      token: 'stub-usd',
+      balance: `${this.vaultBalance}`,
     }
   }
 

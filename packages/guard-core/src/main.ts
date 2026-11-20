@@ -1,5 +1,7 @@
 import { createSvmAnchor } from '@defimind/onchain'
 import { readKeypairFile, readReceiptKeyFile } from './adapters/keypair.js'
+import { withKeys } from './adapters/keystore.js'
+import { publicKeys } from './adapters/public-keys.js'
 import { readVapidKeyFile, webPushService } from './adapters/push.js'
 import { buildChains } from './chains.js'
 import { loadConfig } from './config.js'
@@ -7,11 +9,16 @@ import { migrateDb, openDb } from './db/client.js'
 import { countPasskeys } from './db/passkeys.js'
 import { requirePersistentDb } from './db/placement.js'
 import { buildServers } from './http/server.js'
+import type { ChainHost } from './http/owner-settings.js'
+import { readSettings } from './db/settings.js'
+import { applySettings } from './domain/settings.js'
 import { killTargets } from './kill-targets.js'
 
-const config = loadConfig()
+const env = loadConfig()
 
-requirePersistentDb(config)
+requirePersistentDb(env)
+
+const config = await withKeys(env)
 
 const db = openDb(config.DATABASE_URL)
 migrateDb(db)
@@ -22,16 +29,19 @@ if (config.PASSKEY_ABOVE !== undefined && countPasskeys(db) === 0) {
   throw new Error('invalid configuration: PASSKEY_ABOVE is set but no passkey is enrolled')
 }
 
-const chains = await buildChains(config)
+// A setting the owner stored in the panel fills in only what the env leaves unset (CR-019).
+const effective = applySettings(config, readSettings(db))
+const chains = await buildChains(effective)
 const receiptKey =
   config.RECEIPT_SIGNING_KEY_FILE === undefined
     ? undefined
     : await readReceiptKeyFile(config.RECEIPT_SIGNING_KEY_FILE)
 
+const vapidSubject = config.VAPID_SUBJECT ?? config.PUBLIC_URL
 const vapid =
-  config.VAPID_PRIVATE_KEY_FILE === undefined || config.VAPID_SUBJECT === undefined
+  config.VAPID_PRIVATE_KEY_FILE === undefined || vapidSubject === undefined
     ? undefined
-    : await readVapidKeyFile(config.VAPID_PRIVATE_KEY_FILE, config.VAPID_SUBJECT)
+    : await readVapidKeyFile(config.VAPID_PRIVATE_KEY_FILE, vapidSubject)
 
 // The anchor key is its own keypair: one that holds fees only, so a leak of it moves no funds.
 const anchorPublisher =
@@ -45,8 +55,19 @@ const anchorPublisher =
         secretKey: await readKeypairFile(config.ANCHOR_KEY_FILE),
       })
 
-const targets = config.SIGN_PAGE_URL === undefined ? [] : await killTargets(config)
+const targets = config.SIGN_PAGE_URL === undefined ? [] : await killTargets(effective)
+const host: ChainHost = {
+  env: config,
+  build: (next) => buildChains(next),
+  // In place: the owner kill route holds this array.
+  changed: async (next) => {
+    if (config.SIGN_PAGE_URL !== undefined) {
+      targets.splice(0, targets.length, ...(await killTargets(next)))
+    }
+  },
+}
 
+const keys = await publicKeys(config)
 const split = config.PUBLIC_PORT !== undefined
 const [app, publicApp] = await buildServers(
   {
@@ -55,6 +76,8 @@ const [app, publicApp] = await buildServers(
     chains,
     sweepMs: config.EXPIRY_SWEEP_MS,
     killTargets: targets,
+    keys,
+    host,
     ...(anchorPublisher === undefined ? {} : { anchorPublisher }),
     ...(vapid === undefined
       ? {}
@@ -70,6 +93,11 @@ if (config.GUARD_STUB_CHAINS === 'true') {
   // With no adapter the policy has no chain to clear a payment on, so every payment is refused:
   // default deny, not a degraded mode.
   app.log.warn('no chain adapter configured: every payment will be refused')
+}
+for (const { chain } of keys.hotWallets) {
+  if (!chains.has(chain)) {
+    app.log.info({ chain }, 'no vault yet: the chain waits for the owner to adopt one in the panel')
+  }
 }
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

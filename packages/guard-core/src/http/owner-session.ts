@@ -94,7 +94,7 @@ export function ownerSessionRoutes(
   }
 }
 
-function sameOriginCheck(origin: string) {
+export function sameOriginCheck(origin: string) {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     if (request.method === 'GET' || request.method === 'HEAD') {
       return

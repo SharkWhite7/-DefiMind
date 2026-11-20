@@ -7,9 +7,10 @@ import { StubChain } from './adapters/stub.js'
 import type { Config } from './config.js'
 
 /**
- * One adapter per configured chain. A chain that is switched on with a value missing stops the
- * start rather than running without it: a guard that quietly drops a chain looks healthy and pays
- * nothing, or worse, is fixed later by someone guessing.
+ * One adapter per chain that has its vault. A chain with a vault but another value missing stops
+ * the start rather than running without it: a guard that quietly drops a chain looks healthy and
+ * pays nothing, or worse, is fixed later by someone guessing. A chain without a vault is waiting for
+ * the owner to adopt one (CR-019) and has no adapter until then.
  */
 export async function buildChains(
   config: Config,
@@ -21,10 +22,11 @@ export async function buildChains(
     return chains
   }
 
-  if (config.SOLANA_HOT_WALLET_KEYPAIR !== undefined) {
-    const { SOLANA_RPC_URL: rpcUrl, SQUADS_MULTISIG: multisig } = required({
+  const multisig = config.SQUADS_MULTISIG
+  if (multisig !== undefined) {
+    const { SOLANA_RPC_URL: rpcUrl, SOLANA_HOT_WALLET_KEYPAIR: keypair } = required({
       SOLANA_RPC_URL: config.SOLANA_RPC_URL,
-      SQUADS_MULTISIG: config.SQUADS_MULTISIG,
+      SOLANA_HOT_WALLET_KEYPAIR: config.SOLANA_HOT_WALLET_KEYPAIR,
     })
     const chain = config.SOLANA_CHAIN
     chains.set(
@@ -32,14 +34,14 @@ export async function buildChains(
       createSvmAdapter({
         chain,
         rpcUrl,
-        hotWalletSecretKey: await readKeypairFile(config.SOLANA_HOT_WALLET_KEYPAIR),
+        hotWalletSecretKey: await readKeypairFile(keypair),
         multisig,
         mint: requireAddress(chain, 'usd'),
       }),
     )
   }
 
-  if (config.BASE_CHAIN !== undefined) {
+  if (config.BASE_CHAIN !== undefined && config.SAFE_ADDRESS !== undefined) {
     const chain = config.BASE_CHAIN
     // A verified address in shared wins; the env value is only for a chain shared has none for.
     const values = required({
@@ -66,7 +68,7 @@ export async function buildChains(
     )
   }
 
-  if (config.ROBINHOOD_CHAIN !== undefined) {
+  if (config.ROBINHOOD_CHAIN !== undefined && config.ROBINHOOD_SAFE_ADDRESS !== undefined) {
     const chain = config.ROBINHOOD_CHAIN
     const values = required({
       ROBINHOOD_RPC_URL: config.ROBINHOOD_RPC_URL,

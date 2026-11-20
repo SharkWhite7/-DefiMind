@@ -134,6 +134,9 @@ importers:
       tsx:
         specifier: ^4.23.15
         version: 4.23.15
+      viem:
+        specifier: ^2.57.16
+        version: 2.57.16(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.6.7)
       web-push:
         specifier: 3.6.7
         version: 3.6.7

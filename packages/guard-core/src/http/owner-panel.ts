@@ -13,6 +13,10 @@ import { controls } from './control.js'
 import { decideIntent, decideMandateFor } from './decisions.js'
 import { ownerExecutions } from './executions.js'
 import { HttpError } from './errors.js'
+import { ownerKeysRoute } from './owner-setup.js'
+import { type ChainHost, ownerSettingsRoutes } from './owner-settings.js'
+import { ownerGuideRoutes } from './owner-guide.js'
+import type { PublicKeys } from '../adapters/public-keys.js'
 import {
   agentIdParam,
   agentRouteParam,
@@ -41,6 +45,8 @@ export function ownerPanelRoutes(
     /** The VAPID public key; push is off without it. */
     pushKey?: string
     signing?: { page: string; targets: KillTarget[] }
+    keys?: PublicKeys
+    host?: ChainHost
   },
 ) {
   const { db, now } = deps
@@ -61,6 +67,13 @@ export function ownerPanelRoutes(
 
   return async (app: FastifyInstance) => {
     await app.register(ownerExecutions(deps))
+    if (setup.keys !== undefined) {
+      await app.register(ownerKeysRoute(setup.keys))
+    }
+    if (setup.host !== undefined) {
+      await app.register(ownerSettingsRoutes(deps, setup.host, stepUp))
+      await app.register(ownerGuideRoutes(deps, setup.host, setup.signing?.page))
+    }
 
     app.post('/v1/owner/challenge', async (request) => {
       const { action, body } = ownerChallenge.parse(request.body)

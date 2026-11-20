@@ -39,15 +39,16 @@ describe('anchoring', () => {
     ANCHOR_KEY_FILE: '/run/defimind/anchor.json',
   }
 
-  it('takes the three settings with a receipt key', () => {
-    expect(() =>
-      loadConfig({ ...base, ...anchor, RECEIPT_SIGNING_KEY_FILE: '/run/defimind/receipt.pem' }),
-    ).not.toThrow()
+  it('takes the cluster and its RPC, with or without a key file, which is made when absent', () => {
+    expect(() => loadConfig({ ...base, ...anchor })).not.toThrow()
+    expect(() => loadConfig({ ...base, ...anchor, ANCHOR_KEY_FILE: '' })).not.toThrow()
   })
 
-  it('refuses part of them, or anchoring without a receipt key', () => {
-    expect(() => loadConfig({ ...base, ANCHOR_CHAIN: anchor.ANCHOR_CHAIN })).toThrow()
-    expect(() => loadConfig({ ...base, ...anchor })).toThrow()
+  it('refuses the cluster without its RPC, or the RPC without a cluster', () => {
+    expect(() => loadConfig({ ...base, ANCHOR_CHAIN: anchor.ANCHOR_CHAIN })).toThrow(
+      'invalid configuration: ANCHOR_RPC_URL',
+    )
+    expect(() => loadConfig({ ...base, ANCHOR_RPC_URL: anchor.ANCHOR_RPC_URL })).toThrow()
   })
 
   it('refuses a chain that is not a Solana cluster', () => {

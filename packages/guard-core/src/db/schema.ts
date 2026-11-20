@@ -323,3 +323,14 @@ export const anchors = sqliteTable('anchors', {
   txId: text('tx_id').notNull(),
   anchoredAt: text('anchored_at').notNull(),
 })
+
+/**
+ * CR-019: what the owner set in the panel for a chain. Used only where the env leaves the value
+ * unset, and a vault only once guard-core has read on chain that it names this hot wallet.
+ */
+export const chainSettings = sqliteTable('chain_settings', {
+  chain: text('chain').primaryKey(),
+  rpcUrl: text('rpc_url'),
+  vault: text('vault'),
+  updatedAt: text('updated_at').notNull(),
+})

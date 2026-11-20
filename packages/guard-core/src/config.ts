@@ -10,7 +10,28 @@ function optional<T extends z.ZodType>(schema: T) {
 
 const evmAddress = z.string().regex(/^0x[0-9a-fA-F]{40}$/, 'expected a 0x address')
 
-export const configSchema = z
+/**
+ * CR-019. PUBLIC_URL is the address the owner opens; on Render the host sets RENDER_EXTERNAL_URL.
+ * The passkey's RP id and origin follow from it unless set, since the browser binds both to it.
+ */
+function defaults(env: unknown): unknown {
+  if (typeof env !== 'object' || env === null) {
+    return env
+  }
+  const raw = env as Record<string, unknown>
+  const given = (name: string) => (raw[name] === '' ? undefined : raw[name])
+  const publicUrl = given('PUBLIC_URL') ?? given('RENDER_EXTERNAL_URL')
+  const url =
+    typeof publicUrl === 'string' && URL.canParse(publicUrl) ? new URL(publicUrl) : undefined
+  return {
+    ...raw,
+    PUBLIC_URL: publicUrl,
+    PASSKEY_RP_ID: given('PASSKEY_RP_ID') ?? url?.hostname,
+    PASSKEY_ORIGIN: given('PASSKEY_ORIGIN') ?? url?.origin,
+  }
+}
+
+const settings = z
   .object({
     PORT: z.coerce.number().int().positive().default(8787),
     /** Loopback unless set: a deployment opts in to listening beyond this machine. */
@@ -26,6 +47,13 @@ export const configSchema = z
     DATABASE_URL: z.string().min(1).default('file:./data/guard.db'),
 
     ADMIN_TOKEN: secret,
+    /** CR-019. False leaves /v1/admin/* unregistered, as a one-listener host must. */
+    ADMIN_ROUTES: z.enum(['true', 'false']).default('true'),
+    /** CR-019. Issues the first enrol link from the panel, until a passkey exists. */
+    SETUP_CODE: optional(secret),
+    PUBLIC_URL: optional(z.url({ protocol: /^https$/ })),
+    /** Where generated keys live (CR-019). Defaults to keys/ next to the database. */
+    KEYS_DIR: optional(z.string().min(1)),
     /**
      * CR-017. The Telegram bot is optional: all three or none. Without them guard-core sends no
      * webhook and has no /v1/bot routes; the owner is reached through the panel's Web Push alone.
@@ -81,19 +109,23 @@ export const configSchema = z
     TELEGRAM_APPROVALS: z.enum(['true', 'false']).default('false'),
     /**
      * CR-012. Web Push to the owner's panel: a P-256 private key in PEM, and the contact the push
-     * services may reach (mailto: or https:). Both or neither; push is off without them.
+     * services may reach (mailto: or https:). The key is made when no file is given (CR-019) and
+     * the contact defaults to PUBLIC_URL; push is off with neither contact.
      */
     VAPID_PRIVATE_KEY_FILE: optional(z.string().min(1)),
     VAPID_SUBJECT: optional(z.string().regex(/^(mailto:|https:\/\/)\S+$/)),
     /**
      * CR-013. Anchoring of the execution chain: a Solana cluster, its RPC, and a keypair of its own,
-     * funded for fees only and never the hot wallet. All three or none; off without them.
+     * funded for fees only and never the hot wallet. Off without the cluster and its RPC; the
+     * keypair is made when no file is given (CR-019).
      */
     ANCHOR_CHAIN: optional(z.enum([CHAINS.solanaDevnet, CHAINS.solanaMainnet])),
     ANCHOR_RPC_URL: optional(z.url({ protocol: /^https?$/ })),
     ANCHOR_KEY_FILE: optional(z.string().min(1)),
     /** CR-014. The onchain signing page; with it, the owner kill links each chain's kill there. */
     SIGN_PAGE_URL: optional(z.url({ protocol: /^https$/ })),
+    /** CR-019. The signing page's build, served at /sign. Defaults to packages/onchain/web/dist. */
+    SIGN_DIR: optional(z.string().min(1)),
     /** The panel's static build, served at /panel. Defaults to packages/panel/dist. */
     PANEL_DIR: optional(z.string().min(1)),
 
@@ -107,6 +139,11 @@ export const configSchema = z
      * client picks a fresh one per request and is never limited.
      */
     TRUST_FLY_CLIENT_IP: z.enum(['true', 'false']).default('false'),
+    /**
+     * CR-019. Whether the client's address is the last X-Forwarded-For hop, the one the host's
+     * proxy (Render's) appends. Hops before it are whatever the client sent.
+     */
+    TRUST_FORWARDED_FOR: z.enum(['true', 'false']).default('false'),
 
     /** Requests per minute. Per IP on every route, and per agent token on the agent routes. */
     RATE_LIMIT_PER_IP: z.coerce.number().int().positive().default(120),
@@ -121,20 +158,21 @@ export const configSchema = z
       path: ['PASSKEY_ORIGIN'],
     },
   )
+  // The anchor key is made when no file is given (CR-019); the chain and its RPC go together.
+  .refine((c) => (c.ANCHOR_CHAIN === undefined) === (c.ANCHOR_RPC_URL === undefined), {
+    path: ['ANCHOR_RPC_URL'],
+  })
+  // Push services refuse a sender with no contact; PUBLIC_URL serves as one.
   .refine(
     (c) =>
-      [c.ANCHOR_CHAIN, c.ANCHOR_RPC_URL, c.ANCHOR_KEY_FILE].every((v) => v === undefined) ||
-      [c.ANCHOR_CHAIN, c.ANCHOR_RPC_URL, c.ANCHOR_KEY_FILE, c.RECEIPT_SIGNING_KEY_FILE].every(
-        (v) => v !== undefined,
-      ),
-    // Anchoring roots over receipts that are never signed would prove nothing.
-    {
-      path: ['ANCHOR_CHAIN'],
-      message: 'needs ANCHOR_RPC_URL, ANCHOR_KEY_FILE and RECEIPT_SIGNING_KEY_FILE',
-    },
+      c.VAPID_PRIVATE_KEY_FILE === undefined ||
+      c.VAPID_SUBJECT !== undefined ||
+      c.PUBLIC_URL !== undefined,
+    { path: ['VAPID_SUBJECT'] },
   )
-  .refine((c) => (c.VAPID_PRIVATE_KEY_FILE === undefined) === (c.VAPID_SUBJECT === undefined), {
-    path: ['VAPID_SUBJECT'],
+  .refine((c) => c.TRUST_FLY_CLIENT_IP === 'false' || c.TRUST_FORWARDED_FOR === 'false', {
+    path: ['TRUST_FORWARDED_FOR'],
+    message: 'trust one proxy header, not both',
   })
   .superRefine((c, ctx) => {
     const bot = {
@@ -160,6 +198,8 @@ export const configSchema = z
       (c.PASSKEY_RP_ID !== undefined && c.PASSKEY_ORIGIN !== undefined),
     { path: ['PASSKEY_RP_ID'] },
   )
+
+export const configSchema = z.preprocess(defaults, settings)
 
 function originMatches(origin: string, rpId: string | undefined): boolean {
   const url = new URL(origin)
