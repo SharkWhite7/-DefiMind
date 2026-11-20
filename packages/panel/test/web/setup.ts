@@ -36,7 +36,7 @@ export function setupMock() {
       if (passkeys > 0) {
         send(410, { error: 'setup_done' })
       } else if (body['setupCode'] !== SETUP_CODE) {
-        send(401, { error: 'setup_code_not_valid' })
+        send(401, { error: 'setup_code_invalid' })
       } else {
         send(200, { enrolLink: `${origin}/panel/enrol#code=fresh` })
       }
