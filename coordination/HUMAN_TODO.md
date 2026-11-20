@@ -71,37 +71,8 @@ is the owner's decision: which firm, what scope, what cost. Until then, the publ
 ## ⏳ HUMAN-31 — Run the infrastructure migration
 
 CR-012, CR-013 and CR-016 are complete in code, so the move of the live deployment to this repository
-can start. The runbook is [`docs/migration.md`](../docs/migration.md) (Parts A to F, with a rollback); the manager walks the owner through it one step at a time, and the integrator helps when a check fails; HUMAN-27, HUMAN-28 and HUMAN-30
-happen during it. One rule from CR-016: the new bot app gets `BOT_TOKEN` only, never
+can start. The runbook is [`docs/migration.md`](../docs/migration.md) (Parts A to F, with a rollback); the manager walks the owner through it one step at a time, and the integrator helps when a check fails; HUMAN-24, HUMAN-27, HUMAN-28 and HUMAN-30 were done in Parts A and B (2026-11-19). Progress: A and B1–B5 passed; B6 next. One rule from CR-016: the new bot app gets `BOT_TOKEN` only, never
 `GUARD_ADMIN_TOKEN`. The signing page stays at `agentguard-onchain.vercel.app`; the migration creates no new domain.
-
----
-
-## ⬜ HUMAN-30 — Create the anchoring key (CR-013)
-
-At the infrastructure migration. guard-core anchors the execution chain on Solana, and needs its own
-fee-only keypair for that: never the hot wallet, holding only SOL for fees. Create it on the owner's
-machine straight into a file, fund it on devnet first, then set three Fly secrets on guard-core:
-`ANCHOR_KEYPAIR_JSON` (the keypair), `ANCHOR_CHAIN` and `ANCHOR_RPC_URL`. It is a signing key: never
-commit it, paste it in chat or send it to a session. The manager sends the exact commands then.
-
----
-
-## ⬜ HUMAN-27 — Create the Web Push key (CR-012)
-
-When the panel goes live with the infrastructure migration. On the owner's machine, create a P-256
-private key (PEM) straight into a file, then set two Fly secrets on guard-core: `VAPID_PRIVATE_KEY`,
-holding the PEM read from that file, and `VAPID_SUBJECT`, a `mailto:` address the owner reads. The
-entrypoint writes the key into tmpfs and points guard-core at it (PR #15). It is a signing key: never
-commit it, paste it in chat or send it to a session. The manager sends the exact commands then.
-
----
-
-## ⬜ HUMAN-28 — Set the signing page address on guard-core (CR-014)
-
-When the panel goes live. Set `SIGN_PAGE_URL` on guard-core to the signing page's address, the same
-value the bot uses. Without it, the panel's Stop screen shows raw transactions instead of the
-one-tap Phantom links. A public URL, not a secret.
 
 ---
 
@@ -120,14 +91,6 @@ Telegram button. The manager sends the steps then.
 
 ---
 
-## ⬜ HUMAN-24 — Create the receipt key (CR-010, phase 3)
-
-In phase 3 guard-core signs a receipt for each payment with its own key. The owner creates it on their
-machine straight into a file and stores it in Fly's secrets without printing it. The manager sends the
-command then.
-
----
-
 ## ⬜ HUMAN-6 — Tenderly account (optional)
 
 Only if simulation needs a second provider. Not needed so far.
@@ -136,27 +99,31 @@ Only if simulation needs a second provider. Not needed so far.
 
 ## Done
 
-| id       | What                                                                            | When       | Record                                                               |
-| -------- | ------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------- |
-| HUMAN-1  | Repository created, sessions given write access                                 | 2026-11-03 | `SharkWhite7/-DefiMind`                                              |
-| HUMAN-2  | Development environment: Node 22, pnpm, Foundry                                 | 2026-11-03 | —                                                                    |
-| HUMAN-3  | Base test wallets                                                               | 2026-11-03 | keys only in local `.env` files                                      |
-| HUMAN-3B | Solana test keypairs                                                            | 2026-11-03 | keys only in mode-600 files outside the repository                   |
-| HUMAN-4  | Devnet funds                                                                    | 2026-11-03 | —                                                                    |
-| HUMAN-9  | Solana genesis hashes confirmed against the networks                            | 2026-11-03 | SVM-7                                                                |
-| HUMAN-10 | Squads v4 program fixture for the onchain cap tests                             | 2026-11-04 | `8470861` on `fixture/squads-v4`                                     |
-| HUMAN-5  | Telegram bot created                                                            | 2026-11-04 | —                                                                    |
-| HUMAN-11 | First live run on Solana devnet: three payments, 3.5 USDC                       | 2026-11-04 | INT-3, INT-4                                                         |
-| HUMAN-12 | Safe on Base Sepolia                                                            | 2026-11-05 | `0x1df91C7e227370F138Ae546f3D2fa2Fde8a48C2D`                         |
-| HUMAN-13 | First live run on Base Sepolia, from an empty hot wallet                        | 2026-11-05 | INT-6, PR #63                                                        |
-| HUMAN-14 | Phantom signing page hosted                                                     | 2026-11-06 | `https://agentguard-onchain.vercel.app`                              |
-| HUMAN-15 | Devnet rehearsal with Phantom as owner: create, add limit, kill                 | 2026-11-07 | ADR 003                                                              |
-| HUMAN-16 | Base hot wallet key moved to a file                                             | 2026-11-07 | PR #81                                                               |
-| HUMAN-18 | Robinhood Chain USDG addresses confirmed against Paxos                          | 2026-11-07 | allowlist-only token rule                                            |
-| HUMAN-17 | guard-core and the bot on Fly.io (devnet)                                       | 2026-11-08 | INT-7                                                                |
-| HUMAN-19 | Bot redeployed with time-limited kill buttons                                   | 2026-11-08 | PRs #99, #100                                                        |
-| HUMAN-20 | Robinhood Chain testnet run                                                     | 2026-11-08 | ✖️ no USDG faucet; replaced by HUMAN-21                              |
-| HUMAN-21 | Real-money pilot on Robinhood Chain: 0.50 USDG x402 payment, then kill          | 2026-11-09 | `0xa9c7abffb5676651193e866e4f02d9925a72c100ba20972226075dad78083d86` |
-| HUMAN-7  | Deploy accounts                                                                 | 2026-11-08 | Fly.io (D3), done as HUMAN-17                                        |
-| HUMAN-8  | Mainnet decisions D1–D8 and the written go-ahead to launch                      | 2026-11-09 | `LAUNCH.md` §1                                                       |
-| HUMAN-22 | Launch: Robinhood Chain and Solana mainnet, repository public, `main` protected | 2026-11-09 | `LAUNCH.md`, PR #139                                                 |
+| id       | What                                                                              | When       | Record                                                               |
+| -------- | --------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------- |
+| HUMAN-1  | Repository created, sessions given write access                                   | 2026-11-03 | `SharkWhite7/-DefiMind`                                              |
+| HUMAN-2  | Development environment: Node 22, pnpm, Foundry                                   | 2026-11-03 | —                                                                    |
+| HUMAN-3  | Base test wallets                                                                 | 2026-11-03 | keys only in local `.env` files                                      |
+| HUMAN-3B | Solana test keypairs                                                              | 2026-11-03 | keys only in mode-600 files outside the repository                   |
+| HUMAN-4  | Devnet funds                                                                      | 2026-11-03 | —                                                                    |
+| HUMAN-9  | Solana genesis hashes confirmed against the networks                              | 2026-11-03 | SVM-7                                                                |
+| HUMAN-10 | Squads v4 program fixture for the onchain cap tests                               | 2026-11-04 | `8470861` on `fixture/squads-v4`                                     |
+| HUMAN-5  | Telegram bot created                                                              | 2026-11-04 | —                                                                    |
+| HUMAN-11 | First live run on Solana devnet: three payments, 3.5 USDC                         | 2026-11-04 | INT-3, INT-4                                                         |
+| HUMAN-12 | Safe on Base Sepolia                                                              | 2026-11-05 | `0x1df91C7e227370F138Ae546f3D2fa2Fde8a48C2D`                         |
+| HUMAN-13 | First live run on Base Sepolia, from an empty hot wallet                          | 2026-11-05 | INT-6, PR #63                                                        |
+| HUMAN-14 | Phantom signing page hosted                                                       | 2026-11-06 | `https://agentguard-onchain.vercel.app`                              |
+| HUMAN-15 | Devnet rehearsal with Phantom as owner: create, add limit, kill                   | 2026-11-07 | ADR 003                                                              |
+| HUMAN-16 | Base hot wallet key moved to a file                                               | 2026-11-07 | PR #81                                                               |
+| HUMAN-18 | Robinhood Chain USDG addresses confirmed against Paxos                            | 2026-11-07 | allowlist-only token rule                                            |
+| HUMAN-17 | guard-core and the bot on Fly.io (devnet)                                         | 2026-11-08 | INT-7                                                                |
+| HUMAN-19 | Bot redeployed with time-limited kill buttons                                     | 2026-11-08 | PRs #99, #100                                                        |
+| HUMAN-20 | Robinhood Chain testnet run                                                       | 2026-11-08 | ✖️ no USDG faucet; replaced by HUMAN-21                              |
+| HUMAN-21 | Real-money pilot on Robinhood Chain: 0.50 USDG x402 payment, then kill            | 2026-11-09 | `0xa9c7abffb5676651193e866e4f02d9925a72c100ba20972226075dad78083d86` |
+| HUMAN-7  | Deploy accounts                                                                   | 2026-11-08 | Fly.io (D3), done as HUMAN-17                                        |
+| HUMAN-8  | Mainnet decisions D1–D8 and the written go-ahead to launch                        | 2026-11-09 | `LAUNCH.md` §1                                                       |
+| HUMAN-22 | Launch: Robinhood Chain and Solana mainnet, repository public, `main` protected   | 2026-11-09 | `LAUNCH.md`, PR #139                                                 |
+| HUMAN-24 | Receipt signing key created and set on `defimind-guard-core` (HUMAN-31 A4, B3)    | 2026-11-19 | never printed; `/v1/receipts/key` serves the public key              |
+| HUMAN-30 | Anchoring keypair created, funded with 2 devnet SOL, set on `defimind-guard-core` | 2026-11-19 | fee-only, never the hot wallet                                       |
+| HUMAN-27 | Web Push (VAPID) key created and set on `defimind-guard-core`                     | 2026-11-19 | HUMAN-31 A4, B3                                                      |
+| HUMAN-28 | `SIGN_PAGE_URL` set on `defimind-guard-core` from the bot's live value            | 2026-11-19 | `agentguard-onchain.vercel.app`                                      |
