@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -14,7 +15,7 @@ import {
 } from 'viem'
 import { describe, expect, it } from 'vitest'
 import { allowanceCalls, allowanceModuleAbi } from '../src/evm/safe.js'
-import { buildPage } from '../web/build.js'
+import { buildPage, HASHED } from '../web/build.js'
 import { csp, evmChains, rpcUrls } from '../web/page.js'
 import {
   createData,
@@ -216,6 +217,12 @@ describe('the EVM clusters the page is built for', () => {
       hot,
     })
     expect(config.rpc).not.toHaveProperty('evm-localnet')
+    // What a release publishes: the hash of each file every deployment serves unchanged.
+    const sums = await readFile(join(dist, 'SHA256SUMS'), 'utf8')
+    for (const file of HASHED) {
+      const digest = createHash('sha256').update(await readFile(join(dist, file)))
+      expect(sums).toContain(`${digest.digest('hex')}  ${file}\n`)
+    }
     // app.js holds no address: the same bundle serves every config.
     expect(await readFile(join(dist, 'app.js'), 'utf8')).not.toContain(hot)
     expect(html).toContain('https://rpc.mainnet.chain.robinhood.com')

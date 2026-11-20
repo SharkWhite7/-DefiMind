@@ -55,6 +55,8 @@ export async function stage() {
 
 export const heading = (page: Page) => page.locator('h1')
 export const lines = (page: Page) => page.locator('p').allTextContents()
+/** The transaction as the page decoded it from its bytes, before Phantom's prompt. */
+export const decodedLines = (page: Page) => page.locator('.decoded li').allTextContents()
 
 /**
  * What identifies an instruction: its program, data and accounts in order. Decompiling marks the fee

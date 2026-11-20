@@ -91,3 +91,22 @@ export function askAmount(ask: {
     })
   })
 }
+
+/**
+ * What the transaction itself does, in large text, under the page's own summary: read from its
+ * bytes, so the owner has something not from the link or the server to hold against Phantom's screen.
+ */
+export function decoded(lines: string[]) {
+  const section = document.createElement('section')
+  section.className = 'decoded'
+  const heading = document.createElement('h2')
+  heading.textContent = 'What this transaction does, read from its bytes'
+  const list = document.createElement('ol')
+  for (const line of lines) {
+    const item = document.createElement('li')
+    item.textContent = line
+    list.append(item)
+  }
+  section.append(heading, list)
+  app.append(section)
+}

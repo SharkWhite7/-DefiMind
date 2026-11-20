@@ -62,7 +62,7 @@ describe('reads', () => {
       expect(data).toContain(safe.slice(2).toLowerCase())
       return uint(42_000_000n)
     }
-    expect(await adapter.getVault!()).toEqual({ address: safe, token: usdc, balance: '42000000' })
+    expect(await adapter.getVault()).toEqual({ address: safe, token: usdc, balance: '42000000' })
   })
 
   const minute = 29_896_000n

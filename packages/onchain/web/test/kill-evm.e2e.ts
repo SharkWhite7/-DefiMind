@@ -3,7 +3,7 @@ import { chromium, type Browser } from 'playwright'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { killData } from '../src/evm/calls.js'
 import { MODULE, mockPhantomEvm, stageEvm } from './evm-node.js'
-import { heading, lines } from './harness.js'
+import { decodedLines, heading, lines } from './harness.js'
 
 /** The kill page on Robinhood, with a stand-in for Phantom's EVM provider and the chain. */
 let browser: Browser
@@ -65,6 +65,9 @@ describe('the kill page on an EVM chain', () => {
     const text = (await lines(page)).join('\n')
     expect(text).toContain(`Safe ${s.state.safe}, on evm-localnet.`)
     expect(text).toContain('50000000 base units')
+    expect(await decodedLines(page)).toEqual([
+      `Remove ${s.state.hot} as a delegate of module ${MODULE}, with its allowances.`,
+    ])
     expect(s.sent).toEqual([])
     await page.locator('button').click()
     await settled(page, 'Killed')
