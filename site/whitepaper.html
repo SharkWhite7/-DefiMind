@@ -539,11 +539,11 @@
             autonomous payments.</b
           >
           An agent can only pay through DefiMind. Every payment is checked against a policy the
-          owner sets, test-run before it is signed, and then auto-approved, sent to the owner on
-          Telegram for approval, or rejected. The agent never holds a key. Funds stay in the owner's
-          own multisig vault; the agent spends only from a small hot wallet that is refilled under a
-          daily limit enforced by the blockchain itself, so the maximum that can be lost in a day is
-          bounded even if our software fails.
+          owner sets, test-run before it is signed, and then auto-approved, sent to the owner's
+          panel for approval with a passkey, or rejected. The agent never holds a key. Funds stay in
+          the owner's own multisig vault; the agent spends only from a small hot wallet that is
+          refilled under a daily limit enforced by the blockchain itself, so the maximum that can be
+          lost in a day is bounded even if our software fails.
         </p>
 
         <h2><span class="n">01</span>The problem</h2>
@@ -622,8 +622,8 @@
             permitted. Empty means deny.
           </li>
           <li>
-            <strong>Approval threshold</strong> — any payment at or above it waits for the owner on
-            Telegram.
+            <strong>Approval threshold</strong> — any payment at or above it waits for the owner in
+            the panel.
           </li>
           <li><strong>Pause</strong> — one switch stops an agent, or every agent at once.</li>
         </ul>
@@ -686,16 +686,17 @@
 
         <h2><span class="n">06</span>Human approval and the kill switch</h2>
         <p>
-          Payments at or above your threshold are sent to Telegram with a plain summary of what the
-          transaction will do. You approve or reject. An approval is redeemed once, for exactly the
-          approved chain, token, amount, recipient and domain, and expires after ten minutes if you
-          do not answer, so nothing is paid by default. Every message to the bot is
-          cryptographically signed; stale or replayed events are refused.
+          Payments at or above your threshold wait in your owner panel, with a push to your phone
+          and a plain summary of what the transaction will do. You approve with your passkey, or
+          reject. An approval is redeemed once, for exactly the approved chain, token, amount,
+          recipient and domain, and expires after ten minutes if you do not answer, so nothing is
+          paid by default. A Telegram bot is optional: it can send the same alerts and stop
+          everything, but it cannot approve by default.
         </p>
         <p>
-          One command, <code>/kill</code>, pauses every agent at once and prepares, for each chain,
-          the transaction that sets the spending limit to zero and removes the delegate. You sign it
-          and the vault is sealed. The kill has been rehearsed on mainnet.
+          One button, <strong>Stop everything</strong> in the panel, pauses every agent at once and
+          prepares, for each chain, the transaction that sets the spending limit to zero and removes
+          the delegate. You sign it and the vault is sealed. The kill has been rehearsed on mainnet.
         </p>
 
         <h2><span class="n">07</span>Chains and assets</h2>

@@ -1,4 +1,4 @@
-import { CHAINS } from '@defimind/shared'
+import { CHAINS, HOSTED_SIGN_PAGE } from '@defimind/shared'
 import { z } from 'zod'
 
 const secret = z.string().min(32, 'use at least 32 characters; generate with openssl rand -hex 32')
@@ -39,6 +39,9 @@ const httpsPage = z.string().refine((value) => {
 }, 'expected an https url with no query or fragment')
 
 const solanaKey = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/, 'expected a base58 public key')
+/** The one page built from main with no hot wallet of its own (CR-020). */
+export const hosted = (page: string) => page.replace(/\/+$/, '') === HOSTED_SIGN_PAGE
+
 const evmAddress = z.string().regex(/^0x[0-9a-fA-F]{40}$/, 'expected a 0x address')
 
 export const configSchema = z
@@ -82,8 +85,10 @@ export const configSchema = z
     // The weekly report: both, or neither for no weekly report. 0 is Sunday.
     REPORT_WEEKDAY: optional(z.coerce.number().int().min(0).max(6)),
     REPORT_HOUR_UTC: optional(z.coerce.number().int().min(0).max(23)),
-    // The page takes the Robinhood hot wallet from its own build, so the link names only the Safe.
     ROBINHOOD_SAFE_ADDRESS: optional(evmAddress),
+    // guard-core's Robinhood hot wallet. A page built for one deployment knows it; the hosted page
+    // knows none (CR-020), so its kill link must name it.
+    ROBINHOOD_HOT_WALLET_ADDRESS: optional(evmAddress),
   })
   // A kill link that names no multisig or hot wallet opens a page that can only refuse it. With the
   // page set, each chain is configured completely or not at all, and at least one chain is.
@@ -104,6 +109,14 @@ export const configSchema = z
         : []
     for (const key of missing) {
       ctx.addIssue({ code: 'custom', path: [key], message: 'required with SIGN_PAGE_URL' })
+    }
+    const blind = hosted(config.SIGN_PAGE_URL) && !unset('ROBINHOOD_SAFE_ADDRESS')
+    if (blind && unset('ROBINHOOD_HOT_WALLET_ADDRESS')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['ROBINHOOD_HOT_WALLET_ADDRESS'],
+        message: 'required with the hosted signing page',
+      })
     }
   })
 

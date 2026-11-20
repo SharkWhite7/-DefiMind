@@ -7,6 +7,7 @@ import { prepareCreate } from './create.js'
 import { decodeSolana, cannotRead, NOT_ASKED } from './decoded.js'
 import { prepareDeposit } from './deposit.js'
 import { evmMain } from './evm/main.js'
+import { whichHot } from './hot.js'
 import { prepareKill } from './kill.js'
 import { prepareLimit } from './limit.js'
 import { askCap, askDeposit, cap, deposit, EXPIRED, expired, issued, problems } from './link.js'
@@ -48,24 +49,6 @@ const solanaLink = z.discriminatedUnion('action', [
 
 const refuse = (reason: string) => Promise.resolve<Plan>({ kind: 'refused', reason })
 
-/**
- * The hot wallet the page was built for. A link may name one, but only to be refused when it names
- * another: a kill that looked up the wrong one would find no limit and report it gone.
- */
-function builtHot(cluster: string, named: PublicKey | undefined): PublicKey | string {
-  const hot = built(HOT_WALLETS, cluster)
-  if (!hot) {
-    return `This page knows no hot wallet for ${cluster}.`
-  }
-  if (named && !named.equals(new PublicKey(hot))) {
-    return (
-      `The link names ${named.toBase58()} as the hot wallet, but this page only acts for ${hot}. ` +
-      'Do not sign anything from this link.'
-    )
-  }
-  return new PublicKey(hot)
-}
-
 type SolanaLink = z.infer<typeof solanaLink>
 
 async function prepare(
@@ -86,12 +69,20 @@ async function prepare(
       askDeposit('USDC', request.amount),
     )
   }
-  const hotWallet = builtHot(request.cluster, request.hot)
-  if (typeof hotWallet === 'string') {
-    return refuse(hotWallet)
+  const ours = built(HOT_WALLETS, request.cluster)
+  const hot = whichHot(
+    ours === undefined ? undefined : new PublicKey(ours),
+    request.hot,
+    request.action === 'kill',
+    (a, b) => a.equals(b),
+    (key) => key.toBase58(),
+  )
+  if (typeof hot === 'string') {
+    return refuse(hot)
   }
+  const hotWallet = hot.key
   if (request.action === 'kill') {
-    return prepareKill(connection, { ...request, hotWallet }, owner)
+    return prepareKill(connection, { ...request, hotWallet, fromLink: hot.fromLink }, owner)
   }
   if (!usdc) {
     return refuse(`This page knows no USDC for ${request.cluster}.`)

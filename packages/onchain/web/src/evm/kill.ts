@@ -1,5 +1,6 @@
 import type { Address, PublicClient } from 'viem'
 import { hasAllowance, readAllowance } from '../../../src/evm/safe.js'
+import { NO_LIMIT } from '../hot.js'
 import { killData } from './calls.js'
 import { notSoleOwner, type EvmPlan } from './plan.js'
 
@@ -9,6 +10,8 @@ export interface EvmKillRequest {
   hot: Address
   module: Address
   usd: Address
+  /** Named by the link on a page built without one, so a missing allowance says nothing of the kill. */
+  fromLink: boolean
 }
 
 /**
@@ -28,6 +31,7 @@ export async function prepareEvmKill(
   const allowance = await readAllowance(client, module, safe, hot, usd)
   const drawing = () => hasAllowance(client, module, safe, hot, allowance)
   if (!(await drawing())) {
+    if (request.fromLink) return { kind: 'refused', reason: NO_LIMIT }
     return {
       kind: 'done',
       title: 'Already killed',

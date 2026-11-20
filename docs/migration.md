@@ -385,15 +385,23 @@ Check: setup says `Saved the token to …/.defimind/mcp/<id>.token`, and `--chec
 
 **E2. Resume each agent in the panel,** in Agents, with the passkey.
 
-**E3. Prove it works.**
+**E3. Prove it works,** with one real payment that comes back to you: 1.00 USDC on Solana, from the
+vault to your own Phantom address. It is at the approval threshold (D2), so it also proves the
+passkey approval.
 
-1. Have one agent make one small payment. If the policy asks for it, approve it in the panel with
-   the passkey.
-2. In the panel's Executions, the payment has a receipt. Within an hour an anchor appears: a devnet
-   transaction from the anchoring key.
-3. Open the panel's Stop screen and check that it offers one Phantom link per chain. **Do not tap
-   one:** on mainnet that is a real kill.
-4. In Telegram, `/status` shows today's spend including the test payment.
+1. In the panel, open Agents, then `fly-agent`, and add your own Phantom Solana address to the
+   allowed recipients. Saving asks for the passkey, because it allows something new.
+2. Check that `fly-agent` is live and not paused (E2).
+3. In Claude Code, ask the agent: "Use the DefiMind transfer tool to send 1.00 USDC on Solana to
+   <your address>. Reason: migration test."
+4. The panel notifies you. Open it and approve with the passkey.
+5. Phantom shows 1.00 USDC arriving. In the panel's Executions the payment has a receipt, and within
+   an hour an anchor appears: a devnet transaction from the anchoring key.
+6. The panel's Overview shows today's spend including the test payment.
+7. Remove your address from the allowed recipients again. Removing needs no passkey.
+
+Do not press **Stop everything** to look for the Phantom kill links: it pauses every agent, and on
+mainnet the links remove the real limit.
 
 Check the anchor transaction with this, while it runs:
 

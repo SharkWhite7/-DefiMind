@@ -76,9 +76,9 @@ can start. The runbook is [`docs/migration.md`](../docs/migration.md) (Parts A t
 
 ---
 
-## ⬜ HUMAN-34 — Publish the hosted signing page `defimind-sign` (CR-020)
+## ⏳ HUMAN-34 — Publish the hosted signing page `defimind-sign` (CR-020)
 
-Once ON-24 is merged, so the first deploy is the right build. This page serves the kill and the
+Ready: ON-24 is on `main` (#87), so the first deploy is the right build. GC-58 waits for this step. This page serves the kill and the
 deposit for every deployment, so it holds no hot wallet and no key.
 
 1. On vercel.com: Add New → Project → import `SharkWhite7/-DefiMind`.
@@ -90,8 +90,8 @@ deposit for every deployment, so it holds no hot wallet and no key.
 5. Tell the integrator, who checks the deployed `app.js`, `style.css` and `index.template.html`
    against the release's `SHA256SUMS`.
 
-If Vercel gives a different domain, the integrator changes `HOSTED_SIGN_PAGE` to it. Onchain may
-correct the build settings in ON-24; the manager updates these steps then.
+If Vercel gives a different domain, the integrator changes `HOSTED_SIGN_PAGE` to it. Onchain confirmed
+these build settings.
 
 ---
 

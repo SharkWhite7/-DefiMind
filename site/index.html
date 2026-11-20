@@ -7,7 +7,7 @@
     <meta name="claude:viewport-fit-sides" content="cover" />
     <meta
       name="description"
-      content="DefiMind is the security layer between AI agents and their wallets. Policy, simulation, Telegram approvals and an onchain daily cap on Solana, Robinhood Chain and Base."
+      content="DefiMind is the security layer between AI agents and their wallets. Policy, simulation, passkey approvals in your own panel and an onchain daily cap, on Solana and Robinhood Chain, with Base next."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -1137,7 +1137,7 @@
         }
       }
 
-      /* Telegram split */
+      /* Approval split */
       .split {
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -1912,7 +1912,8 @@
             <p class="lede">
               DefiMind is the security layer your AI agent plugs into before it can move a cent.
               Every payment is checked against your rules, test-run before signing, then approved by
-              you on Telegram or blocked. One MCP connection, any agent, any platform.
+              you with a passkey in your own panel, or blocked. One MCP connection, any agent, any
+              platform.
             </p>
             <div class="hero-actions">
               <a class="btn btn-primary" href="#how"
@@ -1930,9 +1931,9 @@
               <a class="btn btn-ghost" href="#security">Why it is safe</a>
             </div>
             <div class="hero-note">
-              <span><b>Solana</b> · <b>Robinhood</b> · <b>Base</b></span>
+              <span><b>Solana</b> · <b>Robinhood</b> · Base next</span>
               <span>USDC</span>
-              <span>x402 (pay-per-use APIs) · MCP (agent plug-in) · Telegram</span>
+              <span>x402 (pay-per-use APIs) · MCP (agent plug-in) · passkeys</span>
             </div>
           </div>
 
@@ -2020,7 +2021,7 @@
               <span class="mark">x402 <small>pay-per-use payments</small></span>
               <span class="mark">Model Context Protocol <small>how agents connect</small></span>
               <span class="mark">USDC <small>digital dollar</small></span>
-              <span class="mark">Telegram <small>approvals</small></span>
+              <span class="mark">Passkeys <small>approvals</small></span>
             </div>
             <div class="marquee-track" aria-hidden="true">
               <span class="mark">Squads v4 <small>vault wallet</small></span>
@@ -2029,7 +2030,7 @@
               <span class="mark">x402 <small>pay-per-use payments</small></span>
               <span class="mark">Model Context Protocol <small>how agents connect</small></span>
               <span class="mark">USDC <small>digital dollar</small></span>
-              <span class="mark">Telegram <small>approvals</small></span>
+              <span class="mark">Passkeys <small>approvals</small></span>
             </div>
           </div>
         </div>
@@ -2318,10 +2319,11 @@
                   <path d="m21 4-9.5 9.5M21 4l-6 17-3.5-7.5L4 10l17-6Z" />
                 </svg>
               </div>
-              <h3>Telegram approvals</h3>
+              <h3>Passkey approvals</h3>
               <p>
-                Payments at or above your threshold go to your phone with a plain summary of what
-                they will do. No answer in 10 minutes means no payment.
+                Payments at or above your threshold wait in your panel, with a push to your phone
+                and a plain summary of what they will do. You approve with your face or fingerprint.
+                No answer in 10 minutes means no payment.
               </p>
             </article>
             <article class="feature">
@@ -2393,8 +2395,9 @@
             <span class="eyebrow">Human in the loop</span>
             <h2 class="h2">Big payments wait for <span class="grad-text">your thumb.</span></h2>
             <p class="lede">
-              Set an approval threshold. Anything above it lands in Telegram with what the payment
-              will actually do, so you approve the effect, not the agent's story.
+              Set an approval threshold. Anything above it waits in your panel with what the payment
+              will actually do, so you approve the effect, not the agent's story. A Telegram bot can
+              send you the same alerts, if you want one.
             </p>
             <ul class="checks">
               <li>
@@ -2460,7 +2463,7 @@
             </ul>
           </div>
 
-          <div class="phone" aria-label="Example Telegram approval">
+          <div class="phone" aria-label="Example approval in the owner panel">
             <div class="phone-top">
               <div class="avatar">
                 <svg class="logo-mark" viewBox="0 0 100 100" aria-hidden="true">
@@ -2502,7 +2505,7 @@
                   </g>
                 </svg>
               </div>
-              <div><b>DefiMind</b><small>bot</small></div>
+              <div><b>DefiMind</b><small>owner panel</small></div>
             </div>
             <div class="chat">
               <div class="bubble">
@@ -2533,7 +2536,7 @@
                 </div>
               </div>
               <div class="tg-btns" id="tgBtns">
-                <button class="tg-btn ok" type="button" id="tgOk">Approve</button>
+                <button class="tg-btn ok" type="button" id="tgOk">Approve with passkey</button>
                 <button class="tg-btn no" type="button" id="tgNo">Reject</button>
               </div>
               <div class="tg-done" id="tgDone" hidden></div>
@@ -2704,7 +2707,7 @@
               <ul>
                 <li>Policy engine and HTTP API</li>
                 <li>MCP server, four tools</li>
-                <li>Telegram approvals and kill</li>
+                <li>Owner approvals and kill</li>
                 <li>530 tests, 24 attack cases</li>
               </ul>
             </div>
@@ -2723,7 +2726,7 @@
               <ul>
                 <li>Live on mainnet with real money</li>
                 <li>Capped daily per chain to start</li>
-                <li>Real signing, Telegram and kill end to end</li>
+                <li>Real signing and kill end to end</li>
               </ul>
             </div>
             <div class="phase next">
@@ -2791,7 +2794,7 @@
             <details>
               <summary>Does the agent's explanation affect the decision?</summary>
               <p>
-                Never. The reason an agent gives is shown to you in Telegram and marked as
+                Never. The reason an agent gives is shown to you in your panel and marked as
                 unverified. Decisions use only your policy and the simulated effect of the
                 transaction.
               </p>
@@ -3052,7 +3055,7 @@
             what: 'Transfer to vendor 7xKX…q4Pd',
             amt: 18,
             s: 'pending',
-            meta: '≥ approval threshold · sent to Telegram',
+            meta: '≥ approval threshold · waiting in your panel',
           },
           {
             k: 'x402',
@@ -3156,7 +3159,7 @@
         ;[cap, hot, vault].forEach((el) => el.addEventListener('input', calc))
         calc()
 
-        // Telegram mockup.
+        // Approval mockup.
         let secs = 582
         const cd = document.getElementById('cd')
         const tick = setInterval(() => {
@@ -3187,7 +3190,7 @@
             ['DAILY_EXCEEDED', "Would push today's spend past your daily max."],
             ['SIM_FAILED', 'The test run failed, so nothing was signed.'],
             ['SIM_UNEXPECTED_EFFECT', 'The test run shows an effect the agent never asked for.'],
-            ['OWNER_REJECTED', 'You pressed Reject in Telegram.'],
+            ['OWNER_REJECTED', 'You pressed Reject in your panel.'],
             ['APPROVAL_TIMEOUT', 'No answer within 10 minutes.'],
             ['INVALID_402', 'The payment request looked malformed, so it was refused.'],
           ],
