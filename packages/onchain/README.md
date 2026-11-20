@@ -246,6 +246,7 @@ design is in [ADR 003](../../docs/adr/003-phantom-owner.md).
   | `/?action=create&cluster=<cluster>`                                                 | `multisigCreateV2`            | `createMultisigInstruction`      |
   | `/?action=add-limit&cluster=<cluster>&multisig=<pda>[&amount=<base units>]`         | `multisigAddSpendingLimit`    | `addSpendingLimitInstruction`    |
   | `/?action=kill&cluster=<cluster>&multisig=<pda>&hot=<pubkey>&issued=<unix seconds>` | `multisigRemoveSpendingLimit` | `removeSpendingLimitInstruction` |
+  | `/?action=deposit&cluster=<cluster>&multisig=<pda>[&amount=<base units>]`           | SPL `transferChecked`         | `transferInstructions`           |
 
   The limit's address is derived from the hot wallet, so the page adds and removes the limit the
   adapter draws on and nothing else. The USDC mint comes from `shared/addresses.ts` at build time,
@@ -254,7 +255,12 @@ design is in [ADR 003](../../docs/adr/003-phantom-owner.md).
   hot wallet is a redeploy from `main`. The amount must not exceed `MAX_DAILY_CAP`.
   The link may leave the amount out. On add-limit, and on enable on EVM, the owner then types the
   daily cap in dollars on the page. The page refuses anything above `MAX_DAILY_CAP` and says that
-  this ceiling is for the beta only. Create makes its one-time create key in the browser; the key signs before
+  this ceiling is for the beta only.
+  **Deposit** moves the owner's own USDC into the vault the chain derives from the multisig, as a
+  plain transfer. On Solana it first creates the vault's token account if it is missing. It grants
+  no delegate, approval or authority. Only a member of the multisig may deposit, and only an owner
+  of the Safe; the page refuses anyone else before it asks for an amount. It needs no hot wallet,
+  so it works on the hosted page for any deployment. Create makes its one-time create key in the browser; the key signs before
   Phantom does. A kill link carries `issued`, when the bot made it, and the page refuses it once it
   is more than 15 minutes old ("This link expired. Use /kill in Telegram for a fresh one"), so a
   button left in an old message cannot remove the limit out of step with guard-core. After a kill,
@@ -487,11 +493,12 @@ whatever its symbol.
   account. Phantom's EVM provider (`window.phantom.ethereum`) must switch to the chain first, or the
   page stops.
 
-  | Link (`cluster=robinhood-testnet` or `robinhood`)                     | Sends                                                                                                              |
-  | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-  | `/?action=create&cluster=<cluster>`                                   | `createProxyWithNonce` on Safe's factory: SafeL2 1.4.1, the owner alone, threshold 1                               |
-  | `/?action=enable&cluster=<cluster>&safe=<Safe>[&amount=<base units>]` | `execTransaction` → MultiSendCallOnly: `enableModule`, `addDelegate(hot)`, `setAllowance(hot, USDG, amount, 1440)` |
-  | `/?action=kill&cluster=<cluster>&safe=<Safe>&issued=<unix seconds>`   | `execTransaction` → `removeDelegate(hot, true)`, the call `buildKillTx` builds                                     |
+  | Link (`cluster=robinhood-testnet` or `robinhood`)                      | Sends                                                                                                              |
+  | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+  | `/?action=create&cluster=<cluster>`                                    | `createProxyWithNonce` on Safe's factory: SafeL2 1.4.1, the owner alone, threshold 1                               |
+  | `/?action=enable&cluster=<cluster>&safe=<Safe>[&amount=<base units>]`  | `execTransaction` → MultiSendCallOnly: `enableModule`, `addDelegate(hot)`, `setAllowance(hot, USDG, amount, 1440)` |
+  | `/?action=deposit&cluster=<cluster>&safe=<Safe>[&amount=<base units>]` | `transfer(safe, amount)` on USDG                                                                                   |
+  | `/?action=kill&cluster=<cluster>&safe=<Safe>&issued=<unix seconds>`    | `execTransaction` → `removeDelegate(hot, true)`, the call `buildKillTx` builds                                     |
   - The Safe calls carry the Safe's pre-validated signature (r = owner, v = 1). The Safe accepts it
     only with the owner as `msg.sender`, so nothing is signed off-chain. The batch is a delegatecall
     into MultiSendCallOnly, which itself refuses delegatecalls.

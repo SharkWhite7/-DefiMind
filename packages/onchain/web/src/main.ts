@@ -4,10 +4,11 @@ import { getAddress } from 'viem'
 import { z } from 'zod'
 import { config, configured } from './config.js'
 import { prepareCreate } from './create.js'
+import { prepareDeposit } from './deposit.js'
 import { evmMain } from './evm/main.js'
 import { prepareKill } from './kill.js'
 import { prepareLimit } from './limit.js'
-import { askCap, cap, EXPIRED, expired, issued, problems } from './link.js'
+import { askCap, askDeposit, cap, deposit, EXPIRED, expired, issued, problems } from './link.js'
 import { isPublicKey, type Plan } from './plan.js'
 import { proveSolana, unreadable } from './proof.js'
 import { button, link, show, waitFor } from './view.js'
@@ -32,6 +33,7 @@ const solanaLink = z.discriminatedUnion('action', [
     issued,
   }),
   z.object({ action: z.literal('create'), cluster }),
+  z.object({ action: z.literal('deposit'), cluster, multisig: key, amount: deposit }),
   z.object({ action: z.literal('proof'), cluster, multisig: key }),
   z.object({
     action: z.literal('add-limit'),
@@ -76,6 +78,14 @@ async function prepare(
   if (request.action === 'kill' && expired(request.issued)) {
     return refuse(EXPIRED)
   }
+  const usdc = built(USDC_MINTS, request.cluster)
+  if (request.action === 'deposit') {
+    if (!usdc) return refuse(`This page knows no USDC for ${request.cluster}.`)
+    const { amount } = request
+    return prepareDeposit(connection, { ...request, usdc: new PublicKey(usdc) }, owner, () =>
+      amount === undefined ? askDeposit('USDC') : Promise.resolve(amount),
+    )
+  }
   const hotWallet = builtHot(request.cluster, request.hot)
   if (typeof hotWallet === 'string') {
     return refuse(hotWallet)
@@ -83,7 +93,6 @@ async function prepare(
   if (request.action === 'kill') {
     return prepareKill(connection, { ...request, hotWallet }, owner)
   }
-  const usdc = built(USDC_MINTS, request.cluster)
   if (!usdc) {
     return refuse(`This page knows no USDC for ${request.cluster}.`)
   }

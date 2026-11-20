@@ -18,6 +18,7 @@ import { buildPage } from '../web/build.js'
 import { csp, evmChains, rpcUrls } from '../web/page.js'
 import {
   createData,
+  depositData,
   enableData,
   FALLBACK_HANDLER,
   killData,
@@ -142,6 +143,7 @@ describe("the signing page's Safe calls", () => {
         enable: enableData(owner, safe, on, false),
         kill: killData(owner, on.module, hot),
         reenable: enableData(owner, safe, on, true),
+        deposit: depositData(safe, cap),
       }
       await expect(`${JSON.stringify(fixture, null, 2)}\n`).toMatchFileSnapshot(
         `../forge/fixtures/signing-page-${cluster}.json`,

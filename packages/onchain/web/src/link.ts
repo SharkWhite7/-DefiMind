@@ -26,19 +26,32 @@ export const problems = (error: z.ZodError) =>
 
 const ceiling = () => BigInt(config.maxDailyCap)
 
+const baseUnits = z
+  .string()
+  .regex(/^[1-9]\d{0,19}$/, 'a positive whole number of base units')
+  .transform(BigInt)
+
 /**
  * A daily cap in base units, at most the page's ceiling. A link may leave it out, and then the owner
  * types one on the page.
  */
-export const cap = z
-  .string()
-  .regex(/^[1-9]\d{0,19}$/, 'a positive whole number of base units')
-  .transform(BigInt)
+export const cap = baseUnits
   .refine(
     (amount) => amount <= ceiling(),
     `above this page's maximum daily cap of ${config.maxDailyCap} base units`,
   )
   .optional()
+
+/** A deposit in base units: no ceiling, since it moves the owner's own money into their own vault. */
+export const deposit = baseUnits.optional()
+
+export const askDeposit = (symbol: string) =>
+  askAmount({
+    title: 'Deposit into the vault',
+    lines: ['How much to move from your wallet into the vault the agent draws on.'],
+    label: 'Amount',
+    symbol,
+  })
 
 export const askCap = (symbol: string) =>
   askAmount({

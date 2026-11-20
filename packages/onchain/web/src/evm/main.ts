@@ -7,11 +7,12 @@ import {
   type PublicClient,
 } from 'viem'
 import { z } from 'zod'
-import { askCap, cap, EXPIRED, expired, issued, problems } from '../link.js'
+import { askCap, askDeposit, cap, deposit, EXPIRED, expired, issued, problems } from '../link.js'
 import { unreadable } from '../proof.js'
 import { button, link, show, waitFor } from '../view.js'
 import { openInPhantom } from '../wallet.js'
 import { prepareEvmCreate } from './create.js'
+import { prepareEvmDeposit } from './deposit.js'
 import { prepareEvmEnable } from './enable.js'
 import { prepareEvmKill } from './kill.js'
 import type { EvmPlan } from './plan.js'
@@ -39,6 +40,7 @@ const evmLink = z.discriminatedUnion('action', [
   z.object({ action: z.literal('kill'), safe: address, hot, issued }),
   z.object({ action: z.literal('create') }),
   z.object({ action: z.literal('proof'), safe: address }),
+  z.object({ action: z.literal('deposit'), safe: address, amount: deposit }),
   z.object({
     action: z.literal('enable'),
     safe: address,
@@ -117,6 +119,16 @@ async function prepare(
   }
   if (request.action === 'kill' && expired(request.issued)) {
     return refuse(EXPIRED)
+  }
+  if (request.action === 'deposit') {
+    const { amount } = request
+    const { usd, symbol } = chain
+    return prepareEvmDeposit(
+      client,
+      { cluster: chain.name, safe: request.safe, usd, symbol },
+      owner,
+      () => (amount === undefined ? askDeposit(symbol) : Promise.resolve(amount)),
+    )
   }
   const hot = chain.hot && getAddress(chain.hot)
   if (!hot) {

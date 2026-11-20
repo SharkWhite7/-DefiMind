@@ -3,6 +3,7 @@ import {
   encodePacked,
   size,
   encodeFunctionData,
+  erc20Abi,
   parseAbi,
   zeroAddress,
   type Address,
@@ -106,3 +107,7 @@ export const killData = (owner: Address, module: Address, hot: Address): Hex =>
       args: [hot, true],
     }),
   )
+
+/** The deposit: a plain token transfer into the Safe, which grants no approval and no delegate. */
+export const depositData = (safe: Address, amount: bigint): Hex =>
+  encodeFunctionData({ abi: erc20Abi, functionName: 'transfer', args: [safe, amount] })
