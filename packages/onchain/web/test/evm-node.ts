@@ -224,7 +224,7 @@ export async function stageEvm() {
     EVM_LOCALNET_RPC: `${server.origin}/evm-rpc`,
     EVM_HOT_WALLET_LOCALNET: state.hot,
   })
-  return { state, sent, server }
+  return { state, sent, server, dist }
 }
 
 /**

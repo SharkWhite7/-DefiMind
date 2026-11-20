@@ -13,8 +13,17 @@ import { formatUnits } from '../../src/svm/transfer.js'
 const g = multisig.generated
 const TRANSFER_CHECKED = 12
 const CREATE_IDEMPOTENT = 1
+export const REJECT = ': reject this transaction.'
 const UNKNOWN = (program: PublicKey) =>
-  `An instruction for ${program.toBase58()} this page cannot read: reject this transaction.`
+  `An instruction for ${program.toBase58()} this page cannot read${REJECT}`
+
+/** Whether any decoded line is one the page cannot vouch for: then it asks Phantom nothing. */
+export const cannotRead = (lines: string[]) => lines.some((line) => line.endsWith(REJECT))
+
+export const NOT_ASKED = [
+  'This transaction carries something this page cannot read, so it does not ask Phantom to sign ' +
+    'it. Do not sign it anywhere else either.',
+]
 
 const units = (amount: bigint, decimals = USDC_DECIMALS) =>
   `${formatUnits(amount, decimals)} (${amount} base units at ${decimals} decimals)`

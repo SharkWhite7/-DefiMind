@@ -12,7 +12,8 @@ import {
   spendingLimitPda,
 } from '../src/svm/squads.js'
 import { transferInstructions } from '../src/svm/transfer.js'
-import { decodeSolana } from '../web/src/decoded.js'
+import { cannotRead, decodeSolana } from '../web/src/decoded.js'
+import { decodeEvm } from '../web/src/evm/decoded.js'
 
 const key = () => Keypair.generate().publicKey
 const owner = key()
@@ -86,5 +87,18 @@ describe('the Solana transaction, read from its bytes', () => {
     expect(await decode([ix])).toEqual([
       `An instruction for ${program.toBase58()} this page cannot read: reject this transaction.`,
     ])
+  })
+
+  it('flags a transaction with any unreadable line, on either chain, and none of ours', async () => {
+    const program = key()
+    const ix = { programId: program, keys: [], data: Buffer.from([1]) } as TransactionInstruction
+    expect(cannotRead(await decode([ix]))).toBe(true)
+    expect(cannotRead(decodeEvm('0x0000000000000000000000000000000000000001', '0xdeadbeef'))).toBe(
+      true,
+    )
+    const limit = spendingLimitPda(multisigPda, hot)
+    expect(
+      cannotRead(await decode([removeSpendingLimitInstruction(multisigPda, owner, limit)])),
+    ).toBe(false)
   })
 })
