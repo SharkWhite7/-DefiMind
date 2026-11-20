@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.14 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.15 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -318,8 +318,10 @@ GET  /v1/owner/policy/:agentId; PUT /v1/owner/policy/:agentId { policy, assertio
 POST /v1/owner/pause { agentId }; POST /v1/owner/resume { agentId, assertion }
 POST /v1/owner/kill {} -> the same body as POST /v1/admin/kill, plus on each ownerTransactions entry
   link?: string (Phantom universal link) and pageLink?: string (the signing page itself), built with
-  phantomKillUrl / killPageUrl from @defimind/shared. Only when guard-core has SIGN_PAGE_URL and the
-  chain has a signing-page target (CR-014). The admin kill never carries them.
+  phantomKillUrl / killPageUrl from @defimind/shared, on SIGN_PAGE_URL or, without it, on
+  HOSTED_SIGN_PAGE (CR-020), whenever the chain has a signing-page target. Each target names the
+  vault and this deployment's hot wallet: multisig and hot on Solana, safe and hot on EVM. The
+  admin kill never carries them.
 GET  /v1/owner/passkeys -> as GET /v1/admin/passkeys
 POST /v1/owner/push { subscription: { endpoint, keys: { p256dh, auth } } } -> { id }
 DELETE /v1/owner/push/:id
@@ -415,8 +417,19 @@ multisig or safe) derives the vault from the chain, signs only when the connecte
 of that multisig or an owner of that Safe, lets the owner type the amount, and signs a plain token
 transfer into the vault; it never grants an allowance, delegate or other authority.
 Only create and add-limit need this deployment's hot wallet. Deposit and kill need no
-per-deployment value, so the panel opens them on the hosted page built from main (the default
-SIGN_PAGE_URL); a compromised guard-core cannot change that page. Before every Phantom prompt, /sign
+per-deployment value, so the panel opens them on the hosted page built from main; a compromised
+guard-core cannot change that page.
+
+Hosted page (CR-020). HOSTED_SIGN_PAGE in @defimind/shared is one page built from main with no hot
+wallet, at a fixed URL, and the default for kill and deposit links when SIGN_PAGE_URL is unset. On a
+cluster for which a build has no hot wallet, it serves create, deposit and kill only: action=kill
+takes the vault and the hot wallet from the link (multisig and hot on Solana, safe and hot on EVM),
+since a kill only removes authority, and add-limit and enable are refused. When no limit or
+allowance exists for a hot wallet taken from the link, the page says so ("No limit found for this
+hot wallet"), never "Already killed". A build that has a hot wallet for the cluster keeps the rule
+that a link naming any other hot wallet is refused. Every action still checks the connected wallet
+on the chain before Phantom opens: the config authority of the multisig, the sole owner of the Safe,
+or a member or owner for a deposit. Before every Phantom prompt, /sign
 and the hosted page show in large text what the transaction itself carries, decoded from its bytes
 and not from the link or the server: the destination or delegate, and the amount. /sign is served
 with the same strict CSP as the panel, and each release publishes the SHA-256 of the signing-page
@@ -472,6 +485,9 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.15 (2026-11-20): CR-020, approved by the owner. One hosted kill and deposit page for every
+  deployment: HOSTED_SIGN_PAGE, kill links that name the hot wallet on both families, and a page
+  that takes the vault and hot wallet from a kill link when it was built with none.
 - v0.14 (2026-11-20): CR-019, approved by the owner. Guided setup: one-click deploy, first access by
   SETUP_CODE, keys generated on the server's disk, settings and vaults from the panel, the setup
   progress, deposits (ChainAdapter.getVault, GET /v1/owner/deposit), and the signing page served by

@@ -1033,8 +1033,9 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
 
 - **From:** integrator
 - **Date:** 2026-11-20
-- **Status:** proposed. The owner asked for this draft ("cr020 escreve", relayed by the manager);
-  that is not an approval of the change.
+- **Status:** approved by the owner on 2026-11-20 ("cr020 aprovado", in the manager's session,
+  after both risks below were shown to him; also "pode corrigir o stop do render" and "pode corrigir
+  o stop completo também", relayed by panel). Applied to SPEC v0.15 on 2026-11-20.
 - **What breaks today:**
   - A one-click deployment (CR-019) sets no `SIGN_PAGE_URL`. The owner kill then pauses every
     agent, but `POST /v1/owner/kill` returns the owner transactions without `link` or `pageLink`.

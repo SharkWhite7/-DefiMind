@@ -1,6 +1,12 @@
 import { CHAINS } from './constants.js'
 import type { ChainId } from './types.js'
 
+/**
+ * CR-020: the signing page built from main with no hot wallet, the default for kill and deposit
+ * links when a deployment sets no SIGN_PAGE_URL. Only main deploys it.
+ */
+export const HOSTED_SIGN_PAGE = 'https://defimind-sign.vercel.app'
+
 /** The cluster names the signing page accepts (packages/onchain/web). Base has no page yet. */
 const CLUSTERS = new Map<string, string>([
   [CHAINS.solanaDevnet, 'devnet'],
