@@ -388,6 +388,34 @@ solana transaction-history "$(solana-keygen pubkey ~/.defimind/anchor.json)" --u
 
 ## Part F: afterwards
 
+**F0. Without Telegram (CR-017).** For an owner who runs the panel only, this step drops the bot's
+three settings from guard-core. It runs in two deploys, so guard-core never meets a partial set:
+
+1. Deploy the CR-017 code with all three settings still present. `BOT_URL` now lives in the
+   secrets instead of `fly.toml`.
+2. Then unset all three together. The new code runs without any of them.
+
+```bash
+cd ~/DefiMind && git pull && fly secrets set --app defimind-guard-core --stage BOT_URL=http://defimind-bot.internal:8788
+cd ~/DefiMind && fly deploy . --config packages/guard-core/fly.toml --dockerfile packages/guard-core/Dockerfile --ha=false
+fly status --app defimind-guard-core && fly logs --app defimind-guard-core --no-tail | tail -n 20
+```
+
+Check: one machine is `started`, and the log shows no config error. Then unset the three:
+
+```bash
+fly secrets unset BOT_URL BOT_TOKEN BOT_WEBHOOK_SECRET --app defimind-guard-core
+fly status --app defimind-guard-core && fly logs --app defimind-guard-core --no-tail | tail -n 20
+```
+
+Check:
+
+- the machine restarts to `started`, with no config error;
+- the log no longer shows `approval webhook failed` warnings;
+- the panel's Doctor has no bot check.
+
+An owner who keeps Telegram skips F0 and runs B6 and C5 instead.
+
 **F1. Automatic deploys.** Each app's deploy token goes straight from flyctl into the `defimind`
 environment's secrets, never into a variable. It needs the GitHub CLI, logged in with `gh auth login`.
 

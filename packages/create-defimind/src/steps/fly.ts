@@ -9,11 +9,7 @@ export async function flyApps(ctx: Ctx, setup: Setup, state: State): Promise<voi
   const { prefix, region } = setup.answers
   const apps = appNames(prefix)
   await ctx.files.ensureDir(setup.paths.flyDir)
-  await writeConfig(ctx, setup, 'guard-core', {
-    app: apps.guard,
-    region,
-    peer: { name: 'BOT_URL', app: apps.bot },
-  })
+  await writeConfig(ctx, setup, 'guard-core', { app: apps.guard, region })
   await writeConfig(ctx, setup, 'telegram-bot', {
     app: apps.bot,
     region,
