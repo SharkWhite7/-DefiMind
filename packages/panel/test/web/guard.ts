@@ -299,7 +299,19 @@ export async function guardCore(dist: string, { fresh = false } = {}) {
       }
       const agentId = String(body['agentId'])
       state.agents.push({ agentId, mode: 'shadow' })
-      state.policy = { ...state.policy, agentId }
+      // As guard-core makes it: deny-all until the owner opens chains, tokens and amounts.
+      state.policy = {
+        agentId,
+        chains: [],
+        tokens: [],
+        perTxMax: '0',
+        dailyMax: '0',
+        approvalThreshold: '0',
+        allowedRecipients: [],
+        allowedDomains: [],
+        paused: false,
+        mode: 'shadow',
+      }
       state.tokens.push({ agentId, stepUp: bound })
       return send(200, { agentId, token: b64(randomBytes(32)) })
     }
@@ -313,7 +325,11 @@ export async function guardCore(dist: string, { fresh = false } = {}) {
         limit: setup.state.vault !== undefined,
         deposit: setup.state.balance !== '0',
         agent: state.agents.length > 0,
-        rules: state.puts.length > 0,
+        // guard-core counts the rules only once the agent may pay somewhere.
+        rules:
+          state.agents.length > 0 &&
+          (state.policy['chains'] as string[]).length > 0 &&
+          state.policy['dailyMax'] !== '0',
         shadow: state.puts.length > 0,
         live: state.policy['mode'] === 'live',
       }

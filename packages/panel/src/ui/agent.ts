@@ -2,7 +2,7 @@ import type { BudgetView, PolicyView } from '../adapters/schemas.js'
 import { chainName } from '../domain/chains.js'
 import { fromForm, toForm } from '../domain/form.js'
 import { formatUsd } from '../domain/money.js'
-import { loosens } from '../domain/policy.js'
+import { chainRules, loosens } from '../domain/policy.js'
 import type { Context, Screen } from './context.js'
 import { button, card, el, row, when } from './dom.js'
 
@@ -29,8 +29,27 @@ async function save(ctx: Context, before: PolicyView, after: PolicyView, message
   ctx.say(loose ? `${message} Confirmed with your passkey.` : message, 'done')
 }
 
-function policyForm(ctx: Context, policy: PolicyView) {
+/** One box per chain this deployment runs: ticking it lets the agent pay there in its dollar. */
+function chainBoxes(known: string[], policy: PolicyView) {
+  const boxes = known.map((chain, i) => {
+    const box = el('input', { id: `chain-${i}`, type: 'checkbox' })
+    box.checked = policy.chains.includes(chain)
+    return { chain, box }
+  })
+  return {
+    picked: () => boxes.filter(({ box }) => box.checked).map(({ chain }) => chain),
+    nodes: [
+      el('p', {}, 'Where it may pay'),
+      ...boxes.map(({ chain, box }) =>
+        el('label', { class: 'check' }, box, `${chainName(chain)}, in its dollar`),
+      ),
+    ],
+  }
+}
+
+function policyForm(ctx: Context, policy: PolicyView, known: string[]) {
   const form = toForm(policy)
+  const chains = chainBoxes(known, policy)
   const perTx = field('per-tx', 'Per payment, in dollars', form.perTxMax)
   const daily = field('daily', 'Per day, in dollars', form.dailyMax)
   const ask = field('threshold', 'Ask me from, in dollars', form.approvalThreshold)
@@ -53,9 +72,10 @@ function policyForm(ctx: Context, policy: PolicyView) {
     el(
       'dl',
       {},
-      row('Chains', policy.chains.map(chainName).join(', ') || 'none'),
+      known.length === 0 && row('Chains', policy.chains.map(chainName).join(', ') || 'none'),
       row('Tokens', policy.tokens.join(', ') || 'none'),
     ),
+    ...(known.length > 0 ? chains.nodes : []),
     ...perTx.nodes,
     ...daily.nodes,
     ...ask.nodes,
@@ -78,7 +98,7 @@ function policyForm(ctx: Context, policy: PolicyView) {
           ctx.say(after, 'stop')
           return
         }
-        await save(ctx, policy, after, 'Policy saved.')
+        await save(ctx, policy, chainRules(after, known, chains.picked()), 'Policy saved.')
       },
       'primary',
     ),
@@ -86,7 +106,15 @@ function policyForm(ctx: Context, policy: PolicyView) {
 }
 
 export async function agent(ctx: Context, id: string): Screen {
-  const [policy, budget] = await Promise.all([ctx.api.policy(id), ctx.api.budget(id)])
+  // A guard-core older than CR-019 has no settings route: the chains are then shown, not edited.
+  const [policy, budget, known] = await Promise.all([
+    ctx.api.policy(id),
+    ctx.api.budget(id),
+    ctx.api
+      .settings()
+      .then(({ chains }) => chains.map((c) => c.chain))
+      .catch(() => []),
+  ])
   const shadow = policy.mode === 'shadow'
   return [
     el('h1', {}, id),
@@ -137,7 +165,7 @@ export async function agent(ctx: Context, id: string): Screen {
             ctx.say('Paused: its payments are refused.', 'done')
           }),
     ),
-    policyForm(ctx, policy),
+    policyForm(ctx, policy, known),
     card(
       el('h2', {}, 'Revoke'),
       el('p', {}, 'Cuts the agent off at its next request. Its token never works again.'),

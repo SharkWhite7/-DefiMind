@@ -1,6 +1,7 @@
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { CHAINS, getAddress } from '@defimind/shared'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { buildPanel } from '../../build.js'
@@ -100,6 +101,12 @@ describe.each([390, 1280])('the guided setup at %i px', (width) => {
     await page.getByRole('button', { name: 'Use Careful' }).click()
 
     await step(page, 8, 'Try it safely')
+    // The agent started deny-all: the preset opens the vaulted chain and its dollar.
+    expect(guard.state.puts.at(-1)?.policy).toMatchObject({
+      chains: ['solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1'],
+      tokens: [getAddress(CHAINS.solanaDevnet, 'usd')],
+      dailyMax: '5000000',
+    })
     await page.getByRole('button', { name: 'Next' }).click()
 
     await step(page, 9, 'Go live')
@@ -107,6 +114,10 @@ describe.each([390, 1280])('the guided setup at %i px', (width) => {
     await page.getByRole('heading', { name: 'You are set up' }).waitFor()
     expect(guard.state.puts.at(-1)?.stepUp?.action).toBe('loosen_policy')
     expect(guard.state.policy['mode']).toBe('live')
+
+    // The agent's screen shows where it may pay, as boxes over this deployment's chains.
+    await page.goto(`${guard.origin}/panel/agents/my-agent`)
+    expect(await page.getByLabel('Solana devnet, in its dollar').isChecked()).toBe(true)
 
     // Leaving and coming back lands on any step, done ones marked.
     await page.goto(`${guard.origin}/panel/start/deposit`)

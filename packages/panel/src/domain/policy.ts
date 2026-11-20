@@ -1,3 +1,5 @@
+import { getAddress } from '@defimind/shared'
+
 const LIMITS = ['perTxMax', 'dailyMax', 'approvalThreshold'] as const
 const LISTS = ['chains', 'tokens', 'allowedRecipients', 'allowedDomains'] as const
 
@@ -41,3 +43,23 @@ export function hostname(text: string): string | undefined {
     ? host
     : undefined
 }
+
+/**
+ * The chains an agent may pay on and their dollar tokens, as the owner picked them out of the
+ * chains this deployment runs. A token of a chain left out goes too; a token the panel does not
+ * know as a chain's dollar stays, so a hand-set one survives.
+ */
+export function chainRules<P extends Rules>(policy: P, known: string[], picked: string[]): P {
+  const usd = (chain: string) => getAddress(chain, 'usd')
+  const managed = new Set(known.map(usd).filter((token) => token !== undefined))
+  const tokens = picked.map(usd).filter((token) => token !== undefined)
+  return {
+    ...policy,
+    chains: [...policy.chains.filter((chain) => !known.includes(chain)), ...picked],
+    tokens: [...new Set([...policy.tokens.filter((token) => !managed.has(token)), ...tokens])],
+  }
+}
+
+/** The chains a new agent can pay on: those with a vault, where the money is. */
+export const vaulted = (chains: { chain: string; vault?: string | undefined }[]) =>
+  chains.filter((c) => c.vault !== undefined).map((c) => c.chain)
