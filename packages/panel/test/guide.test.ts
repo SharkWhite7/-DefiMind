@@ -59,7 +59,7 @@ describe('guided setup', () => {
       action: 'add-limit',
       multisig: 'M1',
     })
-    expect(link).toBe('https://dm.example/sign/?action=add-limit&multisig=M1&cluster=devnet')
+    expect(link).toBe('https://dm.example/sign/?action=add-limit&cluster=devnet&multisig=M1')
     expect(signLink('https://dm.example', CHAINS.base, { action: 'create' })).toBeUndefined()
   })
 
