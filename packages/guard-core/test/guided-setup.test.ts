@@ -7,6 +7,7 @@ import { readEvmKeyFile, readKeypairFile, readReceiptKeyFile } from '../src/adap
 import { keysDir, withKeys } from '../src/adapters/keystore.js'
 import { publicKeys } from '../src/adapters/public-keys.js'
 import { readVapidKeyFile } from '../src/adapters/push.js'
+import { buildChains } from '../src/chains.js'
 import { loadConfig } from '../src/config.js'
 import { ADMIN_TOKEN, harness, PASSKEY_RP, type Harness } from './harness.js'
 import { PANEL, signedIn } from './owner.js'
@@ -65,6 +66,32 @@ describe('keys made on the server (CR-019)', () => {
     expect(config.RECEIPT_SIGNING_KEY_FILE).toBe('/run/defimind/receipt.pem')
     expect(config.BASE_HOT_WALLET_KEY_FILE).toBeUndefined()
     expect(config.ROBINHOOD_HOT_WALLET_KEY_FILE).toBeUndefined()
+  })
+
+  it('makes no hot wallet for a chain whose vault the env names, so the start still fails', async () => {
+    const vaults = {
+      ADMIN_TOKEN,
+      SOLANA_RPC_URL: 'https://api.devnet.solana.com',
+      SQUADS_MULTISIG: 'Squads1111111111111111111111111111111111111',
+      BASE_CHAIN: 'eip155:84532',
+      SAFE_ADDRESS: `0x${'11'.repeat(20)}`,
+    }
+    const config = await withKeys(loadConfig(vaults), fresh())
+    expect(config.SOLANA_HOT_WALLET_KEYPAIR).toBeUndefined()
+    expect(config.BASE_HOT_WALLET_KEY_FILE).toBeUndefined()
+    await expect(buildChains(config)).rejects.toThrow(
+      'invalid configuration: SOLANA_HOT_WALLET_KEYPAIR',
+    )
+    await expect(buildChains({ ...config, SQUADS_MULTISIG: undefined })).rejects.toThrow(
+      /BASE_HOT_WALLET_KEY_FILE/,
+    )
+  })
+
+  it('makes the hot wallet for a chain still waiting for its vault', async () => {
+    const config = await withKeys(loadConfig({ ADMIN_TOKEN, BASE_CHAIN: 'eip155:84532' }), fresh())
+    expect(config.SOLANA_HOT_WALLET_KEYPAIR).toBeDefined()
+    expect(config.BASE_HOT_WALLET_KEY_FILE).toBeDefined()
+    expect((await buildChains(config)).size).toBe(0)
   })
 
   it('keeps them next to the database unless KEYS_DIR says otherwise', () => {

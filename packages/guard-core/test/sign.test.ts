@@ -56,14 +56,24 @@ describe('the signing page at /sign (CR-019)', () => {
     expect(res.body).not.toContain('1'.repeat(44))
   })
 
+  it('serves create and add-limit only; deposit and kill stay on the hosted page', async () => {
+    const app = await page()
+    expect((await app.inject({ url: '/sign/?action=create&cluster=devnet' })).statusCode).toBe(200)
+    for (const url of ['/sign/', '/sign/?action=deposit', '/sign/?action=kill']) {
+      const res = await app.inject({ url })
+      expect(res.statusCode).toBe(404)
+      expect(res.json()).toEqual({ error: 'action_not_served' })
+    }
+  })
+
   it('reads the chain through the public RPC, never guard-core own', async () => {
-    const res = await (await page()).inject({ url: '/sign/' })
+    const res = await (await page()).inject({ url: '/sign/?action=create' })
     expect(config(res.body).rpc['devnet']).toBe('https://api.devnet.solana.com')
     expect(res.body).not.toContain('secret')
   })
 
   it('serves it under a strict CSP that no other site can frame', async () => {
-    const res = await (await page()).inject({ url: '/sign/' })
+    const res = await (await page()).inject({ url: '/sign/?action=add-limit' })
     const policy = String(res.headers['content-security-policy'])
     expect(policy).toContain("default-src 'none'")
     expect(policy).toContain("frame-ancestors 'none'")
@@ -81,7 +91,11 @@ describe('the signing page at /sign (CR-019)', () => {
   })
 
   it('answers sign_page_not_built without the build', async () => {
-    const res = await (await page(join(tmpdir(), 'no-such-sign-dir'))).inject({ url: '/sign/' })
+    const res = await (
+      await page(join(tmpdir(), 'no-such-sign-dir'))
+    ).inject({
+      url: '/sign/?action=create',
+    })
     expect(res.statusCode).toBe(404)
     expect(res.json()).toEqual({ error: 'sign_page_not_built' })
   })

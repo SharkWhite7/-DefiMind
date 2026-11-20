@@ -61,24 +61,42 @@ function slug(chain: ChainId): string {
 /**
  * The config with every key file it lacks made under `dir` (CR-019). A key given by env or a file
  * always wins, so a deployment that passes its keys as secrets is unchanged.
+ *
+ * A hot wallet is made only for a chain whose vault the env does not name, the guided setup's case,
+ * where the vault is adopted later for this key. With the vault in the env, its limit already names
+ * some key: a missing one must stop the start, not be replaced by a wallet the limit never heard of.
  */
 export async function withKeys(config: Config, dir = keysDir(config)): Promise<Config> {
   const key = (given: string | undefined, name: string, kind: Kind) =>
     given === undefined ? ensureKey(dir, name, kind) : Promise.resolve(given)
-  const evm = (chain: ChainId | undefined, given: string | undefined) =>
-    chain === undefined ? Promise.resolve(given) : key(given, `hot-${slug(chain)}`, 'evm')
-  const solana = config.SOLANA_CHAIN
+  const hot = (
+    chain: ChainId | undefined,
+    vault: string | undefined,
+    given: string | undefined,
+    kind: 'solana' | 'evm',
+  ) =>
+    chain === undefined || vault !== undefined || given !== undefined
+      ? Promise.resolve(given)
+      : ensureKey(dir, `hot-${slug(chain)}${kind === 'solana' ? '.json' : ''}`, kind)
   return {
     ...config,
-    SOLANA_HOT_WALLET_KEYPAIR: await key(
+    SOLANA_HOT_WALLET_KEYPAIR: await hot(
+      config.SOLANA_CHAIN,
+      config.SQUADS_MULTISIG,
       config.SOLANA_HOT_WALLET_KEYPAIR,
-      `hot-${slug(solana)}.json`,
       'solana',
     ),
-    BASE_HOT_WALLET_KEY_FILE: await evm(config.BASE_CHAIN, config.BASE_HOT_WALLET_KEY_FILE),
-    ROBINHOOD_HOT_WALLET_KEY_FILE: await evm(
+    BASE_HOT_WALLET_KEY_FILE: await hot(
+      config.BASE_CHAIN,
+      config.SAFE_ADDRESS,
+      config.BASE_HOT_WALLET_KEY_FILE,
+      'evm',
+    ),
+    ROBINHOOD_HOT_WALLET_KEY_FILE: await hot(
       config.ROBINHOOD_CHAIN,
+      config.ROBINHOOD_SAFE_ADDRESS,
       config.ROBINHOOD_HOT_WALLET_KEY_FILE,
+      'evm',
     ),
     RECEIPT_SIGNING_KEY_FILE: await key(config.RECEIPT_SIGNING_KEY_FILE, 'receipt.pem', 'ed25519'),
     VAPID_PRIVATE_KEY_FILE: await key(config.VAPID_PRIVATE_KEY_FILE, 'vapid.pem', 'p256'),

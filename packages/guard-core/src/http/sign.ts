@@ -22,6 +22,13 @@ const EVM = new Map<ChainId, 'robinhood-testnet' | 'robinhood'>([
   [CHAINS.robinhood, 'robinhood'],
 ])
 
+/**
+ * Only the flows that need this deployment's hot wallet: the multisig, and the limit or the Safe
+ * allowance (`enable`) that names it. Deposit and kill stay on the hosted page built from main,
+ * which a compromised guard-core cannot change (SPEC, "Signing page").
+ */
+const ACTIONS = new Set(['create', 'add-limit', 'enable'])
+
 const FILES = new Map([
   ['app.js', 'text/javascript; charset=utf-8'],
   ['style.css', 'text/css; charset=utf-8'],
@@ -73,7 +80,11 @@ export function signRoutes(keys: PublicKeys, dir: string) {
 
   return async (app: FastifyInstance) => {
     app.get('/sign', async (_request, reply) => reply.redirect('/sign/', 308))
-    app.get('/sign/', async (_request, reply) => {
+    app.get('/sign/', async (request, reply) => {
+      const { action } = request.query as { action?: unknown }
+      if (typeof action !== 'string' || !ACTIONS.has(action)) {
+        return reply.code(404).send({ error: 'action_not_served' })
+      }
       const template = await readFile(join(dir, 'index.template.html'), 'utf8').catch(
         () => undefined,
       )
