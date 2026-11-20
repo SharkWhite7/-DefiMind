@@ -60,6 +60,7 @@ describe('flyTasks', () => {
       ADMIN_TOKEN: { secret: 'ADMIN_TOKEN', from: `${HOME}/.defimind/acme.env` },
       BOT_TOKEN: { secret: 'BOT_TOKEN', from: `${HOME}/.defimind/acme.env` },
       BOT_WEBHOOK_SECRET: { secret: 'BOT_WEBHOOK_SECRET', from: `${HOME}/.defimind/acme.env` },
+      BOT_URL: { value: 'http://acme-bot.internal:8788' },
       SOLANA_CHAIN: { value: CHAINS.solanaMainnet },
       SOLANA_RPC_URL: { secret: 'SOLANA_RPC_URL', from: `${HOME}/.defimind/acme.env` },
       SOLANA_HOT_WALLET_KEYPAIR_JSON: {
