@@ -24,7 +24,7 @@ import type { Ctx } from './context.js'
 export async function choosePrefix(ctx: Ctx): Promise<string> {
   const existing = prefixesIn(await ctx.files.list(`${ctx.home}/.defimind`))
   return ctx.prompt.ask({
-    text: 'A short name for your Fly apps. They become <name>-guard-core and <name>-bot, and Fly names are global, so make it your own.',
+    text: 'A short name for your Fly apps. They become <name>-guard-core (and <name>-bot with Telegram), and Fly names are global, so make it your own.',
     default: existing.length === 1 ? existing[0] : defaultPrefix(ctx.username),
     parse: (raw) => check(prefixSchema, raw),
   })
@@ -38,7 +38,7 @@ export async function askAnswers(ctx: Ctx, prefix: string): Promise<Answers> {
     parse: (raw) => check(orgSchema, raw),
   })
   const region = await ask({
-    text: 'The Fly region for both apps.',
+    text: 'The Fly region for your apps.',
     default: 'gru',
     parse: (raw) => check(regionSchema, raw),
   })
@@ -67,25 +67,43 @@ export async function askAnswers(ctx: Ctx, prefix: string): Promise<Answers> {
     default: 'careful',
     parse: (raw) => check(presetSchema, raw.toLowerCase()),
   })
-  const ownerIds = await ask({
-    text: 'Your Telegram user id: only this account can approve payments and press kill. @userinfobot tells you yours. For several, separate them with commas.',
-    parse: (raw) => check(ownerIdsSchema, raw),
+  const telegram = await ask({
+    text: 'Also use a Telegram bot? The owner panel in your browser does everything: approvals with your passkey, the kill, alerts. A bot adds the same alerts in Telegram, and a second Fly app.',
+    default: 'no',
+    parse: (raw) => yesNo(raw, false),
   })
+  const ownerIds = telegram
+    ? await ask({
+        text: 'Your Telegram user id: only this account can use the bot and press kill there. @userinfobot tells you yours. For several, separate them with commas.',
+        parse: (raw) => check(ownerIdsSchema, raw),
+      })
+    : undefined
   const agentId = await ask({
     text: 'A name for your first agent.',
     default: 'agent-1',
     parse: (raw) => check(agentIdSchema, raw),
   })
-  return { prefix, org, region, networks, caps, preset, ownerIds, agentId }
+  return {
+    prefix,
+    org,
+    region,
+    networks,
+    caps,
+    preset,
+    telegram,
+    ...(ownerIds === undefined ? {} : { ownerIds }),
+    agentId,
+  }
 }
 
 /**
- * Fills the env file with what is still missing: the bot token and the RPC URLs, asked, and the
- * three service tokens, generated. Nothing here is printed.
+ * Fills the env file with what is still missing: the RPC URLs and, with Telegram, the bot token,
+ * asked; the admin token, the panel's setup code and, with Telegram, the bot's two, generated.
+ * Nothing here is printed.
  */
 export async function secrets(ctx: Ctx, paths: Paths, answers: Answers): Promise<void> {
   if (ctx.dry) {
-    ctx.say('(dry run: the Telegram token and the RPC URLs are not asked)')
+    ctx.say('(dry run: the RPC URLs and any Telegram token are not asked)')
     await ctx.files.write(paths.envFile, '')
     return
   }
@@ -93,7 +111,11 @@ export async function secrets(ctx: Ctx, paths: Paths, answers: Answers): Promise
     ? parseEnvFile(await ctx.files.read(paths.envFile))
     : {}
   const missing = (name: string) => entries[name] === undefined || entries[name] === ''
-  for (const name of [SECRETS.admin, SECRETS.bot, SECRETS.webhook]) {
+  const generated: string[] = [SECRETS.admin, SECRETS.setup]
+  if (answers.telegram) {
+    generated.push(SECRETS.bot, SECRETS.webhook)
+  }
+  for (const name of generated) {
     if (missing(name)) {
       entries[name] = ctx.token()
     }
@@ -112,14 +134,18 @@ function questions(answers: Answers) {
   const url = (raw: string) => check(httpsUrlSchema, raw)
   const page = `https://${appNames(answers.prefix).page}.vercel.app`
   return [
-    {
-      name: SECRETS.telegram,
-      ask: {
-        text: 'Your Telegram bot token, from @BotFather. It is hidden as you type.',
-        hidden: true,
-        parse: (raw: string) => check(telegramTokenSchema, raw),
-      },
-    },
+    ...(answers.telegram
+      ? [
+          {
+            name: SECRETS.telegram,
+            ask: {
+              text: 'Your Telegram bot token, from @BotFather. It is hidden as you type.',
+              hidden: true,
+              parse: (raw: string) => check(telegramTokenSchema, raw),
+            },
+          },
+        ]
+      : []),
     ...(solana === undefined
       ? []
       : [

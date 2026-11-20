@@ -1,7 +1,8 @@
 # Run your own DefiMind
 
-DefiMind is self-hosted. You run your own guard-core and Telegram bot, your funds sit in a vault
-only you control, and nothing in the path belongs to us. This guide goes from an empty account to
+DefiMind is self-hosted. You run your own guard-core, with its owner panel, your funds sit in a
+vault only you control, and nothing in the path belongs to us. A Telegram bot is optional: the panel
+does everything without it. This guide goes from an empty account to
 an agent paying an x402 API under a daily cap, with a kill switch that works.
 
 Each step links to the package README that holds the exact commands. Those READMEs are kept in step
@@ -17,7 +18,7 @@ with the code by its tests; this page gives the order. If something goes wrong, 
 - A [Fly.io](https://fly.io) account with a card on it. Trial machines stop after 5 minutes.
 - A [Vercel](https://vercel.com) account for your signing page. Any static host with custom
   headers works, but `vercel.json` is ready.
-- Telegram, and a bot token from [@BotFather](https://t.me/BotFather).
+- Only for the optional Telegram bot: a bot token from [@BotFather](https://t.me/BotFather).
 - **A new Phantom wallet with its own recovery phrase, used for nothing but owning your vaults.**
   That wallet can move everything in them, so keep them small (below).
 - On each chain you run: the chain's dollar for the vault, and a little of the native token for
@@ -44,11 +45,11 @@ Your vault (Squads multisig on Solana, Safe on EVM). Only your Phantom wallet co
   └─ daily cap, enforced onchain by Squads or the Safe Allowance Module
        └─ guard-core's hot wallet, holding little or nothing
             └─ pays x402 APIs, after your agent's policy, a simulation and, above your
-               threshold, your approval in Telegram
+               threshold, your approval with your passkey in the owner panel
 ```
 
 The most a day can cost is the cap plus what the hot wallet holds, even if guard-core is
-compromised. Hold in the vault only what your agents need for the coming days. `/kill` in Telegram
+compromised. Hold in the vault only what your agents need for the coming days. **Kill** in the panel
 stops guard-core, and one Phantom signature then removes the onchain cap.
 
 ## 1. Clone and check
@@ -67,8 +68,10 @@ cd ~/DefiMind && pnpm install && pnpm check
   - Solana: `solana-keygen new -o ~/.defimind/sol-hot.json`;
   - EVM: the one-liner in [`packages/onchain/README.md`](../packages/onchain/README.md), Robinhood
     Chain section.
-- **Service tokens:** `openssl rand -hex 32` for each of guard-core's `ADMIN_TOKEN`, `BOT_TOKEN` and
-  `BOT_WEBHOOK_SECRET`. The bot gets the same three values.
+- **Service tokens:** `openssl rand -hex 32` for guard-core's `ADMIN_TOKEN` and `SETUP_CODE`. The
+  setup code opens the owner panel for its first passkey, once (CR-019). With the Telegram bot, also
+  `BOT_TOKEN` and `BOT_WEBHOOK_SECRET`, which the bot gets as well (CR-017: all three of
+  `BOT_URL`, `BOT_TOKEN` and `BOT_WEBHOOK_SECRET`, or none).
 
 Never reuse a devnet or testnet key on mainnet.
 
@@ -126,14 +129,12 @@ Each prints the owner, the cap and the balance.
 Send each hot wallet a little of the chain's native token: on EVM, it pays the gas to draw from the
 Safe.
 
-## 5. guard-core and the bot on Fly
+## 5. guard-core on Fly, and the optional bot
 
-Fly app names are global, so pick your own. Then make three edits:
-
-- `app` in `packages/guard-core/fly.toml`;
-- `app` in `packages/telegram-bot/fly.toml`;
-- the two private URLs that name each other: `BOT_URL` in guard-core's `fly.toml` and `GUARD_URL`
-  in the bot's.
+Fly app names are global, so pick your own, and set `app` in `packages/guard-core/fly.toml`. With
+the Telegram bot, also set `app` in `packages/telegram-bot/fly.toml` and its `GUARD_URL` to
+guard-core's private address, and give guard-core `BOT_URL` (the bot's private address) as a
+secret with the bot's other two.
 
 Then follow, in order:
 
@@ -143,33 +144,40 @@ Then follow, in order:
    - pipe each hot key straight from its file;
    - deploy one machine.
 
-   For mainnet, set `SOLANA_CHAIN` explicitly, since the default is devnet.
+   For mainnet, set `SOLANA_CHAIN` explicitly, since the default is devnet. For the panel, set
+   `PUBLIC_URL=https://<your guard-core app>.fly.dev`, `SETUP_CODE`, and `SIGN_PAGE_URL` pointing
+   at your page, so the panel's kill links each chain's kill there.
 
-2. "Deploy on Fly.io" in [`packages/telegram-bot/README.md`](../packages/telegram-bot/README.md),
-   with `SIGN_PAGE_URL` pointing at your page.
-3. Check: `/status` in Telegram lists each chain with its cap.
+2. Open `https://<your guard-core app>.fly.dev/panel/` on the device that will hold your passkey,
+   enter the setup code and create the passkey. Check: the panel's overview lists each chain with
+   its cap.
+3. Optional: "Deploy on Fly.io" in
+   [`packages/telegram-bot/README.md`](../packages/telegram-bot/README.md), with `SIGN_PAGE_URL`
+   pointing at your page. Then `/status` in Telegram lists the same.
 
 Only guard-core's agent routes are public. The admin routes are on Fly's private network, and you
 reach them with `fly proxy 18787:8787 --app <your guard-core app>`.
 
 To deploy on every merge to your `main`, keep `.github/workflows/deploy.yml`:
 
-1. Change the two app names in its matrix.
-2. Add `FLY_API_TOKEN_GUARD` and `FLY_API_TOKEN_BOT` as **secrets**, never variables: either
+1. Change the app names in its matrix, and drop the bot's entry if you run no bot.
+2. Add `FLY_API_TOKEN_GUARD`, and `FLY_API_TOKEN_BOT` with the bot, as **secrets**, never variables: either
    repository secrets, or secrets of an environment named `defimind` limited to `main`.
    Make each one with `fly tokens create deploy -a <app>`.
 
 ## Run anywhere, instead of Fly
 
-`docker-compose.yml` at the repository root runs the same two images on any server with Docker:
-guard-core with its database on a volume, and the bot. The admin and bot routes stay on the compose
-network. The agent routes listen on `127.0.0.1:8080` only.
+`docker-compose.yml` at the repository root runs the same images on any server with Docker:
+guard-core with its database on a volume, and the bot if you want it. The admin and bot routes stay
+on the compose network. The agent routes listen on `127.0.0.1:8080` only.
 
-1. Put the settings both apps need in `~/.defimind/compose.env`, mode 0600. These are the same
+1. Put the settings the apps need in `~/.defimind/compose.env`, mode 0600. These are the same
    names as in `fly secrets import`. Each hot key goes in as its content, as on Fly:
    `SOLANA_HOT_WALLET_KEYPAIR_JSON`, `ROBINHOOD_HOT_WALLET_KEY`. The entrypoint moves them into
    files on tmpfs before node starts.
-2. `docker compose --env-file ~/.defimind/compose.env up -d --build`.
+2. `docker compose --env-file ~/.defimind/compose.env up -d --build`. With the Telegram bot, add
+   `--profile telegram`, and put `BOT_URL=http://bot:8788` in `compose.env` with `BOT_TOKEN` and
+   `BOT_WEBHOOK_SECRET`.
 3. For agents on other machines, point a DNS name at the server and add Caddy, which gets the
    certificate itself:
    `DOMAIN=guard.example.com docker compose --env-file ~/.defimind/compose.env --profile tls up -d --build`.
@@ -187,18 +195,19 @@ Any other host works if it builds from the repository root and gives guard-core:
 - a persistent volume at `/data`;
 - when keys come in through the env, a tmpfs at `/run/defimind` or the right to mount one (with
   no key in the env, guard-core makes its own under `/data/keys`, as on Render: see `render.yaml`);
-- the private network both apps need.
+- with the bot, the private network both apps need.
 
 We have run it on Fly and with this compose file only.
 
 ## 6. Agents
 
-1. Create an agent on the machine:
+1. Create an agent in the owner panel, under **Agents**: it shows the agent's token once. Or on the
+   machine:
    `fly ssh console --app <guard-core app> -C "sh -c 'cd /srv/defimind/packages/guard-core && for f in receipt.pem:RECEIPT_SIGNING_KEY_FILE vapid.pem:VAPID_PRIVATE_KEY_FILE anchor.json:ANCHOR_KEY_FILE; do [ -f /run/defimind/\${f%%:*} ] && export \${f#*:}=/run/defimind/\${f%%:*}; done; node --import tsx src/scripts/create-agent.ts <agent-id>'"`.
    The entrypoint gives the key paths to the server process only, so the loop names again each key
    the machine has: the receipt, Web Push and anchoring keys.
    It prints the agent's token once.
-2. Its policy starts by denying everything. Set one through the proxy with
+2. Its policy starts by denying everything. Set one in the panel, or through the proxy with
    `PUT /v1/admin/policy/<agent-id>`. The fields are in [`SPEC.md`](../SPEC.md). A sensible start
    is 5 per payment, 20 a day, your approval above 1, and only the API domains you trust.
 3. Connect the agent: "For agent builders" in
@@ -215,9 +224,9 @@ Run each of these once, on your own setup:
 - **A small payment:** a few cents to an x402 API you control. `e2e/src/evm-paywall.ts` and
   `devnet-paywall.ts` are paid APIs you can run yourself.
 - **The kill:**
-  1. `/kill` → Confirm in Telegram;
+  1. **Kill** in the owner panel (or `/kill` → Confirm in Telegram, with the bot);
   2. the Phantom button for each chain;
-  3. then `/status` shows no onchain limit.
+  3. then the panel's overview (or `/status`) shows no onchain limit.
 
   If a button is missing, build the link by hand: [`LAUNCH.md`](../LAUNCH.md), "Kill, in order".
 

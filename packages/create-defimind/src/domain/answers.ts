@@ -75,17 +75,24 @@ export const familiesSchema = z
 const network = z.enum(NETWORK_IDS)
 
 /** Everything the wizard asks that is not a secret: what the state file keeps between runs. */
-export const answersSchema = z.object({
-  prefix: prefixSchema,
-  org: orgSchema,
-  region: regionSchema,
-  networks: z.array(network).min(1),
-  /** Each network's onchain daily cap, in base units. */
-  caps: z.partialRecord(network, z.string().regex(/^[1-9]\d*$/)),
-  preset: presetSchema,
-  ownerIds: z.string().min(1),
-  agentId: agentIdSchema,
-})
+export const answersSchema = z
+  .object({
+    prefix: prefixSchema,
+    org: orgSchema,
+    region: regionSchema,
+    networks: z.array(network).min(1),
+    /** Each network's onchain daily cap, in base units. */
+    caps: z.partialRecord(network, z.string().regex(/^[1-9]\d*$/)),
+    preset: presetSchema,
+    /**
+     * CR-017: the bot is optional, and the owner panel does everything without it. A state file
+     * from before the question always had the bot, so a missing answer means yes.
+     */
+    telegram: z.boolean().default(true),
+    ownerIds: z.string().min(1).optional(),
+    agentId: agentIdSchema,
+  })
+  .refine((a) => !a.telegram || a.ownerIds !== undefined, { path: ['ownerIds'] })
 export type Answers = z.infer<typeof answersSchema>
 
 /** Parses one typed answer; the message names what is wrong, never the value. */

@@ -10,7 +10,7 @@ function dry(seed = checkoutSeed()) {
   const said: string[] = []
   const say = (line = '') => void said.push(line)
   const http = fakeHttp(() => ({}))
-  const prompt = scriptedPrompter(['acme', '', '', 'solana', '', '', 'standard', '111', ''])
+  const prompt = scriptedPrompter(['acme', '', '', 'solana', '', '', 'standard', 'yes', '111', ''])
   const { ctx } = makeCtx({
     dry: true,
     files: dryFiles(memory.api, say, HOME),
@@ -90,6 +90,7 @@ describe('--dry-run', () => {
       'yes',
       '1',
       '',
+      'yes',
       '111',
       '',
     ]).prompter

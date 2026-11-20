@@ -29,10 +29,11 @@ use.
 set, and the page refuses to ask for a second signature. Read it back with `pnpm status:robinhood`.
 
 **"This link expired. Use /kill in Telegram for a fresh one."** A kill link works for 15 minutes, so
-an old button cannot fire later. Run `/kill` again.
+an old button cannot fire later. Press **Stop everything** in the owner panel again (or send `/kill`
+with the bot) for a fresh one.
 
 **"Nothing to sign" or "Already killed" after a kill.** That chain has no limit left, so there is
-nothing to remove. Check with `/status`. The page refuses a kill link that names a hot wallet other
+nothing to remove. Check the panel's overview, or `/status` with the bot. The page refuses a kill link that names a hot wallet other
 than the one it was built for.
 
 **On a computer, the bot's "Open … kill in Phantom" button stops on a phantom.com page with a QR

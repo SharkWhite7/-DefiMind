@@ -22,6 +22,7 @@ const answers: Answers = {
   networks: ['solana-mainnet', 'robinhood-mainnet'],
   caps: { 'solana-mainnet': '20000000', 'robinhood-mainnet': '5000000' },
   preset: 'careful',
+  telegram: true,
   ownerIds: '111,222',
   agentId: 'agent-1',
 }
@@ -58,6 +59,8 @@ describe('flyTasks', () => {
   it("gives guard-core its tokens, each chain's RPC and its hot key by reference", () => {
     expect(env(tasks[3]!)).toEqual({
       ADMIN_TOKEN: { secret: 'ADMIN_TOKEN', from: `${HOME}/.defimind/acme.env` },
+      PUBLIC_URL: { value: 'https://acme-guard-core.fly.dev' },
+      SETUP_CODE: { secret: 'SETUP_CODE', from: `${HOME}/.defimind/acme.env` },
       BOT_TOKEN: { secret: 'BOT_TOKEN', from: `${HOME}/.defimind/acme.env` },
       BOT_WEBHOOK_SECRET: { secret: 'BOT_WEBHOOK_SECRET', from: `${HOME}/.defimind/acme.env` },
       BOT_URL: { value: 'http://acme-bot.internal:8788' },
@@ -91,6 +94,27 @@ describe('flyTasks', () => {
     const guard = env(solanaOnly[3]!)
     expect(guard['SOLANA_CHAIN']).toEqual({ value: CHAINS.solanaDevnet })
     expect(Object.keys(guard).some((name) => name.startsWith('ROBINHOOD'))).toBe(false)
+  })
+
+  it('without Telegram makes one app, and gives guard-core none of the bot three (CR-017)', () => {
+    const panelOnly = flyTasks(
+      setupFor({ answers: { ...answers, telegram: false, ownerIds: undefined } }),
+    )
+    expect(panelOnly.map((task) => task.id)).toEqual([
+      'fly:create:acme-guard-core',
+      'fly:volume:acme-guard-core',
+      'fly:secrets:acme-guard-core',
+    ])
+    const guard = env(panelOnly[2]!)
+    expect(Object.keys(guard).filter((name) => name.startsWith('BOT_'))).toEqual([])
+    expect(guard['PUBLIC_URL']).toEqual({ value: 'https://acme-guard-core.fly.dev' })
+    expect(guard['SETUP_CODE']).toEqual({ secret: 'SETUP_CODE', from: expect.any(String) })
+  })
+
+  it('refuses a bot without the Telegram id that may use it', () => {
+    expect(() => flyTasks(setupFor({ answers: { ...answers, ownerIds: undefined } }))).toThrow(
+      /Telegram user id/,
+    )
   })
 })
 
@@ -137,11 +161,25 @@ describe('finishTasks', () => {
       'fly:deploy:acme-guard-core',
       'fly:deploy:acme-bot',
     ])
-    expect(env(tasks[0]!)).toEqual({
+    const signing = {
+      SIGN_PAGE_URL: { value: 'https://acme-signing-page.vercel.app' },
       SQUADS_MULTISIG: { value: MULTISIG },
       ROBINHOOD_SAFE_ADDRESS: { value: SAFE },
-    })
-    expect(env(tasks[1]!)['SIGN_PAGE_URL']).toEqual({
+    }
+    // guard-core gets the page as well: the panel's kill links there.
+    expect(env(tasks[0]!)).toEqual(signing)
+    expect(env(tasks[1]!)).toEqual(signing)
+  })
+
+  it('without Telegram stages and deploys guard-core alone', () => {
+    const panelOnly = finishTasks(
+      setupFor({ answers: { ...answers, telegram: false, ownerIds: undefined } }),
+    )
+    expect(panelOnly.map((task) => task.id)).toEqual([
+      'fly:vault-secrets:acme-guard-core',
+      'fly:deploy:acme-guard-core',
+    ])
+    expect(env(panelOnly[0]!)['SIGN_PAGE_URL']).toEqual({
       value: 'https://acme-signing-page.vercel.app',
     })
   })

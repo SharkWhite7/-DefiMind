@@ -202,6 +202,9 @@ Check:
 
 **B6. The bot's secrets, and the "bot gets BOT_TOKEN only" check.**
 
+> Only with Telegram. An owner who runs the panel alone skips B6 and C5, and runs F0 instead
+> (CR-017).
+
 - The values are copied from the running `agentguard-bot`, the same way as B2. The list of names
   leaves `GUARD_ADMIN_TOKEN` out.
 - `GUARD_PUBLIC_URL` is set to the new address.
@@ -278,6 +281,8 @@ Check:
 - `/health` answers.
 
 **C5. Deploy the new bot,** then finish the "bot gets BOT_TOKEN only" check.
+
+> Only with Telegram: skip it for the panel alone, as in B6.
 
 ```bash
 cd ~/DefiMind && if grep -qx '\*\*/.env' .dockerignore && [ ! -e packages/telegram-bot/Dockerfile.dockerignore ]; then fly deploy . --config packages/telegram-bot/fly.toml --dockerfile packages/telegram-bot/Dockerfile --ha=false; else echo 'STOP: the build context must use the root .dockerignore, and it must exclude **/.env'; fi

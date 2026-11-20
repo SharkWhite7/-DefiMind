@@ -1,14 +1,15 @@
 # DefiMind
 
 A security layer between AI agents and their wallets. An agent can only pay through DefiMind: every
-payment is checked against a policy, simulated, and then auto-approved, sent to the owner on Telegram
+payment is checked against a policy, simulated, and then auto-approved, sent to the owner's panel
 for approval, or rejected.
 
 Funds stay in a vault the owner alone controls: a **Squads multisig** on Solana, a **Safe** on EVM
 chains. An onchain spend limit lets the guard's hot wallet draw at most a daily cap from it: the
 Squads Spending Limit on Solana, the Safe Allowance Module on EVM chains, both third-party code
 audited by their own makers. There is no custom contract. The agent never holds a key: guard-core signs, and only after the checks pass. The owner
-approves and kills from Telegram, and signs vault changes in Phantom.
+approves with a passkey and kills from the owner panel in the browser, and signs vault changes in
+Phantom. A Telegram bot is optional: it adds alerts and the kill in Telegram.
 
 ```
 Owner vault (Squads multisig or Safe, owned by the owner's Phantom wallet)
@@ -31,7 +32,8 @@ development.
 ## Install the beta
 
 You need Node 20+, pnpm 10, git, [flyctl](https://fly.io/docs/flyctl/install/), accounts on Fly.io
-and Vercel, a Telegram bot token from @BotFather, and a new Phantom wallet used for nothing else.
+and Vercel, and a new Phantom wallet used for nothing else. A Telegram bot token from @BotFather is
+needed only if you also want the bot; the wizard asks.
 On Windows, use WSL2 with Ubuntu.
 
 ```bash
@@ -41,9 +43,11 @@ pnpm --filter create-defimind start --dry-run   # see every step first, nothing 
 pnpm --filter create-defimind start             # the setup; run it again to continue
 ```
 
-The wizard creates your keys, your Fly apps and your signing page. You sign the vault and the cap
+The wizard creates your keys, your Fly app and your signing page. You sign the vault and the cap
 in Phantom, and the wizard creates your first agent in shadow mode: it pays nothing until you switch
-it live with `/mode <agent> live` in Telegram. Then connect the agent from the same checkout:
+it live. At the end it gives you your owner panel's address: open it, enter the setup code it names,
+and create your passkey. From the panel you approve payments, change the rules, switch the agent
+live and press kill. Then connect the agent from the same checkout:
 `pnpm --filter @defimind/mcp-server run setup claude-code`.
 
 - The same setup by hand: [`docs/self-host.md`](./docs/self-host.md).
@@ -69,7 +73,8 @@ it live with `/mode <agent> live` in Telegram. Then connect the agent from the s
 | [`packages/onchain`](./packages/onchain)           | Session 1  | Squads and Safe adapters, signing page, fork tests           |
 | [`packages/guard-core`](./packages/guard-core)     | Session 2  | Policy engine, simulation, signer, x402 client, HTTP API, DB |
 | [`packages/mcp-server`](./packages/mcp-server)     | Session 3  | MCP server exposing payment tools to agents                  |
-| [`packages/telegram-bot`](./packages/telegram-bot) | Session 4  | Owner approvals and kill switch                              |
+| [`packages/panel`](./packages/panel)               | Session 4  | The owner panel: passkey approvals, rules, kill, setup guide |
+| [`packages/telegram-bot`](./packages/telegram-bot) | Session 4  | Optional: alerts and the kill in Telegram                    |
 | [`e2e`](./e2e)                                     | integrator | End-to-end and attack tests                                  |
 
 ## Getting started
@@ -83,15 +88,17 @@ pnpm check        # lint + typecheck + test
 
 ### Running the whole stack
 
-`pnpm dev:all` starts guard-core (:8787), telegram-bot (:8788) and mcp-server over HTTP (:8789). It
-first cross-checks the three `.env` files and refuses to start if they disagree: a webhook secret or
-token that differs between guard-core and the bot, the admin token in the bot's `.env`, a service
-pointed at the wrong port, or no agent.
+`pnpm dev:all` starts guard-core (:8787) and mcp-server over HTTP (:8789), and telegram-bot (:8788)
+only when guard-core's `.env` names a bot (CR-017). It first cross-checks the `.env` files and
+refuses to start if they disagree: part of the bot's three set, a webhook secret or token that
+differs between guard-core and the bot, the admin token in the bot's `.env`, a service pointed at
+the wrong port, or no agent.
 
-1. Copy each `packages/<name>/.env.example` to `.env`. Generate every secret with
-   `openssl rand -hex 32`. Give guard-core's `BOT_WEBHOOK_SECRET` and `BOT_TOKEN` to the bot as
-   `BOT_WEBHOOK_SECRET` and `GUARD_BOT_TOKEN`. `ADMIN_TOKEN` stays with guard-core: the bot only
-   reads and tightens, on its own routes (CR-016).
+1. Copy `packages/guard-core/.env.example` and `packages/mcp-server/.env.example` to `.env`.
+   Generate every secret with `openssl rand -hex 32`. For the bot too, copy its `.env.example`,
+   set guard-core's `BOT_URL`, `BOT_WEBHOOK_SECRET` and `BOT_TOKEN`, and give the last two to the
+   bot as `BOT_WEBHOOK_SECRET` and `GUARD_BOT_TOKEN`. `ADMIN_TOKEN` stays with guard-core: the bot
+   only reads and tightens, on its own routes (CR-016).
 2. Create an agent: `pnpm --filter @defimind/guard-core create-agent agent-1`. Put the printed
    token in mcp-server's `AGENT_TOKEN`. In mcp-server's `.env`, set `MCP_TRANSPORT=http` and an
    `MCP_HTTP_TOKEN`.

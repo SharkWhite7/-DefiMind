@@ -1,7 +1,8 @@
 /**
- * Cross-checks the three .env files `pnpm dev:all` starts with. Each service validates its own
- * config, but none can see the others', and a mismatch between them fails quietly: an unsigned
- * webhook is a 401 the owner never sees, a wrong token is a refused approval.
+ * Cross-checks the .env files `pnpm dev:all` starts with: guard-core's and mcp-server's, and the
+ * bot's when guard-core names one (CR-017). Each service validates its own config, but none can
+ * see the others', and a mismatch between them fails quietly: an unsigned webhook is a 401 the
+ * owner never sees, a wrong token is a refused approval.
  *
  * Problems name variables, never values: the values are secrets.
  */
@@ -28,9 +29,15 @@ export type McpEnv = Vars<
 
 export interface Envs {
   guard: GuardEnv
-  bot: BotEnv
+  /** Absent when there is no packages/telegram-bot/.env. */
+  bot?: BotEnv
   mcp: McpEnv
 }
+
+const BOT_VARS = ['BOT_URL', 'BOT_TOKEN', 'BOT_WEBHOOK_SECRET'] as const
+
+/** Whether guard-core runs with the Telegram bot: any of its three set (CR-017). */
+export const withBot = (guard: GuardEnv) => BOT_VARS.some((name) => Boolean(guard[name]))
 
 export interface Report {
   errors: string[]
@@ -44,40 +51,21 @@ export function checkEnvs({ guard, bot, mcp }: Envs): Report {
   const errors: string[] = []
   const warnings: string[] = []
 
-  const same = (a: string | undefined, b: string | undefined, message: string) => {
-    if (!a || a !== b) {
-      errors.push(message)
-    }
-  }
-  same(
-    guard.BOT_WEBHOOK_SECRET,
-    bot.BOT_WEBHOOK_SECRET,
-    'BOT_WEBHOOK_SECRET differs between guard-core and telegram-bot',
-  )
-  same(
-    guard.BOT_TOKEN,
-    bot.GUARD_BOT_TOKEN,
-    'guard-core BOT_TOKEN and telegram-bot GUARD_BOT_TOKEN differ',
-  )
-  // CR-016: the bot ignores the admin token, so a copy of it on the bot's side is only exposure.
-  if (bot.GUARD_ADMIN_TOKEN) {
-    errors.push('telegram-bot GUARD_ADMIN_TOKEN is set: the bot never uses it, remove it')
+  const guardPort = guard.PORT || DEFAULT_GUARD_PORT
+  if (withBot(guard)) {
+    checkBot(guard, bot, errors, guardPort)
+  } else if (bot !== undefined) {
+    warnings.push(
+      'packages/telegram-bot/.env exists but guard-core sets no BOT_URL: dev:all runs without the bot',
+    )
   }
   if (guard.ADMIN_TOKEN && guard.ADMIN_TOKEN === guard.BOT_TOKEN) {
     errors.push(
       'guard-core ADMIN_TOKEN and BOT_TOKEN are the same token: the roles must not share one',
     )
   }
-
-  const guardPort = guard.PORT || DEFAULT_GUARD_PORT
-  if (port(bot.GUARD_URL) !== guardPort) {
-    errors.push(`telegram-bot GUARD_URL does not point at guard-core PORT (${guardPort})`)
-  }
   if (port(mcp.GUARD_URL) !== guardPort) {
     errors.push(`mcp-server GUARD_URL does not point at guard-core PORT (${guardPort})`)
-  }
-  if (port(guard.BOT_URL) !== (bot.PORT || DEFAULT_BOT_PORT)) {
-    errors.push('guard-core BOT_URL does not point at telegram-bot PORT')
   }
 
   // stdio is the agent client's to start; dev:all can only run the HTTP transport.
@@ -107,6 +95,46 @@ export function checkEnvs({ guard, bot, mcp }: Envs): Report {
   }
 
   return { errors, warnings }
+}
+
+function checkBot(guard: GuardEnv, bot: BotEnv | undefined, errors: string[], guardPort: string) {
+  const unset = BOT_VARS.filter((name) => !guard[name])
+  if (unset.length > 0) {
+    errors.push(
+      `guard-core sets some of BOT_URL, BOT_TOKEN and BOT_WEBHOOK_SECRET but not ${unset.join(', ')}: all three or none`,
+    )
+  }
+  if (bot === undefined) {
+    errors.push(
+      'guard-core names a bot but packages/telegram-bot/.env is missing: copy its .env.example, or unset BOT_URL, BOT_TOKEN and BOT_WEBHOOK_SECRET',
+    )
+    return
+  }
+  const same = (a: string | undefined, b: string | undefined, message: string) => {
+    if (!a || a !== b) {
+      errors.push(message)
+    }
+  }
+  same(
+    guard.BOT_WEBHOOK_SECRET,
+    bot.BOT_WEBHOOK_SECRET,
+    'BOT_WEBHOOK_SECRET differs between guard-core and telegram-bot',
+  )
+  same(
+    guard.BOT_TOKEN,
+    bot.GUARD_BOT_TOKEN,
+    'guard-core BOT_TOKEN and telegram-bot GUARD_BOT_TOKEN differ',
+  )
+  // CR-016: the bot ignores the admin token, so a copy of it on the bot's side is only exposure.
+  if (bot.GUARD_ADMIN_TOKEN) {
+    errors.push('telegram-bot GUARD_ADMIN_TOKEN is set: the bot never uses it, remove it')
+  }
+  if (port(bot.GUARD_URL) !== guardPort) {
+    errors.push(`telegram-bot GUARD_URL does not point at guard-core PORT (${guardPort})`)
+  }
+  if (port(guard.BOT_URL) !== (bot.PORT || DEFAULT_BOT_PORT)) {
+    errors.push('guard-core BOT_URL does not point at telegram-bot PORT')
+  }
 }
 
 function port(url: string | undefined): string | undefined {

@@ -21,7 +21,7 @@ export async function firstAgent(ctx: Ctx, setup: Setup, state: State, token: st
     const created = await createAgent(ctx, setup, token)
     if (created === undefined) {
       ctx.say(`An agent named ${agentId} already exists, so its token and policy stay as they are.`)
-      ctx.say('Make another one with /agent new <name> in Telegram.')
+      ctx.say('Make another one in the owner panel, under Agents.')
       return
     }
     const file = agentTokenFile(setup.paths, setup.answers.prefix, agentId)
@@ -51,8 +51,8 @@ export async function firstAgent(ctx: Ctx, setup: Setup, state: State, token: st
   ctx.say(
     `Policy: ${formatUsd(BigInt(policy.perTxMax))} per payment, ${formatUsd(BigInt(policy.dailyMax))} a day, your approval from ${formatUsd(BigInt(policy.approvalThreshold))}.`,
   )
-  ctx.say(`No API domain is allowed yet: add one in Telegram with /allow ${agentId} <domain>.`)
-  ctx.say(`It starts in shadow mode and signs nothing until you send /mode ${agentId} live.`)
+  ctx.say("No API domain is allowed yet: add one to the agent's rules in the owner panel.")
+  ctx.say('It starts in shadow mode and signs nothing until you switch it to live there.')
 }
 
 /** The new agent's token, or undefined when an agent of that name exists already. */
