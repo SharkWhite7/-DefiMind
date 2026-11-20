@@ -6,9 +6,10 @@ the panel walks you through the rest. You never edit a file or paste a key.
 > **Public beta.** DefiMind moves real money, it is new, and it has had no external audit. Put in
 > only what you can afford to lose. The signing page refuses a daily limit above 50 dollars.
 
-> **Status of the one-click deployment.** It is new and has not yet completed a verified run on
-> Render. The CHANGELOG will say when it has. Until then, use the Fly.io route in the
-> [README](../README.md); step 4 below, connecting your agent, is the same for both.
+> **The one-click deployment is new.** If a step does not work as described here, stop and open an
+> issue with the step's number and what you saw, never a key or the setup code. The Fly.io route in
+> the [README](../README.md) is the other way in; step 4 below, connecting your agent, is the same
+> for both.
 
 ## What you need
 
