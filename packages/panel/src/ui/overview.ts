@@ -1,6 +1,7 @@
 import type { Overview } from '../adapters/schemas.js'
 import { chainName } from '../domain/chains.js'
 import { amountText, formatUsd } from '../domain/money.js'
+import { doneSteps, nextStep, STEPS } from '../domain/guide.js'
 import { href, type Route } from '../domain/route.js'
 import type { Context, Screen } from './context.js'
 import { card, el, when } from './dom.js'
@@ -25,11 +26,32 @@ export function agentBadges(agent: { paused: boolean; mode: 'live' | 'shadow' })
   ]
 }
 
+/**
+ * The way back into the guided setup while a step is left. A guard-core older than CR-019 has no
+ * progress route, and the overview must still load there.
+ */
+async function setupNotice(ctx: Context) {
+  const progress = await ctx.api.progress().catch(() => undefined)
+  if (progress === undefined) {
+    return undefined
+  }
+  const done = doneSteps(progress.steps)
+  return (
+    nextStep(done) !== undefined &&
+    card(
+      el('h2', {}, 'Finish setting up'),
+      el('p', {}, `${done.size} of ${STEPS.length} steps done.`),
+      el('a', { href: href({ name: 'guide' }), class: 'button primary' }, 'Continue'),
+    )
+  )
+}
+
 export async function overview(ctx: Context): Screen {
-  const data = await ctx.api.overview()
+  const [data, notice] = await Promise.all([ctx.api.overview(), setupNotice(ctx)])
   const waiting = data.pending.length + data.mandates.length
   return [
     el('h1', {}, 'Overview'),
+    notice,
     el('a', { href: href({ name: 'kill' }), class: 'kill' }, 'Stop everything'),
     card(
       el('h2', {}, waiting === 0 ? 'Nothing waiting' : `Waiting for you (${waiting})`),

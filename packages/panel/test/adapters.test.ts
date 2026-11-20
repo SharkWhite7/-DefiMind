@@ -281,3 +281,59 @@ describe('owner api', () => {
     )
   })
 })
+
+describe('guided setup calls (CR-019)', () => {
+  it('claims with the setup code and reads the enrol link', async () => {
+    const { api, calls } = server([[200, { enrolLink: 'https://dm.example/panel/enrol#code=abc' }]])
+    expect(await api.claim('host-code')).toEqual({
+      enrolLink: 'https://dm.example/panel/enrol#code=abc',
+    })
+    expect(calls[0]).toMatchObject({
+      method: 'POST',
+      path: '/v1/owner/setup',
+      body: { setupCode: 'host-code' },
+    })
+  })
+
+  it('reports setup_done once a passkey exists', async () => {
+    const { api } = server([[410, { error: 'setup_done' }]])
+    await expect(api.claim('x')).rejects.toMatchObject({ status: 410, code: 'setup_done' })
+  })
+
+  it('saves settings with a passkey bound to the exact chains', async () => {
+    const chains = [{ chain: 'solana:devnet', vault: 'V1' }]
+    const { api, calls } = server([
+      [200, options],
+      [200, { ok: true }],
+    ])
+    await api.putSettings(chains)
+    expect(calls[0]).toMatchObject({
+      path: '/v1/owner/challenge',
+      body: { action: 'change_settings', body: { chains } },
+    })
+    expect(calls[1]).toMatchObject({
+      method: 'PUT',
+      path: '/v1/owner/settings',
+      body: { chains, assertion: { id: 'cred' } },
+    })
+    expect(calls[1]?.headers['x-defimind-request']).toBe('1')
+  })
+
+  it("passes on guard-core's refusal of a vault that is not ours", async () => {
+    const { api } = server([
+      [200, options],
+      [422, { error: 'vault_not_ours' }],
+    ])
+    await expect(api.putSettings([])).rejects.toBeInstanceOf(ApiError)
+  })
+
+  it('reads deposits with their amounts as atomic strings', async () => {
+    const chain = { chain: 'solana:devnet', vault: 'V1', token: 'T', balance: '5', dailyCap: '10' }
+    const { api } = server([
+      [200, { chains: [chain] }],
+      [200, { chains: [{ ...chain, balance: 1.5 }] }],
+    ])
+    expect((await api.deposit()).chains).toEqual([chain])
+    await expect(api.deposit()).rejects.toThrow()
+  })
+})

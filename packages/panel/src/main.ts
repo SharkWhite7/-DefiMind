@@ -7,7 +7,9 @@ import { approval, mandate } from './ui/approval.js'
 import type { Context, Screen } from './ui/context.js'
 import { el } from './ui/dom.js'
 import { kill } from './ui/kill.js'
-import { enrol, login } from './ui/login.js'
+import { deposit } from './ui/deposit.js'
+import { guide } from './ui/guide.js'
+import { enrol, login, setup } from './ui/login.js'
 import { overview } from './ui/overview.js'
 import { executions } from './ui/executions.js'
 import { doctor, report } from './ui/report.js'
@@ -32,6 +34,9 @@ const ERRORS: Record<string, string> = {
   not_found: 'Not found.',
   invalid_request: 'guard-core did not accept that request.',
   rate_limited: 'Too many requests. Wait a minute and try again.',
+  vault_not_ours:
+    "That vault's limit does not name this DefiMind. Check the address, or set the daily limit first.",
+  setup_done: 'This DefiMind is already set up. Sign in with your passkey.',
 }
 
 const ctx: Context = {
@@ -89,6 +94,12 @@ function screen(route: Route): Screen {
       return settings(ctx)
     case 'kill':
       return kill(ctx)
+    case 'setup':
+      return setup(ctx)
+    case 'deposit':
+      return deposit(ctx)
+    case 'guide':
+      return guide(ctx, route.step)
     case 'missing':
       return Promise.resolve([el('h1', {}, 'Nothing here'), el('a', { href: BASE }, 'Overview')])
   }
@@ -96,7 +107,7 @@ function screen(route: Route): Screen {
 
 async function render() {
   const route = parseRoute(location.pathname, location.hash)
-  if (route.name !== 'login' && route.name !== 'enrol') {
+  if (!['login', 'enrol', 'setup'].includes(route.name)) {
     after = route
   }
   document.body.dataset['screen'] = route.name
