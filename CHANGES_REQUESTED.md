@@ -947,3 +947,84 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   - telegram-bot: none. It still works for those who set it up.
 - **Rollout:** the live deployment already runs without a bot since the migration's C4 (C5 was
   skipped). Once this lands, the owner unsets the three secrets on `defimind-guard-core`.
+
+### CR-019 — Guided setup: one-click deploy, keys made by the server, a step-by-step panel
+
+- **From:** integrator, after the owner's requests during the migration: make depositing easy, let
+  the customer set the limit, and guide a non-technical user through every step
+- **Date:** 2026-11-20
+- **Status:** approved by the owner on 2026-11-20 ("cr019 aprovado"), with option A: each person runs
+  their own DefiMind. Applied as SPEC v0.14 and ADR 006. It includes the deposit screen first
+  proposed as CR-018, which was never filed on its own.
+- **Why:**
+  - Setting DefiMind up today takes a terminal, a dozen secrets, key files and Fly commands, as the
+    migration showed. Few owners can do that.
+  - The owner cannot see the vault's address or balance in the panel, and funding it means finding
+    the address elsewhere.
+  - The daily cap comes in a link. The owner should type it.
+- **What:**
+  1. **One-click deploy.**
+     - A `render.yaml` blueprint and a Deploy button. The host generates `ADMIN_TOKEN` and
+       `SETUP_CODE`, and mounts a persistent disk at `/data`.
+     - The admin routes are off (`ADMIN_ROUTES=false`).
+     - Passkey settings default from the public URL.
+  2. **First access by setup code.** While no passkey exists, the setup code issues the enrol link.
+     It is constant-time and rate-limited, and dead once a passkey exists.
+  3. **Keys made by the server.**
+     - Each key that env or a file does not give is generated once on `/data/keys`. That covers the
+       hot wallets, the receipt key, the VAPID key and the anchor key.
+     - Only public keys ever leave the server.
+     - Fly deployments that pass keys as secrets do not change.
+  4. **Settings from the panel.**
+     - The RPC per chain and the vault, behind a step-up.
+     - A vault is adopted only after guard-core reads on chain that its limit or allowance names
+       guard-core's own hot wallet.
+  5. **The signing page served by guard-core** at `/sign`, with its own hot wallets injected.
+     - The add-limit link carries no amount: the owner types the cap, at most 50 during the beta.
+     - A new deposit action. It signs only for a wallet that is a member or owner of the vault, and
+       it signs only a plain token transfer into the vault.
+  6. **The guided setup in the panel.** Nine steps, each with one screen, one action and a plain
+     explanation, and the progress derived from real state:
+     1. passkey;
+     2. connect Phantom;
+     3. create the vault;
+     4. type the daily limit;
+     5. deposit;
+     6. connect the agent;
+     7. pick rules from presets;
+     8. test in shadow mode;
+     9. go live.
+  7. **Deposit screen.**
+     - The vault address, with a QR code and a copy button.
+     - The balance, and how many days of the cap it covers.
+     - "Deposit with Phantom".
+- **Blast radius:**
+  - **guard-core:** keys on disk, setup code, the settings and vault adoption, the setup progress,
+    the deposit route, serving `/sign`, `ADMIN_ROUTES`, `PUBLIC_URL`, `TRUST_FORWARDED_FOR`, tests;
+  - **onchain:** `getVault` on both adapters, the signing page's typed cap and deposit action, and a
+    build the server can inject into;
+  - **panel:** the first-access screen, the nine-step guide, Deposit, Settings;
+  - **integrator:** `render.yaml` and the Deploy button, the shared link helpers, e2e of the whole
+    guide, a getting-started page for non-technical owners, SPEC v0.14, ADR 006;
+  - **telegram-bot:** none.
+- **Risks the owner accepted:**
+  - Keys on the server's disk instead of Fly secrets in memory. The disk is encrypted and the files
+    are mode 0600, and the onchain daily cap still bounds a stolen hot key (ADR 006).
+  - The host costs each owner a few dollars a month.
+  - Phantom may warn on each owner's own domain until it is reviewed, as it did for the hosted page
+    (HUMAN-25).
+- **Amendment, from the manager's review, 2026-11-20. The owner accepted the risk on 2026-11-20 ("aceito o risco do cr 19"):**
+  - **The risk.** Serving `/sign` from guard-core puts the signing page in the same trust domain as
+    the hot keys. A compromised guard-core, or a compromised host account, could serve a modified
+    page. That page could ask Phantom to sign a deposit to the attacker, an add-limit for the
+    attacker's key, or a fake kill. The worst case then grows from "today's cap" to "whatever the
+    owner signs next".
+  - **The mitigations, applied in SPEC v0.14:**
+    - deposit and kill stay on the hosted page built from `main`, which guard-core cannot change.
+      Only create and add-limit, which need this deployment's hot wallet, use `/sign`;
+    - before every Phantom prompt, both pages show in large text the destination or delegate and
+      the amount, decoded from the transaction itself. The getting-started page tells owners to
+      compare that with what Phantom shows, and to cancel if anything differs;
+    - `/sign` is served with a strict CSP, and each release publishes the build's SHA-256;
+    - Render disk snapshots hold the key files, so anyone with access to the dashboard's snapshots
+      holds the hot keys. The onchain cap still bounds that (ADR 006).
