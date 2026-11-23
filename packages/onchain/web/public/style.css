@@ -41,27 +41,19 @@ body {
 .mark {
   display: flex;
   align-items: center;
-  gap: 9px;
+  /* The logo's own square already leaves clear space to its right. */
+  gap: 4px;
   max-width: 40rem;
   margin: 0 auto;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
-/* The square-in-square mark. */
-.mark i {
-  position: relative;
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--blue-ink);
-  border-radius: 3px;
-}
-.mark i::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: 1px;
-  background: var(--blue-ink);
+/* The company logo keeps its own colours (ink brief, "The DefiMind logo"); the UI stays flat. */
+.logo {
+  flex: none;
+  width: 24px;
+  height: 24px;
 }
 
 main {
