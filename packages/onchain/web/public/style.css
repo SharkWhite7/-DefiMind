@@ -158,10 +158,6 @@ input {
   color: var(--fg);
   font: 600 1.5rem var(--mono);
   font-variant-numeric: tabular-nums;
-  transition: border-color 150ms ease;
-}
-input:focus {
-  border-color: var(--violet);
 }
 [role='alert'] {
   color: var(--red);
