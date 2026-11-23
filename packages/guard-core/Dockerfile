@@ -29,7 +29,7 @@ COPY packages/panel/package.json packages/panel/
 RUN pnpm install --frozen-lockfile --ignore-scripts --filter @defimind/panel...
 COPY packages/shared/src packages/shared/src
 COPY tsconfig.base.json ./
-COPY packages/panel/build.ts packages/panel/icons.ts packages/panel/tsconfig.json packages/panel/tsconfig.sw.json packages/panel/
+COPY packages/panel/build.ts packages/panel/icons.ts packages/panel/logo.ts packages/panel/tsconfig.json packages/panel/tsconfig.sw.json packages/panel/
 COPY packages/panel/src packages/panel/src
 COPY packages/panel/public packages/panel/public
 RUN pnpm --filter @defimind/panel build
