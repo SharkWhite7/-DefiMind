@@ -2,12 +2,12 @@ import { writeFile } from 'node:fs/promises'
 import { deflateSync } from 'node:zlib'
 
 /**
- * A placeholder logo until the owner's arrives: a blue-to-cyan ring on the panel's dark background,
- * drawn here so the repository holds no binary. It fills the whole square, so it also works maskable.
+ * The DefiMind mark (PANEL-18): a square in a square, in the ink blue on the panel's background,
+ * drawn here so the repository holds no binary. It sits in the middle 45%, inside a maskable icon's
+ * safe zone.
  */
-const BACKGROUND = [0x0b, 0x12, 0x20]
-const BLUE = [0x2f, 0x80, 0xff]
-const CYAN = [0x28, 0xe6, 0xff]
+const BACKGROUND = [0x0a, 0x0f, 0x1a]
+const INK = [0x9d, 0xb7, 0xf0]
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n
@@ -35,12 +35,15 @@ function chunk(type: string, data: Buffer): Buffer {
 }
 
 function pixel(x: number, y: number, size: number): number[] {
-  const r = Math.hypot(x - size / 2, y - size / 2) / (size / 2)
-  if (r < 0.42 || r > 0.62) {
-    return BACKGROUND
-  }
-  const t = (x + y) / (2 * size)
-  return BLUE.map((from, i) => Math.round(from + (CYAN[i]! - from) * t))
+  const side = size * 0.45
+  // From the mockup's 14px mark: a 2px ring, a 1px gap, then the filled centre.
+  const ring = side / 7
+  const gap = side * (3 / 14) - ring
+  const d = Math.max(Math.abs(x + 0.5 - size / 2), Math.abs(y + 0.5 - size / 2))
+  const edge = side / 2
+  const inRing = d <= edge && d > edge - ring
+  const inCore = d <= edge - ring - gap
+  return inRing || inCore ? INK : BACKGROUND
 }
 
 export function icon(size: number): Buffer {

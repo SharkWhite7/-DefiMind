@@ -1,6 +1,6 @@
 import type { Overview } from '../adapters/schemas.js'
-import { chainName } from '../domain/chains.js'
-import { amountText, formatUsd } from '../domain/money.js'
+import { chainName, networkOf } from '../domain/chains.js'
+import { amountText, formatUsd, meterPercent } from '../domain/money.js'
 import { doneSteps, nextStep, STEPS, type StepId } from '../domain/guide.js'
 import { href, type Route } from '../domain/route.js'
 import type { Context, Screen } from './context.js'
@@ -60,14 +60,81 @@ function noChain(done: Set<StepId> | undefined) {
     : el('p', {}, 'No chain is configured: every payment is refused.')
 }
 
+/** CSSOM, not a style attribute: the CSP's style-src blocks the latter, not the former. */
+function meter(percent: number) {
+  const fill = el('i')
+  fill.style.width = `${percent}%`
+  return el('div', { class: 'meter', 'aria-hidden': 'true' }, fill)
+}
+
+const cell = (label: string, value: string) =>
+  el('div', {}, el('div', { class: 'label' }, label), el('div', { class: 'value' }, value))
+
+/**
+ * Today's spend against each chain's onchain cap, one block per chain: their tokens are not summed.
+ * Then the counts the owner looks for first. All of it from the overview already fetched.
+ */
+function summary(data: Overview) {
+  const active = data.chains.flatMap(({ chain, allowance }) =>
+    allowance?.status === 'active' ? [{ chain, ...allowance }] : [],
+  )
+  const waiting = data.pending.length + data.mandates.length
+  const names = data.chains.map(({ chain }) => chainName(chain))
+  return el(
+    'section',
+    { class: 'card summary' },
+    ...active.map(({ chain, spent, cap }) =>
+      el(
+        'div',
+        { class: 'spend' },
+        el(
+          'div',
+          { class: 'label' },
+          active.length > 1 ? `Spent today · ${chainName(chain)}` : 'Spent today',
+        ),
+        el('div', { class: 'big' }, formatUsd(spent), el('small', {}, `of ${formatUsd(cap)}`)),
+        meter(meterPercent(spent, cap)),
+      ),
+    ),
+    el(
+      'div',
+      { class: 'split' },
+      cell('Agents', String(data.agents.length)),
+      cell('Waiting', String(waiting)),
+      cell(names.length > 1 ? 'Chains' : 'Chain', names.join(', ') || 'None'),
+    ),
+  )
+}
+
+/** The header's network, from the chains the overview names; left blank when it cannot be told. */
+function showNetwork(chains: string[]) {
+  const slot = document.getElementById('network')
+  const network = networkOf(chains)
+  if (slot === null) {
+    return
+  }
+  slot.hidden = network === undefined
+  slot.className = `network ${network === 'Mainnet' ? 'ok' : 'warn'}`
+  slot.textContent = network ?? ''
+}
+
 export async function overview(ctx: Context): Screen {
   const [data, done] = await Promise.all([ctx.api.overview(), setupDone(ctx)])
   const waiting = data.pending.length + data.mandates.length
+  showNetwork(data.chains.map(({ chain }) => chain))
+  const today = new Date().toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
   return [
-    el('h1', {}, 'Overview'),
+    el('div', { class: 'title' }, el('h1', {}, 'Overview'), el('span', { class: 'date' }, today)),
+    summary(data),
     setupNotice(done),
     el('a', { href: href({ name: 'kill' }), class: 'kill' }, 'Stop everything'),
-    card(
+    el(
+      'section',
+      { class: waiting === 0 ? 'card' : 'card req' },
       el('h2', {}, waiting === 0 ? 'Nothing waiting' : `Waiting for you (${waiting})`),
       ...data.pending.map(({ intent }) =>
         link(
