@@ -1,23 +1,30 @@
+/*
+ * The panel in the DefiMind brand (site/index.html :root): near-black surfaces, a 1px line, violet
+ * and mint with their gradient as an accent only. System fonts only: the CSP has no font-src.
+ */
 :root {
   color-scheme: dark;
-  --bg: #0b1220;
-  --surface: #121b2e;
-  --line: #22304d;
-  --text: #e8eefc;
-  --muted: #8b9ab8;
-  --blue: #2f80ff;
-  --cyan: #28e6ff;
-  --stop: #ff4d5e;
-  --warn: #ffb547;
-  --ok: #3ddc97;
+  --bg: #050505;
+  --surface: #0d0d0d;
+  --raised: #141416;
+  --line: #1c1c1e;
+  --line-2: #2a2a2d;
+  --text: #f5f5f5;
+  --muted: #a0a0a5;
+  --violet: #9945ff;
+  --mint: #14f195;
+  --grad: linear-gradient(90deg, #9945ff 0%, #43b4ca 50%, #14f195 100%);
+  --ok: var(--mint);
+  --warn: #e8b45a;
+  --stop: #f87171;
+  --radius: 16px;
+  --ease: 150ms ease;
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
   font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Inter, system-ui, sans-serif;
   font-size: 16px;
   line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
 }
 
 * {
@@ -26,78 +33,169 @@
 
 body {
   margin: 0;
+  min-height: 100vh;
   background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 
+a {
+  color: var(--mint);
+  text-underline-offset: 3px;
+}
+
+/* Solid, so nothing scrolling under it shows through it, and the pinned Stop matches it exactly. */
 header {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 10;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 16px;
-  padding: 12px 16px;
-  background: rgb(11 18 32 / 92%);
+  flex-direction: column;
+  gap: 10px;
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 0
+    max(16px, env(safe-area-inset-left));
+  background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
 
 body[data-screen='login'] header,
-body[data-screen='enrol'] header {
+body[data-screen='enrol'] header,
+body[data-screen='setup'] header {
   display: none;
 }
 
 .brand {
-  font-weight: 700;
-  background: linear-gradient(90deg, var(--blue), var(--cyan));
+  align-self: flex-start;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  background: var(--grad);
+  -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   text-decoration: none;
 }
 
+/* One row that scrolls sideways on a phone, rather than wrapping onto two. */
 nav {
   display: flex;
-  gap: 4px 14px;
-  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 calc(-1 * max(16px, env(safe-area-inset-left)));
+  padding: 0 max(16px, env(safe-area-inset-left)) 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
   font-size: 0.95rem;
 }
 
+nav::-webkit-scrollbar {
+  display: none;
+}
+
 nav a {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 6px 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
   color: var(--muted);
   text-decoration: none;
-  padding: 4px 0;
+  transition:
+    color var(--ease),
+    background var(--ease),
+    border-color var(--ease);
 }
 
 nav a:hover,
 nav a:focus-visible {
   color: var(--text);
+  background: var(--raised);
 }
 
+/* Stop stays in view at the row's end while the rest scrolls under it. */
 nav a.stop {
+  position: sticky;
+  right: 0;
+  margin-left: auto;
+  background: var(--bg);
   color: var(--stop);
+  /* Opaque on both sides: the links scrolling under it must not show through. */
+  box-shadow:
+    -20px 0 14px -2px var(--bg),
+    24px 0 0 8px var(--bg);
+}
+
+/* The screen open now, marked from the body's data-screen. */
+body[data-screen='overview'] nav a[href='/panel/'],
+body[data-screen='agents'] nav a[href='/panel/agents'],
+body[data-screen='agent'] nav a[href='/panel/agents'],
+body[data-screen='deposit'] nav a[href='/panel/deposit'],
+body[data-screen='report'] nav a[href='/panel/report'],
+body[data-screen='executions'] nav a[href='/panel/executions'],
+body[data-screen='doctor'] nav a[href='/panel/doctor'],
+body[data-screen='settings'] nav a[href='/panel/settings'],
+body[data-screen='passkeys'] nav a[href='/panel/settings'] {
+  color: var(--text);
+  background: var(--raised);
+  border-color: var(--line-2);
+}
+
+body[data-screen='kill'] nav a.stop {
+  background: #1d0f0f;
+  border-color: rgb(248 113 113 / 40%);
+}
+
+@media (min-width: 760px) {
+  header {
+    flex-direction: row;
+    align-items: center;
+    gap: 20px;
+    padding-bottom: 10px;
+  }
+
+  .brand {
+    align-self: center;
+  }
+
+  nav {
+    margin: 0;
+    padding: 0;
+  }
 }
 
 main {
   max-width: 720px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px max(16px, env(safe-area-inset-right)) max(40px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-left));
 }
 
 main[aria-busy='true'] {
   opacity: 0.6;
+  transition: opacity var(--ease);
 }
 
 h1 {
-  font-size: 1.5rem;
-  margin: 8px 0 16px;
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 8px 0 20px;
   overflow-wrap: anywhere;
 }
 
 h2 {
   font-size: 1.05rem;
+  font-weight: 700;
   margin: 0 0 12px;
+}
+
+h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 16px 0 8px;
 }
 
 p {
@@ -112,7 +210,7 @@ p {
 #status {
   max-width: 720px;
   margin: 12px auto 0;
-  padding: 0 16px;
+  padding: 10px 16px;
   min-height: 1.5em;
 }
 
@@ -129,10 +227,11 @@ p {
 }
 
 .card {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 16px;
+  border-radius: var(--radius);
+  padding: 20px;
   margin-bottom: 16px;
 }
 
@@ -140,20 +239,39 @@ p {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 10px 0;
+  padding: 12px 0;
   border-top: 1px solid var(--line);
   color: inherit;
   text-decoration: none;
   overflow-wrap: anywhere;
+  transition: color var(--ease);
 }
 
 h2 + .item {
   border-top: 0;
 }
 
+a.item {
+  position: relative;
+  padding-right: 24px;
+}
+
+/* Drawn, not typed: generated text would join the link's accessible name. */
+a.item::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid var(--muted);
+  border-right: 2px solid var(--muted);
+  transform: translateY(-50%) rotate(45deg);
+}
+
 a.item:hover strong,
 a.item:focus-visible strong {
-  color: var(--cyan);
+  color: var(--mint);
 }
 
 dl {
@@ -162,9 +280,14 @@ dl {
 
 .row {
   display: grid;
-  grid-template-columns: minmax(96px, 30%) 1fr;
+  grid-template-columns: minmax(96px, 32%) 1fr;
   gap: 12px;
-  padding: 6px 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+
+.row:first-child {
+  border-top: 0;
 }
 
 dt {
@@ -176,44 +299,90 @@ dd {
   overflow-wrap: anywhere;
 }
 
+/* Status pills, each with its dot. */
 .badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-left: 8px;
-  padding: 0 8px;
+  padding: 2px 10px;
+  border: 1px solid transparent;
   border-radius: 999px;
   font-size: 0.75rem;
   font-weight: 600;
+  line-height: 1.6;
   vertical-align: middle;
 }
 
+.badge::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentcolor;
+}
+
 .badge.shadow {
-  background: rgb(40 230 255 / 15%);
-  color: var(--cyan);
+  background: rgb(153 69 255 / 14%);
+  border-color: rgb(153 69 255 / 35%);
+  color: #c49bff;
 }
 
 .badge.stop {
-  background: rgb(255 77 94 / 15%);
+  background: rgb(248 113 113 / 12%);
+  border-color: rgb(248 113 113 / 35%);
   color: var(--stop);
+}
+
+.badge.ok {
+  background: rgb(20 241 149 / 10%);
+  border-color: rgb(20 241 149 / 30%);
+  color: var(--ok);
 }
 
 .flag {
   color: var(--warn);
 }
 
+p.flag {
+  padding: 10px 12px;
+  border: 1px solid rgb(232 180 90 / 30%);
+  border-radius: 10px;
+  background: rgb(232 180 90 / 8%);
+}
+
 button,
 .button {
-  display: inline-block;
-  min-height: 44px;
-  padding: 10px 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 12px 20px;
   margin: 4px 8px 4px 0;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: transparent;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--raised);
   color: var(--text);
   font: inherit;
   font-weight: 600;
+  text-align: center;
   text-decoration: none;
   cursor: pointer;
+  transition:
+    transform var(--ease),
+    background var(--ease),
+    border-color var(--ease),
+    filter var(--ease);
+}
+
+button:hover,
+.button:hover {
+  border-color: var(--muted);
+}
+
+button:active,
+.button:active {
+  transform: scale(0.98);
 }
 
 button:disabled {
@@ -223,80 +392,127 @@ button:disabled {
 
 .primary {
   border-color: transparent;
-  background: linear-gradient(90deg, var(--blue), #2aa8ff);
-  color: #fff;
+  background: var(--grad) border-box;
+  color: #050505;
+  font-weight: 700;
 }
 
+.primary:hover {
+  border-color: transparent;
+  filter: brightness(1.08);
+}
+
+/* Destructive actions are a red outline, never the gradient. */
 .danger {
-  border-color: var(--stop);
+  border-color: rgb(248 113 113 / 60%);
+  background: transparent;
   color: var(--stop);
+}
+
+.danger:hover {
+  border-color: var(--stop);
+  background: rgb(248 113 113 / 8%);
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 8px;
+}
+
+.actions button {
+  margin: 0;
 }
 
 .kill,
 button.kill {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   min-height: 64px;
   margin: 0 0 16px;
   padding: 18px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--radius);
   background: var(--stop);
-  color: #fff;
-  font-size: 1.2rem;
+  color: #050505;
+  font-size: 1.15rem;
   font-weight: 800;
   text-align: center;
   text-decoration: none;
 }
 
+/* On the overview, Stop is there to find, not to shout over what the owner came to read. */
+body[data-screen='overview'] a.kill {
+  min-height: 52px;
+  padding: 14px;
+  border: 1px solid rgb(248 113 113 / 55%);
+  background: rgb(248 113 113 / 6%);
+  color: var(--stop);
+  font-size: 1rem;
+}
+
 label {
   display: block;
-  margin: 12px 0 4px;
+  margin: 14px 0 6px;
   color: var(--muted);
+  font-size: 0.92rem;
 }
 
 label.check {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
+  min-height: 44px;
   color: var(--text);
+  font-size: 1rem;
 }
 
 input:not([type='checkbox']),
 textarea {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
   background: var(--bg);
   color: var(--text);
   font: inherit;
+  transition: border-color var(--ease);
+}
+
+input:not([type='checkbox']):focus,
+textarea:focus {
+  border-color: var(--violet);
+}
+
+input::placeholder {
+  color: #6a6a6f;
 }
 
 input[type='checkbox'] {
+  flex: none;
   width: 22px;
   height: 22px;
-  accent-color: var(--blue);
+  accent-color: var(--mint);
 }
 
 :focus-visible {
-  outline: 2px solid var(--cyan);
+  outline: 2px solid var(--mint);
   outline-offset: 2px;
 }
 
 code.token,
 pre {
   display: block;
-  padding: 12px;
-  border-radius: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
   background: var(--bg);
-  font-family: ui-monospace, Menlo, monospace;
+  color: #c9c9ce;
+  font-family: var(--mono);
   font-size: 0.85rem;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
@@ -315,13 +531,9 @@ pre {
 }
 
 .shadow-total {
-  color: var(--cyan);
+  color: #c49bff;
   font-weight: 600;
-}
-
-.badge.ok {
-  background: rgb(61 220 151 / 15%);
-  color: var(--ok);
+  font-variant-numeric: tabular-nums;
 }
 
 .badge-line {
@@ -338,6 +550,9 @@ pre {
 
 /* Transaction ids and hashes are one long word: break them anywhere rather than widen the page. */
 p code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+  color: #c9c9ce;
   overflow-wrap: anywhere;
   word-break: break-all;
 }
@@ -346,20 +561,92 @@ p code {
   align-self: flex-start;
 }
 
+/* Amounts line up and read as figures. */
+body[data-screen='approval'] h1,
+body[data-screen='mandate'] h1,
+body[data-screen='overview'] .item,
+body[data-screen='agent'] dd,
+.shadow-total {
+  font-variant-numeric: tabular-nums;
+}
+
+/* An approval leads with its amount, big and calm, then one clear action. */
+body[data-screen='approval'] h1,
+body[data-screen='mandate'] h1 {
+  margin: 12px 0 24px;
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+body[data-screen='approval'] .card,
+body[data-screen='mandate'] .card,
+body[data-screen='guide'] .card {
+  overflow: hidden;
+}
+
+body[data-screen='approval'] main > .card::before,
+body[data-screen='mandate'] main > .card::before,
+body[data-screen='guide'] main > .card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: var(--grad);
+}
+
+/* The vault's spend on the overview, as a figure rather than a sentence. */
+body[data-screen='overview'] .item > span:only-of-type {
+  font-size: 1.05rem;
+}
+
+body[data-screen='overview'] .item strong {
+  font-size: 1.05rem;
+}
+
+details summary {
+  cursor: pointer;
+  color: var(--muted);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
 /* CR-019: the deposit QR code stays square and readable on a phone, white margin included. */
 svg.qr {
   display: block;
   width: min(240px, 100%);
   height: auto;
   margin: 12px 0;
-  border-radius: 8px;
+  border-radius: 12px;
 }
 
 progress {
   width: 100%;
-  height: 10px;
-  margin-bottom: 16px;
-  accent-color: var(--cyan);
+  height: 8px;
+  margin-bottom: 20px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--line-2);
+  accent-color: var(--mint);
+  -webkit-appearance: none;
+  appearance: none;
+  overflow: hidden;
+}
+
+progress::-webkit-progress-bar {
+  background: var(--line-2);
+  border-radius: 999px;
+}
+
+progress::-webkit-progress-value {
+  background: var(--grad);
+  border-radius: 999px;
+}
+
+progress::-moz-progress-bar {
+  background: var(--grad);
+  border-radius: 999px;
 }
 
 .why {
@@ -372,7 +659,7 @@ ol.steps {
 }
 
 ol.steps li {
-  padding: 4px 0;
+  padding: 6px 0;
 }
 
 ol.steps li.done a::after {
@@ -385,6 +672,47 @@ ol.steps a {
 }
 
 ol.steps a[aria-current='step'] {
-  color: var(--cyan);
+  color: var(--mint);
   font-weight: 600;
+}
+
+/* The entry screens before sign-in: one centred column. */
+body[data-screen='login'] main,
+body[data-screen='enrol'] main,
+body[data-screen='setup'] main {
+  max-width: 480px;
+  padding-top: max(48px, calc(env(safe-area-inset-top) + 32px));
+}
+
+body[data-screen='login'] h1,
+body[data-screen='setup'] h1 {
+  font-size: 2rem;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+body[data-screen='login'] .primary,
+body[data-screen='enrol'] .primary {
+  width: 100%;
+  margin: 12px 0 0;
+}
+
+@media (max-width: 480px) {
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .actions button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+  }
 }
