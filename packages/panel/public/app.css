@@ -138,7 +138,7 @@ nav::-webkit-scrollbar {
 
 nav a {
   flex: none;
-  padding: 10px 8px 11px;
+  padding: 10px 6px 11px;
   border-bottom: 2px solid transparent;
   color: var(--muted);
   text-decoration: none;
@@ -155,8 +155,8 @@ nav a.stop {
   position: sticky;
   right: 0;
   margin-left: auto;
-  padding-left: 14px;
-  padding-right: max(16px, env(safe-area-inset-right));
+  padding-left: 10px;
+  padding-right: max(12px, env(safe-area-inset-right));
   border-left: 1px solid var(--line);
   background: var(--bg);
   color: var(--stop);
@@ -606,6 +606,15 @@ pre {
 
 .badge-line.stop {
   color: var(--stop);
+}
+
+/* Addresses: monospace, a shade quieter, and whole. */
+.mono {
+  color: #c6cfdd;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  word-break: break-all;
 }
 
 /* Transaction ids and hashes are one long word: break them anywhere rather than widen the page. */
