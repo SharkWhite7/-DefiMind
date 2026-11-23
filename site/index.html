@@ -338,10 +338,6 @@
       .nav-top-link:hover {
         color: var(--fg);
       }
-      .nav-top-link svg {
-        width: 13px;
-        height: 13px;
-      }
       @media (max-width: 1180px) {
         .nav-top-link {
           display: none;
@@ -1916,22 +1912,6 @@
             >Live on mainnet</span
           >
           <a class="nav-top-link" href="whitepaper.html">Whitepaper</a>
-          <a
-            class="nav-top-link"
-            href="https://github.com/SharkWhite7/-DefiMind"
-            target="_blank"
-            rel="noopener"
-            >GitHub
-            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-              <path
-                d="M5 11 11 5M6 5h5v5"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </a>
           <a class="btn btn-primary" href="#how">See it in action</a>
         </div>
       </div>
@@ -2070,7 +2050,8 @@
         </div>
       </section>
 
-      <section class="band" id="setup">
+      <!-- SITE-5: one-click deploy needs the repository public; shown again at launch (HUMAN-35). -->
+      <section class="band" id="setup" hidden>
         <div class="wrap">
           <div class="sec-head">
             <span class="eyebrow">Setup · new, in beta</span>
@@ -2189,23 +2170,6 @@
               >
             </li>
           </ul>
-
-          <div class="hero-actions setup-after">
-            <a
-              class="btn btn-primary"
-              href="https://render.com/deploy?repo=https://github.com/SharkWhite7/-DefiMind"
-              target="_blank"
-              rel="noopener"
-              >Deploy to Render (beta)</a
-            >
-            <a
-              class="btn btn-ghost"
-              href="https://github.com/SharkWhite7/-DefiMind/blob/main/docs/getting-started.md"
-              target="_blank"
-              rel="noopener"
-              >Read the step-by-step guide</a
-            >
-          </div>
         </div>
       </section>
 
@@ -3038,13 +3002,6 @@
               </a>
             </div>
             <div class="soon-row">
-              <a
-                class="soon-chip"
-                href="https://github.com/SharkWhite7/-DefiMind"
-                target="_blank"
-                rel="noopener"
-                >GitHub<small>open</small></a
-              >
               <a class="soon-chip" href="whitepaper.html">Whitepaper<small>read</small></a>
               <span class="soon-chip">Live demo<small>soon</small></span>
             </div>
@@ -3115,15 +3072,6 @@
           <div>
             <h5>Developers</h5>
             <ul>
-              <li>
-                <a
-                  class="soon-item"
-                  href="https://github.com/SharkWhite7/-DefiMind"
-                  target="_blank"
-                  rel="noopener"
-                  >GitHub<small>open</small></a
-                >
-              </li>
               <li>
                 <a class="soon-item" href="whitepaper.html">Whitepaper<small>read</small></a>
               </li>
