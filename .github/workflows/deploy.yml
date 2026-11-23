@@ -33,7 +33,8 @@ jobs:
         include:
           - app: defimind-guard-core
             package: guard-core
-            paths: packages/guard-core packages/onchain/src packages/onchain/package.json packages/shared pnpm-lock.yaml .dockerignore
+            # Everything its image is built from: the panel and the signing page ship inside it.
+            paths: packages/guard-core packages/onchain/src packages/onchain/package.json packages/onchain/web packages/panel packages/shared tsconfig.base.json pnpm-lock.yaml pnpm-workspace.yaml package.json .dockerignore
             token: FLY_API_TOKEN_GUARD
           - app: defimind-bot
             package: telegram-bot
