@@ -8,6 +8,8 @@
       name="description"
       content="DefiMind whitepaper: the security layer between AI agents and their wallets. Policy, simulation, human approval and an onchain daily cap on Solana and Robinhood Chain."
     />
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <style>
       :root {
         --bg: #0a0f1a;
@@ -96,21 +98,11 @@
         letter-spacing: -0.01em;
         color: var(--text);
       }
-      /* The mark: a square in a square, drawn in CSS. */
+      /* The company logo (ink brief): its own colours, never recoloured or glowing. */
       .logo {
-        position: relative;
         flex: none;
-        width: 16px;
-        height: 16px;
-        border: 2px solid var(--blue-ink);
-        border-radius: 3px;
-      }
-      .logo::after {
-        content: '';
-        position: absolute;
-        inset: 3px;
-        background: var(--blue-ink);
-        border-radius: 1px;
+        width: 24px;
+        height: 24px;
       }
       .nav-right {
         display: flex;
@@ -456,10 +448,35 @@
     </style>
   </head>
   <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <linearGradient id="dm-body" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#2f8cff" />
+          <stop offset="1" stop-color="#2166e8" />
+        </linearGradient>
+        <mask id="dm-shape">
+          <ellipse cx="475" cy="558" rx="212" ry="236" fill="#fff" />
+          <rect x="585" y="192" width="102" height="380" fill="#fff" />
+          <ellipse cx="455" cy="542" rx="100" ry="123" fill="#000" />
+          <rect x="555" y="0" width="30" height="420" fill="#000" />
+          <rect x="687" y="0" width="313" height="1000" fill="#000" />
+        </mask>
+        <clipPath id="dm-low">
+          <path d="M200 748 L355 748 Q640 720 687 430 L1000 430 L1000 1000 L200 1000 Z" />
+        </clipPath>
+      </defs>
+      <symbol id="dm-logo" viewBox="165 183 620 620">
+        <g mask="url(#dm-shape)">
+          <rect width="1000" height="1000" fill="url(#dm-body)" />
+          <rect width="1000" height="1000" fill="#0c3fa6" clip-path="url(#dm-low)" />
+          <path d="M350 742 Q636 718 687 424 L687 478 Q648 748 372 764 Z" fill="#25e4ff" />
+        </g>
+      </symbol>
+    </svg>
     <header class="nav">
       <div class="wrap">
         <a class="brand" href="index.html">
-          <i class="logo" aria-hidden="true"></i>
+          <svg class="logo" aria-hidden="true"><use href="#dm-logo" /></svg>
           DefiMind
         </a>
         <div class="nav-right">
