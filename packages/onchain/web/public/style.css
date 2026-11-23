@@ -1,49 +1,212 @@
+/* The DefiMind brand, from site/index.html: dark surfaces, a 1px line, violet to mint. */
 :root {
-  color-scheme: light dark;
-  font-family: system-ui, sans-serif;
+  --bg: #050505;
+  --panel: #0d0d0d;
+  --panel-2: #121214;
+  --line: #1c1c1e;
+  --line-2: #2a2a2d;
+  --fg: #f5f5f5;
+  --muted: #a0a0a5;
+  --violet: #9945ff;
+  --mint: #14f195;
+  --amber: #e8b45a;
+  --red: #f87171;
+  --grad: linear-gradient(90deg, #9945ff 0%, #43b4ca 50%, #14f195 100%);
+  --text:
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Inter, system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  color-scheme: dark;
+  font-family: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+* {
+  box-sizing: border-box;
 }
 body {
   margin: 0;
-  padding: 16px;
+  min-height: 100vh;
+  padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(32px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background:
+    radial-gradient(60rem 30rem at 50% -10rem, rgba(153, 69, 255, 0.16), transparent 70%), var(--bg);
+  color: var(--fg);
+  line-height: 1.55;
 }
+
+.brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 8px auto 24px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.brand svg {
+  width: 30px;
+  height: 30px;
+  overflow: visible;
+  filter: drop-shadow(0 0 7px rgba(153, 69, 255, 0.6));
+}
+
+/* The card, with a thin accent on top that follows the state. */
 main {
+  position: relative;
   max-width: 40rem;
   margin: 0 auto;
+  padding: 28px 24px 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
   overflow-wrap: anywhere;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+}
+main::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--grad);
+}
+main[data-state='stop']::before {
+  background: var(--red);
+}
+main[data-state='done']::before {
+  background: var(--mint);
+}
+
+h1 {
+  margin: 0 0 18px;
+  font-size: clamp(1.6rem, 5.5vw, 2.1rem);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 main[data-state='stop'] h1 {
-  color: #c62828;
+  color: var(--red);
 }
 main[data-state='done'] h1 {
-  color: #2e7d32;
+  color: var(--mint);
 }
+p {
+  margin: 0 0 12px;
+  color: #d4d4d8;
+}
+
+/* The one action on a screen: the wallet button, or the link into Phantom. */
 button,
 a {
-  font-size: 1.1rem;
-  padding: 0.6rem 1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin-top: 8px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--grad);
+  color: #050505;
+  font: 600 1.05rem var(--text);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    transform 150ms ease,
+    filter 150ms ease,
+    box-shadow 150ms ease;
+}
+button:hover,
+a:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 6px 24px rgba(153, 69, 255, 0.35);
+}
+button:active,
+a:active {
+  transform: translateY(1px);
+}
+/* Retrying a refused kill or deposit is a destructive step: red outline, never the gradient. */
+main[data-state='stop'] button,
+main[data-state='stop'] a {
+  background: transparent;
+  color: var(--red);
+  box-shadow: inset 0 0 0 1px var(--red);
+}
+:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 3px;
+}
+
+form {
+  margin-top: 8px;
 }
 label {
   display: block;
   margin-bottom: 0.5rem;
+  color: var(--muted);
+  font-size: 0.95rem;
 }
 input {
   display: block;
-  font-size: 1.4rem;
-  padding: 0.4rem;
-  margin-top: 0.4rem;
   width: 100%;
-  max-width: 14rem;
+  max-width: 16rem;
+  min-height: 52px;
+  margin-top: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--panel-2);
+  color: var(--fg);
+  font: 600 1.5rem var(--mono);
+  font-variant-numeric: tabular-nums;
+  transition: border-color 150ms ease;
+}
+input:focus {
+  border-color: var(--violet);
 }
 [role='alert'] {
-  color: #c62828;
+  color: var(--red);
 }
+
+/* What the transaction carries, read from its bytes: large, mono, never cut. */
 .decoded {
-  margin: 1rem 0;
-  padding: 0.6rem 1rem;
-  border: 2px solid currentColor;
+  margin: 20px 0 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--violet);
+  border-radius: 14px;
+  background: var(--panel-2);
+}
+.decoded h2 {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.decoded ol {
+  margin: 0;
+  padding-left: 1.4rem;
 }
 .decoded li {
-  font-size: 1.3rem;
-  font-weight: 600;
-  margin: 0.4rem 0;
+  margin: 8px 0;
+  font: 600 1.02rem/1.45 var(--mono);
+}
+
+@media (min-width: 720px) {
+  body {
+    padding-top: 48px;
+  }
+  .decoded li {
+    font-size: 1.15rem;
+  }
+  main {
+    padding: 36px 40px 32px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
 }
