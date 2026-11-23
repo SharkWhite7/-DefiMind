@@ -1,13 +1,14 @@
 import { writeFile } from 'node:fs/promises'
 import { deflateSync } from 'node:zlib'
 
+import { BOUNDS, logoAt, type Rgb } from './logo.js'
+
 /**
- * A placeholder logo until the owner's arrives: a blue-to-cyan ring on the panel's dark background,
- * drawn here so the repository holds no binary. It fills the whole square, so it also works maskable.
+ * The PWA icons: the DefiMind logo at about 60% on its navy, drawn here so the repository holds no
+ * binary. The logo sits inside a maskable icon's safe zone.
  */
-const BACKGROUND = [0x0b, 0x12, 0x20]
-const BLUE = [0x2f, 0x80, 0xff]
-const CYAN = [0x28, 0xe6, 0xff]
+const BACKGROUND: Rgb = [0x03, 0x0b, 0x26]
+const SAMPLES = 4
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n
@@ -34,13 +35,21 @@ function chunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([length, body, crc])
 }
 
+/** One pixel, averaged over a few samples so the edges are smooth. */
 function pixel(x: number, y: number, size: number): number[] {
-  const r = Math.hypot(x - size / 2, y - size / 2) / (size / 2)
-  if (r < 0.42 || r > 0.62) {
-    return BACKGROUND
+  const scale = BOUNDS.height / (size * 0.6)
+  const left = BOUNDS.x + BOUNDS.width / 2 - (size / 2) * scale
+  const top = BOUNDS.y + BOUNDS.height / 2 - (size / 2) * scale
+  const sum = [0, 0, 0]
+  for (let i = 0; i < SAMPLES; i++) {
+    for (let j = 0; j < SAMPLES; j++) {
+      const colour =
+        logoAt(left + (x + (i + 0.5) / SAMPLES) * scale, top + (y + (j + 0.5) / SAMPLES) * scale) ??
+        BACKGROUND
+      colour.forEach((c, k) => (sum[k]! += c))
+    }
   }
-  const t = (x + y) / (2 * size)
-  return BLUE.map((from, i) => Math.round(from + (CYAN[i]! - from) * t))
+  return sum.map((c) => Math.round(c / SAMPLES ** 2))
 }
 
 export function icon(size: number): Buffer {

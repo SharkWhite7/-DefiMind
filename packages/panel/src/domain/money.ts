@@ -46,3 +46,17 @@ export function amountText({
   }
   return `${amount} base units of ${token} (not this chain's dollar)`
 }
+
+/**
+ * How full a day's meter is, in whole percent from 0 to 100, in bigint. Any spend shows at least 1,
+ * so a first payment is never drawn as nothing; no cap reads as empty.
+ */
+export function meterPercent(spent: string, cap: string): number {
+  const used = BigInt(spent)
+  const limit = BigInt(cap)
+  if (limit <= 0n || used <= 0n) {
+    return 0
+  }
+  const percent = (used * 100n) / limit
+  return Number(percent > 100n ? 100n : percent === 0n ? 1n : percent)
+}

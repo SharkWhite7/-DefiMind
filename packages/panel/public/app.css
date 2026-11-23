@@ -1,29 +1,30 @@
 /*
- * The panel in the DefiMind brand (site/index.html :root): near-black surfaces, a 1px line, violet
- * and mint with their gradient as an accent only. System fonts only: the CSP has no font-src.
+ * The "ink" look (PANEL-18, approved 2026-11-23): deep blue-black surfaces, one solid blue for the
+ * action, hairlines, small radii. No gradient, glow, blur or pill, except inside the logo itself.
+ * System fonts only: the CSP has no font-src.
  */
 :root {
   color-scheme: dark;
-  --bg: #050505;
-  --surface: #0d0d0d;
-  --raised: #141416;
-  --line: #1c1c1e;
-  --line-2: #2a2a2d;
-  --text: #f5f5f5;
-  --muted: #a0a0a5;
-  --violet: #9945ff;
-  --mint: #14f195;
-  --grad: linear-gradient(90deg, #9945ff 0%, #43b4ca 50%, #14f195 100%);
-  --ok: var(--mint);
-  --warn: #e8b45a;
-  --stop: #f87171;
-  --radius: 16px;
-  --ease: 150ms ease;
-  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --bg: #0a0f1a;
+  --surface: #0e1524;
+  --raise: #131c2e;
+  --line: #1d2739;
+  --line2: #2a3650;
+  --text: #e7ebf1;
+  --muted: #8792a5;
+  --faint: #5d6879;
+  --blue: #2c5ac8;
+  --blue-hi: #3a6ad6;
+  --blue-ink: #9db7f0;
+  --ok: #3fb68b;
+  --warn: #d9a441;
+  --stop: #e5605c;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --ease: 120ms ease;
   font-family:
     -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Inter, system-ui, sans-serif;
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.45;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -40,52 +41,94 @@ body {
 }
 
 a {
-  color: var(--mint);
+  color: var(--blue-ink);
   text-underline-offset: 3px;
 }
 
-/* Solid, so nothing scrolling under it shows through it, and the pinned Stop matches it exactly. */
+/* Solid, with a hairline: nothing scrolling under it shows through. */
 header {
   position: sticky;
   top: 0;
   z-index: 10;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 0
-    max(16px, env(safe-area-inset-left));
+  padding-top: env(safe-area-inset-top);
   background: var(--bg);
   border-bottom: 1px solid var(--line);
 }
 
+/* Before sign-in, only the logo: no tabs to screens that need a session. */
 body[data-screen='login'] header,
 body[data-screen='enrol'] header,
 body[data-screen='setup'] header {
+  border-bottom: 0;
+}
+
+body[data-screen='login'] nav,
+body[data-screen='enrol'] nav,
+body[data-screen='setup'] nav,
+body[data-screen='login'] #network,
+body[data-screen='enrol'] #network,
+body[data-screen='setup'] #network {
   display: none;
 }
 
+header .top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px max(16px, env(safe-area-inset-right)) 6px max(16px, env(safe-area-inset-left));
+}
+
 .brand {
-  align-self: flex-start;
-  font-size: 1.15rem;
-  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 600;
   letter-spacing: -0.01em;
-  background: var(--grad);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
   text-decoration: none;
 }
 
-/* One row that scrolls sideways on a phone, rather than wrapping onto two. */
+/* The DefiMind logo, as it is: its own blue and cyan are the one gradient the panel keeps. */
+.brand .logo {
+  flex: none;
+  width: auto;
+  height: 24px;
+}
+
+.network {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.network::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.network.ok::before {
+  background: var(--ok);
+}
+
+.network.warn::before {
+  background: var(--warn);
+}
+
+/* Plain-text tabs; the current one is underlined. One row that scrolls on a phone. */
 nav {
   display: flex;
-  gap: 4px;
-  margin: 0 calc(-1 * max(16px, env(safe-area-inset-left)));
-  padding: 0 max(16px, env(safe-area-inset-left)) 10px;
+  padding: 0 0 0 max(8px, env(safe-area-inset-left));
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
 nav::-webkit-scrollbar {
@@ -94,50 +137,30 @@ nav::-webkit-scrollbar {
 
 nav a {
   flex: none;
-  display: inline-flex;
-  align-items: center;
-  min-height: 36px;
-  padding: 6px 14px;
-  border: 1px solid transparent;
-  border-radius: 999px;
+  padding: 10px 6px 11px;
+  border-bottom: 2px solid transparent;
   color: var(--muted);
   text-decoration: none;
-  transition:
-    color var(--ease),
-    background var(--ease),
-    border-color var(--ease);
+  transition: color var(--ease);
 }
 
 nav a:hover,
 nav a:focus-visible {
   color: var(--text);
-  background: var(--raised);
 }
 
-/* Stop stays in view at the row's end while the rest scrolls under it. */
+/* Pinned at the row's right end on a phone, on a solid ground: the links scroll under it. */
 nav a.stop {
   position: sticky;
   right: 0;
   margin-left: auto;
+  padding-left: 10px;
+  padding-right: max(12px, env(safe-area-inset-right));
+  border-left: 1px solid var(--line);
   background: var(--bg);
   color: var(--stop);
-  /* Covers the gutter to its right, where the links scrolling under it would show through. */
-  box-shadow: 24px 0 0 8px var(--bg);
 }
 
-/* A fade to its left, so a link half under it never shows as a stray letter. */
-nav a.stop::before {
-  content: '';
-  position: absolute;
-  top: -4px;
-  bottom: -4px;
-  right: 100%;
-  width: 40px;
-  background: linear-gradient(to right, rgb(5 5 5 / 0%), var(--bg) 55%);
-  pointer-events: none;
-}
-
-/* The screen open now, marked from the body's data-screen. */
 body[data-screen='overview'] nav a[href='/panel/'],
 body[data-screen='agents'] nav a[href='/panel/agents'],
 body[data-screen='agent'] nav a[href='/panel/agents'],
@@ -148,37 +171,41 @@ body[data-screen='doctor'] nav a[href='/panel/doctor'],
 body[data-screen='settings'] nav a[href='/panel/settings'],
 body[data-screen='passkeys'] nav a[href='/panel/settings'] {
   color: var(--text);
-  background: var(--raised);
-  border-color: var(--line-2);
+  border-bottom-color: var(--blue-ink);
 }
 
 body[data-screen='kill'] nav a.stop {
-  background: #1d0f0f;
-  border-color: rgb(248 113 113 / 40%);
+  border-bottom-color: var(--stop);
 }
 
 @media (min-width: 760px) {
   header {
-    flex-direction: row;
+    display: flex;
     align-items: center;
-    gap: 20px;
-    padding-bottom: 10px;
+    gap: 24px;
+    padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
   }
 
-  .brand {
-    align-self: center;
+  header .top {
+    padding: 0;
+    flex: none;
+    gap: 16px;
   }
 
   nav {
-    margin: 0;
+    flex: 1;
     padding: 0;
+  }
+
+  nav a {
+    padding: 16px 10px 15px;
   }
 }
 
 main {
   max-width: 720px;
   margin: 0 auto;
-  padding: 20px max(16px, env(safe-area-inset-right)) max(40px, env(safe-area-inset-bottom))
+  padding: 22px max(16px, env(safe-area-inset-right)) max(40px, env(safe-area-inset-bottom))
     max(16px, env(safe-area-inset-left));
 }
 
@@ -188,24 +215,27 @@ main[aria-busy='true'] {
 }
 
 h1 {
-  font-size: 1.75rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  margin: 8px 0 20px;
+  margin: 4px 0 16px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
   overflow-wrap: anywhere;
 }
 
 h2 {
-  font-size: 1.05rem;
-  font-weight: 700;
   margin: 0 0 12px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 h3 {
-  font-size: 0.95rem;
-  font-weight: 700;
   margin: 16px 0 8px;
+  font-size: 0.93rem;
+  font-weight: 600;
 }
 
 p {
@@ -220,8 +250,9 @@ p {
 #status {
   max-width: 720px;
   margin: 12px auto 0;
-  padding: 10px 16px;
+  padding: 0 16px;
   min-height: 1.5em;
+  font-size: 0.93rem;
 }
 
 #status:empty {
@@ -238,11 +269,18 @@ p {
 
 .card {
   position: relative;
+  margin-bottom: 12px;
+  padding: 16px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 20px;
-  margin-bottom: 16px;
+  border-radius: 6px;
+}
+
+/* A request that waits on the owner: a thin amber rail on its left. */
+.card.req,
+body[data-screen='approval'] main > .card,
+body[data-screen='mandate'] main > .card {
+  border-left: 2px solid var(--warn);
 }
 
 .item {
@@ -273,16 +311,20 @@ a.item::after {
   position: absolute;
   top: 50%;
   right: 6px;
-  width: 8px;
-  height: 8px;
-  border-top: 2px solid var(--muted);
-  border-right: 2px solid var(--muted);
+  width: 7px;
+  height: 7px;
+  border-top: 1.5px solid var(--faint);
+  border-right: 1.5px solid var(--faint);
   transform: translateY(-50%) rotate(45deg);
 }
 
 a.item:hover strong,
 a.item:focus-visible strong {
-  color: var(--mint);
+  color: var(--blue-ink);
+}
+
+.item strong {
+  font-weight: 600;
 }
 
 dl {
@@ -291,10 +333,11 @@ dl {
 
 .row {
   display: grid;
-  grid-template-columns: minmax(96px, 32%) 1fr;
+  grid-template-columns: minmax(84px, 30%) 1fr;
   gap: 12px;
   padding: 10px 0;
   border-top: 1px solid var(--line);
+  font-size: 0.9rem;
 }
 
 .row:first-child {
@@ -310,93 +353,61 @@ dd {
   overflow-wrap: anywhere;
 }
 
-/* Status pills, each with its dot: mint for live and running, amber for shadow and paused. */
+/* State: a 7px square in the state's colour, then its text. No pill. */
+.badge,
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  width: fit-content;
-  padding: 4px 12px;
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-  font-size: 0.9rem;
-  font-weight: 600;
-  line-height: 1.4;
+  gap: 7px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  vertical-align: middle;
 }
 
+.badge {
+  margin-left: 10px;
+}
+
+.badge::before,
 .pill::before {
   content: '';
   flex: none;
   width: 7px;
   height: 7px;
-  border-radius: 50%;
+  border-radius: 1px;
   background: currentcolor;
 }
 
-h2.pill {
-  margin-bottom: 14px;
-  font-size: 0.95rem;
-}
-
-.pill.ok {
-  border-color: rgb(20 241 149 / 30%);
-  background: rgb(20 241 149 / 10%);
-  color: var(--ok);
-}
-
+.badge.shadow,
 .pill.wait {
-  border-color: rgb(232 180 90 / 35%);
-  background: rgb(232 180 90 / 10%);
   color: var(--warn);
 }
 
-.pill.chain {
-  color: var(--text);
-  background: var(--raised);
-}
-
-.pill.chain::before {
-  background: var(--grad);
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: 8px;
-  padding: 2px 10px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1.6;
-  vertical-align: middle;
-}
-
-.badge::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentcolor;
-}
-
-.badge.shadow {
-  background: rgb(153 69 255 / 14%);
-  border-color: rgb(153 69 255 / 35%);
-  color: #c49bff;
-}
-
 .badge.stop {
-  background: rgb(248 113 113 / 12%);
-  border-color: rgb(248 113 113 / 35%);
   color: var(--stop);
 }
 
-.badge.ok {
-  background: rgb(20 241 149 / 10%);
-  border-color: rgb(20 241 149 / 30%);
+.badge.ok,
+.pill.ok {
   color: var(--ok);
+}
+
+h2.pill {
+  margin-bottom: 12px;
+  font-size: 0.93rem;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Chain names are plain text. */
+.pill.chain {
+  display: inline;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.pill.chain::before {
+  content: none;
 }
 
 .flag {
@@ -405,9 +416,10 @@ h2.pill {
 
 p.flag {
   padding: 10px 12px;
-  border: 1px solid rgb(232 180 90 / 30%);
-  border-radius: 10px;
-  background: rgb(232 180 90 / 8%);
+  border: 1px solid var(--line2);
+  border-left: 2px solid var(--warn);
+  border-radius: 5px;
+  background: var(--raise);
 }
 
 button,
@@ -415,33 +427,28 @@ button,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 48px;
-  padding: 12px 20px;
+  min-height: 44px;
+  padding: 10px 18px;
   margin: 4px 8px 4px 0;
-  border: 1px solid var(--line-2);
-  border-radius: 12px;
-  background: var(--raised);
+  border: 1px solid var(--line2);
+  border-radius: 5px;
+  background: transparent;
   color: var(--text);
   font: inherit;
+  font-size: 0.93rem;
   font-weight: 600;
   text-align: center;
   text-decoration: none;
   cursor: pointer;
   transition:
-    transform var(--ease),
     background var(--ease),
     border-color var(--ease),
-    filter var(--ease);
+    color var(--ease);
 }
 
 button:hover,
 .button:hover {
-  border-color: var(--muted);
-}
-
-button:active,
-.button:active {
-  transform: scale(0.98);
+  background: var(--raise);
 }
 
 button:disabled {
@@ -450,38 +457,30 @@ button:disabled {
 }
 
 .primary {
-  border-color: transparent;
-  background: var(--grad) border-box;
-  color: #050505;
-  font-weight: 700;
+  border-color: var(--blue);
+  background: var(--blue);
+  color: #fff;
 }
 
 .primary:hover {
-  border-color: transparent;
-  filter: brightness(1.08);
+  border-color: var(--blue-hi);
+  background: var(--blue-hi);
 }
 
-/* Destructive actions are a red outline, never the gradient. */
 .danger {
-  border-color: rgb(248 113 113 / 60%);
-  background: transparent;
   color: var(--stop);
 }
 
-.danger:hover {
-  border-color: var(--stop);
-  background: rgb(248 113 113 / 8%);
-}
-
+/* Paired actions: the primary on the right, and wider. */
 .actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: 1fr 1.6fr;
   gap: 8px;
 }
 
 .actions button {
   margin: 0;
+  width: 100%;
 }
 
 .kill,
@@ -490,34 +489,32 @@ button.kill {
   align-items: center;
   justify-content: center;
   width: 100%;
-  min-height: 64px;
-  margin: 0 0 16px;
-  padding: 18px;
-  border: 0;
-  border-radius: var(--radius);
-  background: var(--stop);
-  color: #050505;
-  font-size: 1.15rem;
-  font-weight: 800;
-  text-align: center;
+  min-height: 48px;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--line2);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--stop);
+  font-size: 0.93rem;
+  font-weight: 600;
   text-decoration: none;
 }
 
-/* On the overview, Stop is there to find, not to shout over what the owner came to read. */
-body[data-screen='overview'] a.kill {
-  min-height: 52px;
-  padding: 14px;
-  border: 1px solid rgb(248 113 113 / 55%);
-  background: rgb(248 113 113 / 6%);
-  color: var(--stop);
-  font-size: 1rem;
+/* On its own screen, Stop is the one action: solid. */
+body[data-screen='kill'] button.kill {
+  border-color: var(--stop);
+  background: var(--stop);
+  color: #fff;
 }
 
 label {
   display: block;
   margin: 14px 0 6px;
   color: var(--muted);
-  font-size: 0.92rem;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 label.check {
@@ -526,17 +523,19 @@ label.check {
   align-items: center;
   min-height: 44px;
   color: var(--text);
-  font-size: 1rem;
+  font-size: 0.93rem;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 input:not([type='checkbox']),
 textarea {
   width: 100%;
-  min-height: 48px;
-  padding: 12px 14px;
-  border: 1px solid var(--line-2);
-  border-radius: 12px;
-  background: var(--bg);
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line2);
+  border-radius: 5px;
+  background: var(--raise);
   color: var(--text);
   font: inherit;
   transition: border-color var(--ease);
@@ -544,36 +543,38 @@ textarea {
 
 input:not([type='checkbox']):focus,
 textarea:focus {
-  border-color: var(--violet);
+  border-color: var(--blue-ink);
 }
 
 input::placeholder {
-  color: #6a6a6f;
+  color: var(--faint);
 }
 
 input[type='checkbox'] {
   flex: none;
-  width: 22px;
-  height: 22px;
-  accent-color: var(--mint);
+  width: 20px;
+  height: 20px;
+  accent-color: var(--blue);
 }
 
 :focus-visible {
-  outline: 2px solid var(--mint);
+  outline: 2px solid var(--blue-ink);
   outline-offset: 2px;
 }
 
 code.token,
 pre {
   display: block;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg);
-  color: #c9c9ce;
+  border-radius: 5px;
+  background: var(--raise);
+  color: #c6cfdd;
   font-family: var(--mono);
-  font-size: 0.85rem;
+  font-size: 0.83rem;
+  line-height: 1.55;
   overflow-wrap: anywhere;
+  word-break: break-all;
   white-space: pre-wrap;
 }
 
@@ -590,9 +591,8 @@ pre {
 }
 
 .shadow-total {
-  color: #c49bff;
+  color: var(--warn);
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 
 .badge-line {
@@ -607,11 +607,20 @@ pre {
   color: var(--stop);
 }
 
+/* Addresses: monospace, a shade quieter, and whole. */
+.mono {
+  color: #c6cfdd;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  word-break: break-all;
+}
+
 /* Transaction ids and hashes are one long word: break them anywhere rather than widen the page. */
 p code {
   font-family: var(--mono);
   font-size: 0.85em;
-  color: #c9c9ce;
+  color: #c6cfdd;
   overflow-wrap: anywhere;
   word-break: break-all;
 }
@@ -620,55 +629,112 @@ p code {
   align-self: flex-start;
 }
 
-/* Amounts line up and read as figures. */
+/* Figures line up. */
 body[data-screen='approval'] h1,
 body[data-screen='mandate'] h1,
-body[data-screen='overview'] .item,
-body[data-screen='agent'] dd,
-.shadow-total {
+.summary,
+.shadow-total,
+.date {
   font-variant-numeric: tabular-nums;
 }
 
-/* An approval leads with its amount, big and calm, then one clear action. */
+/* An approval leads with its amount. */
 body[data-screen='approval'] h1,
 body[data-screen='mandate'] h1 {
-  margin: 12px 0 24px;
-  font-size: 2.6rem;
-  font-weight: 800;
-  letter-spacing: -0.03em;
+  margin: 8px 0 18px;
+  font-size: 30px;
+  letter-spacing: -0.02em;
 }
 
-body[data-screen='approval'] .card,
-body[data-screen='mandate'] .card,
-body[data-screen='guide'] .card {
-  overflow: hidden;
+/* The overview's header: title and date, today's spend with its meter, then the counts. */
+.title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
 }
 
-body[data-screen='approval'] main > .card::before,
-body[data-screen='mandate'] main > .card::before,
-body[data-screen='guide'] main > .card::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto;
-  height: 2px;
-  background: var(--grad);
+.title h1 {
+  margin: 0;
 }
 
-/* The vault's spend on the overview, as a figure rather than a sentence. */
-body[data-screen='overview'] .item > span:only-of-type {
-  font-size: 1.05rem;
+.date {
+  color: var(--faint);
+  font-size: 12px;
 }
 
-body[data-screen='overview'] .item strong {
-  font-size: 1.05rem;
+.summary {
+  padding: 0;
+}
+
+.label {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.spend {
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.big {
+  margin: 6px 0 2px;
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.big small {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.meter {
+  height: 3px;
+  margin-top: 14px;
+  background: var(--line);
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  background: var(--blue-ink);
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.2fr;
+}
+
+.split > div {
+  padding: 12px 16px;
+  border-left: 1px solid var(--line);
+  min-width: 0;
+}
+
+.split > div:first-child {
+  border-left: 0;
+}
+
+.split .value {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 details summary {
-  cursor: pointer;
-  color: var(--muted);
-  min-height: 44px;
   display: flex;
   align-items: center;
+  min-height: 44px;
+  color: var(--muted);
+  cursor: pointer;
 }
 
 /* CR-019: the deposit QR code stays square and readable on a phone, white margin included. */
@@ -677,35 +743,30 @@ svg.qr {
   width: min(240px, 100%);
   height: auto;
   margin: 12px 0;
-  border-radius: 12px;
+  border-radius: 5px;
 }
 
 progress {
   width: 100%;
-  height: 8px;
+  height: 3px;
   margin-bottom: 20px;
   border: 0;
-  border-radius: 999px;
-  background: var(--line-2);
-  accent-color: var(--mint);
+  background: var(--line);
+  accent-color: var(--blue-ink);
   -webkit-appearance: none;
   appearance: none;
-  overflow: hidden;
 }
 
 progress::-webkit-progress-bar {
-  background: var(--line-2);
-  border-radius: 999px;
+  background: var(--line);
 }
 
 progress::-webkit-progress-value {
-  background: var(--grad);
-  border-radius: 999px;
+  background: var(--blue-ink);
 }
 
 progress::-moz-progress-bar {
-  background: var(--grad);
-  border-radius: 999px;
+  background: var(--blue-ink);
 }
 
 .why {
@@ -731,7 +792,7 @@ ol.steps a {
 }
 
 ol.steps a[aria-current='step'] {
-  color: var(--mint);
+  color: var(--blue-ink);
   font-weight: 600;
 }
 
@@ -739,33 +800,19 @@ ol.steps a[aria-current='step'] {
 body[data-screen='login'] main,
 body[data-screen='enrol'] main,
 body[data-screen='setup'] main {
-  max-width: 480px;
-  padding-top: max(48px, calc(env(safe-area-inset-top) + 32px));
+  max-width: 440px;
+  padding-top: 32px;
 }
 
 body[data-screen='login'] h1,
 body[data-screen='setup'] h1 {
-  font-size: 2rem;
-  background: var(--grad);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  font-size: 24px;
 }
 
 body[data-screen='login'] .primary,
 body[data-screen='enrol'] .primary {
   width: 100%;
   margin: 12px 0 0;
-}
-
-@media (max-width: 480px) {
-  .actions {
-    flex-direction: column-reverse;
-  }
-
-  .actions button {
-    width: 100%;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

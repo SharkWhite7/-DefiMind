@@ -1,8 +1,14 @@
 import { CHAINS, getAddress } from '@defimind/shared'
 import { describe, expect, it } from 'vitest'
-import { chainName } from '../src/domain/chains.js'
+import { chainName, networkOf } from '../src/domain/chains.js'
 import { fromForm, toForm } from '../src/domain/form.js'
-import { amountText, dollarsInput, formatUsd, parseDollars } from '../src/domain/money.js'
+import {
+  amountText,
+  dollarsInput,
+  formatUsd,
+  meterPercent,
+  parseDollars,
+} from '../src/domain/money.js'
 import { notification } from '../src/domain/notify.js'
 import { chainRules, hostname, loosens, type Rules, vaulted } from '../src/domain/policy.js'
 import { href, parseRoute, type Route } from '../src/domain/route.js'
@@ -237,5 +243,26 @@ describe('chain rules (PANEL-15)', () => {
 
   it('counts only the chains with a vault as payable', () => {
     expect(vaulted([{ chain: devnet, vault: 'V' }, { chain: robinhood }])).toEqual([devnet])
+  })
+})
+
+describe('overview header (PANEL-18)', () => {
+  it('fills the meter in whole percent, in bigint, between 0 and 100', () => {
+    expect(meterPercent('1000000', '20000000')).toBe(5)
+    expect(meterPercent('0', '20000000')).toBe(0)
+    expect(meterPercent('1', '20000000')).toBe(1)
+    expect(meterPercent('30000000', '20000000')).toBe(100)
+    expect(meterPercent('5', '0')).toBe(0)
+    expect(meterPercent('123456789012345678901234567890', '246913578024691357802469135780')).toBe(
+      50,
+    )
+  })
+
+  it('names the network only when every chain agrees on it', () => {
+    expect(networkOf([CHAINS.solanaMainnet, CHAINS.robinhood])).toBe('Mainnet')
+    expect(networkOf([CHAINS.solanaMainnet, CHAINS.solanaDevnet])).toBe('Devnet')
+    expect(networkOf([CHAINS.baseSepolia])).toBe('Testnet')
+    expect(networkOf([])).toBeUndefined()
+    expect(networkOf(['eip155:1'])).toBeUndefined()
   })
 })

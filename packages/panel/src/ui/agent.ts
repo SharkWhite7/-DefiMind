@@ -73,7 +73,7 @@ function policyForm(ctx: Context, policy: PolicyView, known: string[]) {
       'dl',
       {},
       known.length === 0 && row('Chains', policy.chains.map(chainName).join(', ') || 'none'),
-      row('Tokens', policy.tokens.join(', ') || 'none'),
+      row('Tokens', el('span', { class: 'mono' }, policy.tokens.join(', ') || 'none')),
     ),
     ...(known.length > 0 ? chains.nodes : []),
     ...perTx.nodes,

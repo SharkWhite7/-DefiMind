@@ -10,7 +10,7 @@ import { writeIcon } from './icons.js'
  */
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url))
 
-const STATIC = ['index.html', 'app.css', 'manifest.webmanifest']
+const STATIC = ['index.html', 'app.css', 'manifest.webmanifest', 'icons/logo.svg']
 
 export async function buildPanel(outdir = here('./dist')) {
   await mkdir(`${outdir}/icons`, { recursive: true })

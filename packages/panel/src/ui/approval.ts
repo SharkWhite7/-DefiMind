@@ -50,7 +50,10 @@ export async function approval(ctx: Context, id: string): Screen {
         {},
         row('Agent', intent.agentId),
         row('Chain', el('span', { class: 'pill chain' }, chainName(intent.chain))),
-        row(intent.kind === 'x402' ? 'Pays' : 'To', intent.recipient),
+        row(
+          intent.kind === 'x402' ? 'Pays' : 'To',
+          el('span', { class: 'mono' }, intent.recipient),
+        ),
         intent.domain !== undefined && row('For', intent.domain),
         row('Agent says', intent.reason),
         row('Simulation', simulation.summary),
@@ -82,7 +85,7 @@ export async function mandate(ctx: Context, id: string): Screen {
         row('Agent', task.agentId),
         row('Agent says', task.reason),
         row('Domains', list(task.domains)),
-        row('Recipients', list(task.recipients)),
+        row('Recipients', el('span', { class: 'mono' }, list(task.recipients))),
         ttlSeconds !== undefined &&
           row('Lasts', `${Math.ceil(ttlSeconds / 60)} minutes once approved`),
         row('Decide before', when(approveBefore)),
