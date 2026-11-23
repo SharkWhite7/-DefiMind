@@ -9,32 +9,26 @@
       name="description"
       content="DefiMind is the security layer between AI agents and their wallets. Policy, simulation, passkey approvals in your own panel and an onchain daily cap, on Solana and Robinhood Chain, with Base next."
     />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
-    />
     <style>
-      /* Layout: one dark stage, full-bleed bands, a 1200px content column; the hero pairs a giant headline with a live intent feed. */
+      /* The ink look (SITE-7): navy surfaces, 1px hairlines, one solid blue for actions, no gradients or glows. */
       :root {
-        --bg: #050505;
-        --bg-2: #0a0a0a;
-        --panel: #0d0d0d;
-        --line: #1c1c1e;
-        --line-2: #2a2a2d;
-        --fg: #f5f5f5;
-        --muted: #a0a0a5;
-        --dim: #6a6a6f;
-        --violet: #9945ff;
-        --aqua: #8fa8c8;
-        --mint: #14f195;
-        --amber: #e8b45a;
-        --red: #f87171;
-        --grad: linear-gradient(90deg, #9945ff 0%, #43b4ca 50%, #14f195 100%);
-        --display: 'Inter Tight', 'Inter', 'Helvetica Neue', Arial, sans-serif;
-        --body: 'Inter', 'Helvetica Neue', Arial, sans-serif;
-        --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+        --bg: #0a0f1a;
+        --surface: #0e1524;
+        --raise: #131c2e;
+        --line: #1d2739;
+        --line2: #2a3650;
+        --text: #e7ebf1;
+        --muted: #8792a5;
+        --faint: #5d6879;
+        --blue: #2c5ac8;
+        --blue-hi: #3a6ad6;
+        --blue-ink: #9db7f0;
+        --ok: #3fb68b;
+        --warn: #d9a441;
+        --stop: #e5605c;
+        --sans:
+          -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Inter, system-ui, sans-serif;
+        --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
         --wrap: 1200px;
         --gut-l: max(20px, env(safe-area-inset-left, 0px));
         --gut-r: max(20px, env(safe-area-inset-right, 0px));
@@ -49,8 +43,8 @@
       body {
         margin: 0;
         background: var(--bg);
-        color: var(--fg);
-        font-family: var(--body);
+        color: var(--text);
+        font-family: var(--sans);
         font-size: 16px;
         line-height: 1.6;
         -webkit-font-smoothing: antialiased;
@@ -69,17 +63,18 @@
         text-decoration: none;
       }
       :focus-visible {
-        outline: 2px solid var(--mint);
+        outline: 2px solid var(--blue-ink);
         outline-offset: 3px;
-        border-radius: 6px;
+        border-radius: 5px;
       }
       h1,
       h2,
       h3 {
-        font-family: var(--display);
+        font-family: var(--sans);
         margin: 0;
         text-wrap: balance;
-        letter-spacing: -0.025em;
+        letter-spacing: -0.02em;
+        font-weight: 600;
       }
       p {
         margin: 0;
@@ -101,32 +96,16 @@
         position: relative;
       }
       .eyebrow {
-        font-family: var(--mono);
-        font-size: 12px;
-        letter-spacing: 0.14em;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
         color: var(--muted);
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .eyebrow::before {
-        content: '';
-        width: 8px;
-        height: 8px;
-        border-radius: 2px;
-        background: var(--grad);
-      }
-      .grad-text {
-        background: var(--grad);
-        -webkit-background-clip: text;
-        background-clip: text;
-        color: transparent;
       }
       .h2 {
         font-size: clamp(36px, 5.4vw, 68px);
-        line-height: 1.02;
-        font-weight: 700;
+        line-height: 1.06;
+        font-weight: 600;
       }
       .lede {
         font-size: clamp(17px, 1.6vw, 20px);
@@ -144,50 +123,43 @@
       .btn {
         display: inline-flex;
         align-items: center;
-        gap: 12px;
-        height: 56px;
-        padding: 0 28px;
-        border-radius: 999px;
+        gap: 10px;
+        height: 48px;
+        padding: 0 22px;
+        border-radius: 5px;
         font-weight: 600;
-        font-size: 15.5px;
+        font-size: 15px;
         transition:
-          transform 0.2s ease,
-          background 0.2s ease,
-          border-color 0.2s ease;
+          background-color 120ms ease,
+          border-color 120ms ease;
         white-space: nowrap;
         cursor: pointer;
-        border: 0;
-        font-family: var(--body);
-      }
-      .btn:hover {
-        transform: translateY(-1px);
+        border: 1px solid transparent;
+        font-family: var(--sans);
       }
       .btn-primary {
-        background: var(--fg);
-        color: var(--bg);
+        background: var(--blue);
+        color: #fff;
       }
       .btn-primary:hover {
-        background: #fff;
+        background: var(--blue-hi);
       }
       .btn-ghost {
         background: transparent;
-        color: var(--fg);
-        border: 1px solid var(--line-2);
+        color: var(--text);
+        border: 1px solid var(--line2);
       }
       .btn-ghost:hover {
         border-color: var(--muted);
       }
       .btn-soon {
         background: transparent;
-        color: var(--dim);
-        border: 1px dashed var(--line-2);
+        color: var(--faint);
+        border: 1px dashed var(--line2);
         cursor: default;
       }
-      .btn-soon:hover {
-        transform: none;
-      }
       .soon-item {
-        color: var(--dim);
+        color: var(--faint);
         display: inline-flex;
         align-items: center;
         gap: 8px;
@@ -198,7 +170,7 @@
         letter-spacing: 0.08em;
         text-transform: uppercase;
         border: 1px solid var(--line);
-        border-radius: 5px;
+        border-radius: 3px;
         padding: 2px 6px;
       }
       .soon-row {
@@ -214,58 +186,43 @@
         gap: 8px;
         font-size: 14px;
         color: var(--muted);
-        border: 1px dashed var(--line-2);
-        border-radius: 999px;
-        padding: 9px 16px;
+        border: 1px dashed var(--line2);
+        border-radius: 5px;
+        padding: 9px 14px;
       }
       .soon-chip small {
         font-family: var(--mono);
         font-size: 9.5px;
         letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: #7fd4e3;
-        border: 1px solid rgba(67, 180, 202, 0.35);
-        border-radius: 5px;
+        color: var(--faint);
+        border: 1px solid var(--line2);
+        border-radius: 3px;
         padding: 2px 6px;
       }
       a.soon-chip {
-        color: var(--fg);
+        color: var(--text);
         border-style: solid;
-        transition:
-          border-color 0.2s ease,
-          transform 0.2s ease;
+        transition: border-color 120ms ease;
       }
       a.soon-chip:hover {
         border-color: var(--muted);
-        transform: translateY(-1px);
       }
       a.soon-chip small {
-        color: var(--mint);
-        border-color: rgba(20, 241, 149, 0.4);
+        color: var(--blue-ink);
       }
       a.soon-item {
         color: var(--muted);
       }
       a.soon-item:hover {
-        color: var(--fg);
+        color: var(--text);
       }
       a.soon-item small {
-        color: var(--mint);
-        border-color: rgba(20, 241, 149, 0.4);
+        color: var(--blue-ink);
       }
       .btn svg {
         width: 16px;
         height: 16px;
-      }
-      .btn-primary svg {
-        width: 32px;
-        height: 32px;
-        padding: 8px;
-        box-sizing: border-box;
-        border-radius: 50%;
-        background: #0a0a0a;
-        color: #fff;
-        margin-right: -14px;
       }
 
       /* Nav */
@@ -273,10 +230,8 @@
         position: sticky;
         top: env(safe-area-inset-top, 0px);
         z-index: 50;
-        backdrop-filter: blur(16px) saturate(140%);
-        -webkit-backdrop-filter: blur(16px) saturate(140%);
-        background: rgba(5, 5, 5, 0.78);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        background: var(--bg);
+        border-bottom: 1px solid var(--line);
       }
       .nav .wrap {
         display: flex;
@@ -288,24 +243,36 @@
       .brand {
         display: flex;
         align-items: center;
-        gap: 11px;
+        gap: 10px;
         font-weight: 600;
-        font-size: 18px;
-        letter-spacing: -0.02em;
+        font-size: 17px;
+        letter-spacing: -0.01em;
       }
-      .brand svg {
-        width: 32px;
-        height: 32px;
-        filter: drop-shadow(0 0 7px rgba(153, 69, 255, 0.6));
+      /* The mark: a square in a square, drawn in CSS. */
+      .logo {
+        position: relative;
+        flex: none;
+        width: 16px;
+        height: 16px;
+        border: 2px solid var(--blue-ink);
+        border-radius: 3px;
       }
-      .logo-mark {
-        overflow: visible;
+      .logo::after {
+        content: '';
+        position: absolute;
+        inset: 3px;
+        background: var(--blue-ink);
+        border-radius: 1px;
       }
-      .cta-logo {
-        width: clamp(100px, 13vw, 150px);
-        height: clamp(100px, 13vw, 150px);
-        filter: drop-shadow(0 0 22px rgba(153, 69, 255, 0.55))
-          drop-shadow(0 0 80px rgba(20, 241, 149, 0.3));
+      .logo-lg {
+        width: 44px;
+        height: 44px;
+        border-width: 4px;
+        border-radius: 4px;
+      }
+      .logo-lg::after {
+        inset: 8px;
+        border-radius: 2px;
       }
       .nav-links {
         display: flex;
@@ -315,7 +282,7 @@
         white-space: nowrap;
       }
       .nav-links a:hover {
-        color: var(--fg);
+        color: var(--text);
       }
       .nav-cta {
         display: flex;
@@ -336,7 +303,7 @@
         white-space: nowrap;
       }
       .nav-top-link:hover {
-        color: var(--fg);
+        color: var(--text);
       }
       @media (max-width: 1180px) {
         .nav-top-link {
@@ -347,20 +314,18 @@
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        font-family: var(--mono);
-        font-size: 12px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
         color: var(--muted);
-        padding: 6px 12px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
         white-space: nowrap;
       }
       .dot {
         width: 7px;
         height: 7px;
-        border-radius: 50%;
-        background: var(--amber);
-        box-shadow: 0 0 10px var(--amber);
+        border-radius: 1px;
+        background: var(--warn);
       }
       @media (max-width: 960px) {
         .nav-links,
@@ -375,22 +340,6 @@
         overflow: hidden;
         padding-block: clamp(70px, 9vw, 120px) clamp(60px, 7vw, 100px);
       }
-      #ribbons {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        opacity: 0.8;
-        pointer-events: none;
-      }
-      .hero::after {
-        content: '';
-        position: absolute;
-        inset: auto 0 0;
-        height: 220px;
-        background: linear-gradient(to bottom, transparent, var(--bg));
-        pointer-events: none;
-      }
       .hero .wrap {
         position: relative;
         z-index: 2;
@@ -400,10 +349,10 @@
         align-items: center;
       }
       .hero h1 {
-        font-size: clamp(44px, 6.6vw, 92px);
-        line-height: 1;
-        font-weight: 700;
-        letter-spacing: -0.035em;
+        font-size: clamp(40px, 5.6vw, 76px);
+        line-height: 1.04;
+        font-weight: 600;
+        letter-spacing: -0.03em;
       }
       .hero-copy {
         display: grid;
@@ -421,7 +370,7 @@
       .hero-note {
         font-family: var(--mono);
         font-size: 12.5px;
-        color: var(--dim);
+        color: var(--faint);
         display: flex;
         gap: 18px;
         flex-wrap: wrap;
@@ -443,35 +392,11 @@
 
       /* Intent feed */
       .feed {
-        background: linear-gradient(180deg, rgba(15, 15, 16, 0.95), rgba(8, 8, 9, 0.95));
+        background: var(--surface);
         border: 1px solid var(--line);
-        border-radius: 22px;
+        border-radius: 6px;
         padding: 20px;
-        box-shadow:
-          0 40px 120px -40px rgba(0, 0, 0, 0.7),
-          inset 0 1px 0 rgba(255, 255, 255, 0.04);
         min-width: 0;
-        position: relative;
-      }
-      .feed::before {
-        content: '';
-        position: absolute;
-        inset: -1px;
-        border-radius: 23px;
-        padding: 1px;
-        background: linear-gradient(
-          140deg,
-          rgba(153, 69, 255, 0.45),
-          transparent 40%,
-          transparent 60%,
-          rgba(20, 241, 149, 0.3)
-        );
-        -webkit-mask:
-          linear-gradient(#000 0 0) content-box,
-          linear-gradient(#000 0 0);
-        -webkit-mask-composite: xor;
-        mask-composite: exclude;
-        pointer-events: none;
       }
       .feed-head {
         display: flex;
@@ -492,22 +417,16 @@
       .feed-live {
         font-family: var(--mono);
         font-size: 11px;
-        color: var(--dim);
+        color: var(--faint);
         display: flex;
         align-items: center;
         gap: 7px;
       }
       .feed-live i {
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--mint);
-        animation: pulse 1.6s infinite;
-      }
-      @keyframes pulse {
-        50% {
-          opacity: 0.25;
-        }
+        width: 7px;
+        height: 7px;
+        border-radius: 1px;
+        background: var(--ok);
       }
       .feed-list {
         display: grid;
@@ -521,22 +440,15 @@
         grid-template-columns: auto minmax(0, 1fr) auto;
         gap: 14px;
         align-items: center;
-        padding: 13px 14px;
-        border-radius: 14px;
-        background: rgba(255, 255, 255, 0.025);
-        border: 1px solid rgba(255, 255, 255, 0.04);
-        animation: slidein 0.5s ease both;
-      }
-      @keyframes slidein {
-        from {
-          transform: translateY(-8px);
-          opacity: 0.3;
-        }
+        padding: 12px 14px;
+        border-radius: 5px;
+        background: var(--raise);
+        border: 1px solid var(--line);
       }
       .intent-ico {
         width: 34px;
         height: 34px;
-        border-radius: 10px;
+        border-radius: 5px;
         display: grid;
         place-items: center;
         font-family: var(--mono);
@@ -555,38 +467,44 @@
       .intent-meta {
         font-family: var(--mono);
         font-size: 11.5px;
-        color: var(--dim);
+        color: var(--faint);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
       .chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
         font-family: var(--mono);
         font-size: 11px;
-        padding: 5px 9px;
-        border-radius: 7px;
         white-space: nowrap;
-        letter-spacing: 0.02em;
+      }
+      .chip::before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 1px;
+        background: currentColor;
       }
       .s-approved {
-        color: var(--mint);
-        background: rgba(20, 241, 149, 0.1);
+        color: var(--ok);
       }
       .s-pending {
-        color: var(--amber);
-        background: rgba(232, 180, 90, 0.12);
+        color: var(--warn);
       }
       .s-rejected {
-        color: var(--red);
-        background: rgba(248, 113, 113, 0.12);
+        color: var(--stop);
       }
       .k-x402 {
-        background: rgba(153, 69, 255, 0.16);
-        color: #c9a2ff;
+        background: var(--surface);
+        border: 1px solid var(--line2);
+        color: var(--blue-ink);
       }
       .k-transfer {
-        background: rgba(143, 168, 200, 0.14);
-        color: var(--aqua);
+        background: var(--surface);
+        border: 1px solid var(--line2);
+        color: var(--muted);
       }
       .feed-foot {
         margin-top: 14px;
@@ -603,7 +521,7 @@
       .feed-foot small {
         font-family: var(--mono);
         font-size: 10.5px;
-        color: var(--dim);
+        color: var(--faint);
         text-transform: uppercase;
         letter-spacing: 0.08em;
       }
@@ -613,8 +531,7 @@
         font-size: 15px;
       }
       .meter {
-        height: 4px;
-        border-radius: 4px;
+        height: 3px;
         background: var(--line);
         overflow: hidden;
         margin-top: 6px;
@@ -622,16 +539,15 @@
       .meter i {
         display: block;
         height: 100%;
-        background: var(--grad);
+        background: var(--blue-ink);
         width: 38%;
-        transition: width 0.6s ease;
       }
 
       /* Stats */
       .stats {
         border-top: 1px solid var(--line);
         border-bottom: 1px solid var(--line);
-        background: var(--bg-2);
+        background: var(--surface);
       }
       .stats .wrap {
         display: grid;
@@ -661,7 +577,7 @@
       .stats-cap {
         font-family: var(--mono);
         font-size: 11px;
-        color: var(--dim);
+        color: var(--faint);
         padding-block: 0 22px;
         letter-spacing: 0.04em;
       }
@@ -685,55 +601,41 @@
       /* Marquee */
       .marquee-band {
         padding-block: 56px;
-        overflow: hidden;
       }
       .marquee-label {
         text-align: center;
         font-family: var(--mono);
         font-size: 12px;
-        color: var(--dim);
+        color: var(--faint);
         letter-spacing: 0.14em;
         text-transform: uppercase;
-        margin-bottom: 28px;
-      }
-      .marquee {
-        display: flex;
-        width: max-content;
-        animation: scroll 42s linear infinite;
+        margin-bottom: 24px;
       }
       .marquee-track {
         display: flex;
-        gap: 72px;
-        padding-right: 72px;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 18px 44px;
         align-items: center;
       }
       .mark {
-        font-size: clamp(22px, 2.6vw, 30px);
+        font-size: clamp(17px, 1.8vw, 21px);
         font-weight: 500;
-        color: #606065;
-        letter-spacing: -0.03em;
+        color: var(--muted);
+        letter-spacing: -0.01em;
         white-space: nowrap;
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
       }
       .mark small {
         font-family: var(--mono);
         font-size: 11px;
-        color: var(--dim);
+        color: var(--faint);
         letter-spacing: 0.06em;
         border: 1px solid var(--line);
-        border-radius: 6px;
+        border-radius: 3px;
         padding: 3px 7px;
-      }
-      .marquee-mask {
-        -webkit-mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-        mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-      }
-      @keyframes scroll {
-        to {
-          transform: translateX(-50%);
-        }
       }
 
       /* Pipeline */
@@ -742,9 +644,9 @@
         grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 0;
         border: 1px solid var(--line);
-        border-radius: 24px;
+        border-radius: 6px;
         overflow: hidden;
-        background: var(--bg-2);
+        background: var(--surface);
       }
       .step {
         padding: 34px 30px 36px;
@@ -761,7 +663,7 @@
       .step-n {
         font-family: var(--mono);
         font-size: 12px;
-        color: var(--dim);
+        color: var(--faint);
       }
       .step h3 {
         font-size: 24px;
@@ -784,15 +686,15 @@
         font-size: 12px;
         color: var(--muted);
         padding: 7px 10px;
-        border-radius: 8px;
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.04);
+        border-radius: 4px;
+        background: var(--raise);
+        border: 1px solid var(--line);
         overflow-wrap: anywhere;
       }
       .step-bar {
-        height: 3px;
-        width: 40px;
-        border-radius: 3px;
+        height: 2px;
+        width: 32px;
+        background: var(--blue-ink);
       }
       .outcomes {
         display: grid;
@@ -805,8 +707,8 @@
         gap: 10px;
         font-size: 14px;
         padding: 9px 12px;
-        border-radius: 10px;
-        background: rgba(255, 255, 255, 0.03);
+        border-radius: 5px;
+        background: var(--raise);
       }
       @media (max-width: 960px) {
         .pipeline {
@@ -839,9 +741,9 @@
         gap: 28px;
       }
       .card {
-        background: var(--panel);
+        background: var(--surface);
         border: 1px solid var(--line);
-        border-radius: 24px;
+        border-radius: 6px;
         padding: clamp(26px, 3vw, 40px);
         min-width: 0;
       }
@@ -859,11 +761,11 @@
       .node-ico {
         width: 44px;
         height: 44px;
-        border-radius: 12px;
+        border-radius: 5px;
         display: grid;
         place-items: center;
-        border: 1px solid var(--line-2);
-        background: var(--bg-2);
+        border: 1px solid var(--line2);
+        background: var(--surface);
       }
       .node-ico svg {
         width: 20px;
@@ -881,11 +783,11 @@
       }
       .node .mono {
         font-size: 12px;
-        color: var(--dim);
+        color: var(--faint);
       }
       .link {
         margin-left: 21px;
-        border-left: 1px dashed var(--line-2);
+        border-left: 1px dashed var(--line2);
         height: 30px;
         position: relative;
       }
@@ -896,7 +798,7 @@
         transform: translateY(-50%);
         font-family: var(--mono);
         font-size: 11px;
-        color: var(--violet);
+        color: var(--blue-ink);
         white-space: nowrap;
       }
       .formula {
@@ -919,7 +821,7 @@
         color: var(--muted);
       }
       .field-row output {
-        color: var(--fg);
+        color: var(--text);
         font-family: var(--mono);
         font-variant-numeric: tabular-nums;
       }
@@ -937,24 +839,24 @@
         width: 22px;
         height: 22px;
         border-radius: 50%;
-        background: var(--fg);
-        border: 4px solid var(--violet);
+        background: var(--text);
+        border: 4px solid var(--blue-ink);
         cursor: pointer;
       }
       input[type='range']::-moz-range-thumb {
         width: 16px;
         height: 16px;
         border-radius: 50%;
-        background: var(--fg);
-        border: 4px solid var(--violet);
+        background: var(--text);
+        border: 4px solid var(--blue-ink);
         cursor: pointer;
       }
       .result {
         margin-top: 8px;
         padding: 22px;
-        border-radius: 18px;
-        background: rgba(153, 69, 255, 0.1);
-        border: 1px solid rgba(153, 69, 255, 0.3);
+        border-radius: 6px;
+        background: var(--raise);
+        border: 1px solid var(--line2);
         display: grid;
         gap: 6px;
       }
@@ -989,7 +891,7 @@
         gap: 1px;
         background: var(--line);
         border: 1px solid var(--line);
-        border-radius: 24px;
+        border-radius: 6px;
         overflow: hidden;
       }
       .feature {
@@ -998,20 +900,20 @@
         display: grid;
         gap: 14px;
         align-content: start;
-        transition: background 0.25s ease;
+        transition: background-color 120ms ease;
         min-width: 0;
       }
       .feature:hover {
-        background: var(--bg-2);
+        background: var(--surface);
       }
       .feature-ico {
         width: 48px;
         height: 48px;
-        border-radius: 14px;
+        border-radius: 6px;
         display: grid;
         place-items: center;
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid var(--line-2);
+        background: var(--raise);
+        border: 1px solid var(--line2);
         margin-bottom: 8px;
       }
       .feature-ico svg {
@@ -1029,7 +931,7 @@
       }
       .feature code {
         font-size: 12.5px;
-        color: var(--aqua);
+        color: var(--blue-ink);
       }
       @media (max-width: 960px) {
         .features {
@@ -1068,7 +970,7 @@
         font-size: 15.5px;
       }
       .checks li b {
-        color: var(--fg);
+        color: var(--text);
         font-weight: 500;
       }
       .checks svg {
@@ -1080,11 +982,10 @@
         max-width: 400px;
         width: 100%;
         justify-self: center;
-        background: #0c0c0e;
-        border: 1px solid var(--line-2);
-        border-radius: 34px;
+        background: var(--surface);
+        border: 1px solid var(--line2);
+        border-radius: 10px;
         padding: 14px;
-        box-shadow: 0 50px 120px -50px rgba(0, 0, 0, 0.7);
       }
       .phone-top {
         display: flex;
@@ -1096,15 +997,11 @@
       .avatar {
         width: 38px;
         height: 38px;
-        border-radius: 50%;
-        background: #0a0a0b;
-        border: 1px solid var(--line-2);
+        border-radius: 6px;
+        background: var(--bg);
+        border: 1px solid var(--line2);
         display: grid;
         place-items: center;
-      }
-      .avatar svg {
-        width: 27px;
-        height: 27px;
       }
       .phone-top b {
         font-size: 15px;
@@ -1114,7 +1011,7 @@
       }
       .phone-top small {
         font-size: 12px;
-        color: var(--dim);
+        color: var(--faint);
       }
       .chat {
         padding: 16px 6px 6px;
@@ -1122,8 +1019,8 @@
         gap: 10px;
       }
       .bubble {
-        background: #151518;
-        border-radius: 16px 16px 16px 4px;
+        background: var(--raise);
+        border-radius: 6px;
         padding: 14px 16px;
         font-size: 14px;
         line-height: 1.55;
@@ -1134,7 +1031,7 @@
       }
       .bubble hr {
         border: 0;
-        border-top: 1px solid var(--line-2);
+        border-top: 1px solid var(--line2);
         margin: 10px 0;
       }
       .bubble-row {
@@ -1144,7 +1041,7 @@
         font-size: 13px;
       }
       .bubble-row span:first-child {
-        color: var(--dim);
+        color: var(--faint);
       }
       .bubble-row span:last-child {
         font-family: var(--mono);
@@ -1153,43 +1050,38 @@
       }
       .tg-btns {
         display: grid;
-        grid-template-columns: 3fr 2fr;
+        grid-template-columns: 2fr 3fr;
         gap: 8px;
       }
       .tg-btn {
         min-height: 48px;
-        border-radius: 12px;
-        background: #151518;
-        border: 1px solid var(--line-2);
-        color: var(--fg);
-        font-family: var(--body);
+        border-radius: 5px;
+        background: transparent;
+        border: 1px solid var(--line2);
+        color: var(--text);
+        font-family: var(--sans);
         font-size: 14px;
-        font-weight: 500;
+        font-weight: 600;
         cursor: pointer;
-        transition: background 0.2s ease;
+        transition:
+          background-color 120ms ease,
+          border-color 120ms ease;
       }
       .tg-btn:hover {
-        background: #202024;
+        background: var(--raise);
       }
-      /* The same two actions as the panel's approval: the gradient, and a red outline. */
+      /* The panel's two actions: solid blue, and Reject in red text on a hairline. */
       .tg-btn.ok {
-        border-color: transparent;
-        background: var(--grad) border-box;
-        color: var(--bg);
-        font-weight: 700;
+        border-color: var(--blue);
+        background: var(--blue);
+        color: #fff;
       }
       .tg-btn.ok:hover {
-        background: var(--grad) border-box;
-        filter: brightness(1.08);
+        border-color: var(--blue-hi);
+        background: var(--blue-hi);
       }
       .tg-btn.no {
-        border-color: rgb(248 113 113 / 60%);
-        background: transparent;
-        color: var(--red);
-      }
-      .tg-btn.no:hover {
-        border-color: var(--red);
-        background: rgb(248 113 113 / 8%);
+        color: var(--stop);
       }
       .tg-done {
         font-family: var(--mono);
@@ -1199,7 +1091,7 @@
         padding: 6px;
       }
       .countdown {
-        color: var(--amber);
+        color: var(--warn);
       }
       @media (max-width: 900px) {
         .split {
@@ -1216,23 +1108,25 @@
       }
       .tab {
         height: 40px;
-        padding: 0 18px;
-        border-radius: 999px;
-        border: 1px solid var(--line-2);
+        padding: 0 16px;
+        border-radius: 5px;
+        border: 1px solid var(--line2);
         background: transparent;
         color: var(--muted);
-        font-family: var(--body);
+        font-family: var(--sans);
         font-size: 14px;
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition:
+          color 120ms ease,
+          border-color 120ms ease;
       }
       .tab:hover {
-        color: var(--fg);
+        color: var(--text);
       }
       .tab[aria-selected='true'] {
-        background: var(--fg);
-        color: var(--bg);
-        border-color: var(--fg);
+        background: var(--raise);
+        color: var(--text);
+        border-color: var(--blue-ink);
       }
       .threats {
         display: grid;
@@ -1241,9 +1135,9 @@
       }
       .threat {
         padding: 20px 22px;
-        border-radius: 16px;
+        border-radius: 6px;
         border: 1px solid var(--line);
-        background: var(--bg-2);
+        background: var(--surface);
         display: grid;
         gap: 8px;
         align-content: start;
@@ -1251,7 +1145,7 @@
       }
       .threat code {
         font-size: 12.5px;
-        color: var(--red);
+        color: var(--stop);
         overflow-wrap: anywhere;
       }
       .threat p {
@@ -1261,7 +1155,7 @@
       .threat .tag {
         font-family: var(--mono);
         font-size: 10.5px;
-        color: var(--dim);
+        color: var(--faint);
         text-transform: uppercase;
         letter-spacing: 0.1em;
       }
@@ -1286,12 +1180,12 @@
         grid-template-columns: minmax(0, 150px) minmax(0, 1fr);
         gap: 16px;
         padding: 14px 16px;
-        border-radius: 14px;
+        border-radius: 6px;
         border: 1px solid var(--line);
         align-items: baseline;
       }
       .tool code {
-        color: var(--aqua);
+        color: var(--blue-ink);
         font-size: 13.5px;
       }
       .tool span {
@@ -1299,9 +1193,9 @@
         font-size: 14px;
       }
       .code-card {
-        background: #0a0a0a;
+        background: var(--surface);
         border: 1px solid var(--line);
-        border-radius: 22px;
+        border-radius: 6px;
         overflow: hidden;
         min-width: 0;
       }
@@ -1322,26 +1216,26 @@
       .code-tab {
         height: 34px;
         padding: 0 14px;
-        border-radius: 9px;
+        border-radius: 5px;
         border: 0;
         background: transparent;
-        color: var(--dim);
+        color: var(--faint);
         font-family: var(--mono);
         font-size: 12.5px;
         cursor: pointer;
       }
       .code-tab:hover {
-        color: var(--fg);
+        color: var(--text);
       }
       .code-tab[aria-selected='true'] {
-        background: rgba(255, 255, 255, 0.06);
-        color: var(--fg);
+        background: var(--raise);
+        color: var(--text);
       }
       .copy {
         height: 32px;
         padding: 0 12px;
-        border-radius: 9px;
-        border: 1px solid var(--line-2);
+        border-radius: 5px;
+        border: 1px solid var(--line2);
         background: transparent;
         color: var(--muted);
         font-family: var(--mono);
@@ -1349,7 +1243,7 @@
         cursor: pointer;
       }
       .copy:hover {
-        color: var(--fg);
+        color: var(--text);
       }
       .code-scroll {
         overflow-x: auto;
@@ -1359,23 +1253,23 @@
         padding: 22px 24px 26px;
         font-size: 13px;
         line-height: 1.75;
-        color: #c9c9d8;
+        color: var(--text);
         tab-size: 2;
       }
       .t-k {
-        color: #c9a2ff;
+        color: var(--blue-ink);
       }
       .t-s {
-        color: #41e3a0;
+        color: var(--ok);
       }
       .t-n {
-        color: #dfb570;
+        color: var(--warn);
       }
       .t-c {
-        color: #5c5c61;
+        color: var(--faint);
       }
       .t-p {
-        color: #9cb3d2;
+        color: var(--muted);
       }
       @media (max-width: 960px) {
         .dev {
@@ -1397,62 +1291,35 @@
       }
       .chain {
         position: relative;
-        overflow: hidden;
-        border-radius: 26px;
+        border-radius: 6px;
         border: 1px solid var(--line);
         padding: clamp(28px, 3.4vw, 44px);
-        background: var(--panel);
+        background: var(--surface);
         display: grid;
         gap: 22px;
         min-width: 0;
-      }
-      .chain::before {
-        content: '';
-        position: absolute;
-        width: 380px;
-        height: 380px;
-        right: -140px;
-        top: -160px;
-        border-radius: 50%;
-        filter: blur(70px);
-        opacity: 0.25;
-        pointer-events: none;
-      }
-      .chain.svm::before {
-        background: var(--violet);
-      }
-      .chain.evm::before {
-        background: #14f195;
-      }
-      .chain.soon::before {
-        background: #43b4ca;
       }
       .chain.soon {
         border-style: dashed;
       }
       .chain.soon .kv dd {
-        color: var(--dim);
+        color: var(--faint);
       }
       .order.soon-tag {
-        color: #7fd4e3;
-        border-color: rgba(67, 180, 202, 0.4);
-        background: rgba(67, 180, 202, 0.1);
+        color: var(--muted);
       }
       .order.live-tag {
-        color: var(--mint);
-        border-color: rgba(20, 241, 149, 0.4);
-        background: rgba(20, 241, 149, 0.1);
+        color: var(--ok);
         display: inline-flex;
         align-items: center;
         gap: 7px;
       }
       .order.live-tag::before {
         content: '';
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        background: var(--mint);
-        box-shadow: 0 0 8px var(--mint);
+        width: 7px;
+        height: 7px;
+        border-radius: 1px;
+        background: var(--ok);
       }
       .chain-head {
         display: flex;
@@ -1470,8 +1337,8 @@
         font-family: var(--mono);
         font-size: 11.5px;
         padding: 6px 10px;
-        border-radius: 8px;
-        border: 1px solid var(--line-2);
+        border-radius: 4px;
+        border: 1px solid var(--line2);
         color: var(--muted);
       }
       .kv {
@@ -1487,7 +1354,7 @@
         font-size: 14.5px;
       }
       .kv dt {
-        color: var(--dim);
+        color: var(--faint);
       }
       .kv dd {
         margin: 0;
@@ -1516,7 +1383,7 @@
         gap: 16px;
       }
       .phase {
-        border-top: 2px solid var(--line-2);
+        border-top: 2px solid var(--line2);
         padding-top: 22px;
         display: grid;
         gap: 12px;
@@ -1524,10 +1391,10 @@
         min-width: 0;
       }
       .phase.done {
-        border-color: var(--mint);
+        border-color: var(--ok);
       }
       .phase.now {
-        border-color: var(--violet);
+        border-color: var(--blue-ink);
       }
       .phase-tag {
         font-family: var(--mono);
@@ -1536,13 +1403,13 @@
         text-transform: uppercase;
       }
       .phase.done .phase-tag {
-        color: var(--mint);
+        color: var(--ok);
       }
       .phase.now .phase-tag {
-        color: var(--violet);
+        color: var(--blue-ink);
       }
       .phase.next .phase-tag {
-        color: var(--dim);
+        color: var(--faint);
       }
       .phase h3 {
         font-size: 22px;
@@ -1571,9 +1438,10 @@
       .notice {
         margin-top: 48px;
         padding: 20px 24px;
-        border-radius: 16px;
-        border: 1px solid rgba(255, 195, 92, 0.3);
-        background: rgba(255, 195, 92, 0.06);
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        border-left: 2px solid var(--warn);
+        background: var(--surface);
         display: flex;
         gap: 14px;
         align-items: flex-start;
@@ -1581,7 +1449,7 @@
         color: var(--muted);
       }
       .notice b {
-        color: var(--amber);
+        color: var(--warn);
         font-weight: 500;
       }
 
@@ -1617,7 +1485,6 @@
         font-size: 24px;
         line-height: 1;
         color: var(--muted);
-        transition: transform 0.25s ease;
       }
       details[open] summary::after {
         transform: rotate(45deg);
@@ -1629,7 +1496,7 @@
       }
       details code {
         font-size: 13px;
-        color: var(--aqua);
+        color: var(--blue-ink);
       }
       @media (max-width: 900px) {
         .faq {
@@ -1640,14 +1507,10 @@
       /* CTA */
       .cta {
         position: relative;
-        overflow: hidden;
-        border-radius: 32px;
+        border-radius: 6px;
         padding: clamp(56px, 8vw, 110px) clamp(24px, 6vw, 80px);
         text-align: center;
-        background:
-          radial-gradient(120% 140% at 50% 0%, rgba(153, 69, 255, 0.22), transparent 55%),
-          radial-gradient(90% 100% at 100% 100%, rgba(20, 241, 149, 0.1), transparent 60%),
-          var(--panel);
+        background: var(--surface);
         border: 1px solid var(--line);
         display: grid;
         gap: 28px;
@@ -1679,7 +1542,7 @@
         font-size: 11.5px;
         letter-spacing: 0.12em;
         text-transform: uppercase;
-        color: var(--dim);
+        color: var(--faint);
         font-weight: 400;
       }
       .foot ul {
@@ -1692,7 +1555,7 @@
         color: var(--muted);
       }
       .foot a:hover {
-        color: var(--fg);
+        color: var(--text);
       }
       .foot-brand {
         display: grid;
@@ -1713,7 +1576,7 @@
         gap: 16px;
         flex-wrap: wrap;
         font-size: 13px;
-        color: var(--dim);
+        color: var(--faint);
         font-family: var(--mono);
       }
       @media (max-width: 800px) {
@@ -1758,49 +1621,10 @@
     </style>
   </head>
   <body>
-    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
-      <defs>
-        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#9945ff" />
-          <stop offset="1" stop-color="#14f195" />
-        </linearGradient>
-      </defs>
-    </svg>
-
     <header class="nav">
       <div class="wrap">
         <a class="brand" href="#top" aria-label="DefiMind home">
-          <svg class="logo-mark" viewBox="0 0 100 100" aria-hidden="true">
-            <defs>
-              <linearGradient id="lgm1" x1="0" y1="0" x2="1" y2="0.25">
-                <stop offset="0" stop-color="#3fd9ff" />
-                <stop offset=".5" stop-color="#5b8cff" />
-                <stop offset="1" stop-color="#9b6bff" />
-              </linearGradient>
-              <filter id="mglow1" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="3.2" />
-              </filter>
-            </defs>
-            <g fill="none" stroke="url(#lgm1)">
-              <g filter="url(#mglow1)" opacity=".95">
-                <circle cx="50" cy="50" r="40" stroke-width="3.6" />
-                <path
-                  d="M50 24 69 31 V48 c0 13-8.2 22-19 26.6 C39.2 70 31 61 31 48 V31 Z"
-                  stroke-width="4"
-                />
-                <path d="M49 47 38.5 72 M51 47 61.5 72" stroke-width="8" />
-                <circle cx="50" cy="43" r="6.6" fill="#5fb3ff" stroke="none" />
-              </g>
-              <circle cx="50" cy="50" r="40" stroke-width="3" />
-              <path
-                d="M50 24 69 31 V48 c0 13-8.2 22-19 26.6 C39.2 70 31 61 31 48 V31 Z"
-                stroke-width="3.4"
-                stroke-linejoin="round"
-              />
-              <path d="M49 47 38.5 72 M51 47 61.5 72" stroke-width="7.5" />
-              <circle cx="50" cy="43" r="6.6" fill="#5fb3ff" stroke="#050505" stroke-width="2.4" />
-            </g>
-          </svg>
+          <i class="logo" aria-hidden="true"></i>
           DefiMind
         </a>
         <nav class="nav-links" aria-label="Main">
@@ -1812,11 +1636,7 @@
         </nav>
         <div class="nav-cta">
           <span class="status-pill"
-            ><span
-              class="dot"
-              style="background: var(--mint); box-shadow: 0 0 10px var(--mint)"
-            ></span
-            >Live on mainnet</span
+            ><span class="dot" style="background: var(--ok)"></span>Live on mainnet</span
           >
           <a class="nav-top-link" href="whitepaper.html">Whitepaper</a>
           <a class="btn btn-primary" href="#how">See it in action</a>
@@ -1826,10 +1646,9 @@
 
     <main id="top">
       <section class="hero">
-        <canvas id="ribbons" aria-hidden="true"></canvas>
         <div class="wrap">
           <div class="hero-copy">
-            <h1>The agent every<br /><span class="grad-text">agent needs.</span></h1>
+            <h1>The agent every<br />agent needs.</h1>
             <p class="lede">
               DefiMind is the security layer your AI agent plugs into before it can move a cent.
               Every payment is checked against your rules, test-run before signing, then approved by
@@ -1893,26 +1712,15 @@
         <p class="marquee-label">
           Built on proven, independently audited tools already live onchain
         </p>
-        <div class="marquee-mask">
-          <div class="marquee">
-            <div class="marquee-track">
-              <span class="mark">Squads v4 <small>vault wallet</small></span>
-              <span class="mark">Safe <small>vault wallet</small></span>
-              <span class="mark">Safe Allowance Module <small>spend limit</small></span>
-              <span class="mark">x402 <small>pay-per-use payments</small></span>
-              <span class="mark">Model Context Protocol <small>how agents connect</small></span>
-              <span class="mark">USDC <small>digital dollar</small></span>
-              <span class="mark">Passkeys <small>approvals</small></span>
-            </div>
-            <div class="marquee-track" aria-hidden="true">
-              <span class="mark">Squads v4 <small>vault wallet</small></span>
-              <span class="mark">Safe <small>vault wallet</small></span>
-              <span class="mark">Safe Allowance Module <small>spend limit</small></span>
-              <span class="mark">x402 <small>pay-per-use payments</small></span>
-              <span class="mark">Model Context Protocol <small>how agents connect</small></span>
-              <span class="mark">USDC <small>digital dollar</small></span>
-              <span class="mark">Passkeys <small>approvals</small></span>
-            </div>
+        <div class="wrap">
+          <div class="marquee-track">
+            <span class="mark">Squads v4 <small>vault wallet</small></span>
+            <span class="mark">Safe <small>vault wallet</small></span>
+            <span class="mark">Safe Allowance Module <small>spend limit</small></span>
+            <span class="mark">x402 <small>pay-per-use payments</small></span>
+            <span class="mark">Model Context Protocol <small>how agents connect</small></span>
+            <span class="mark">USDC <small>digital dollar</small></span>
+            <span class="mark">Passkeys <small>approvals</small></span>
           </div>
         </div>
       </section>
@@ -1922,7 +1730,7 @@
         <div class="wrap">
           <div class="sec-head">
             <span class="eyebrow">Setup · new, in beta</span>
-            <h2 class="h2">Set up in minutes. <span class="grad-text">No server skills.</span></h2>
+            <h2 class="h2">Set up in minutes. No server skills.</h2>
             <p class="lede">
               You run your own DefiMind, and that no longer takes a server admin. One button puts it
               online, and your panel walks you through the rest, one plain step at a time. The
@@ -1933,7 +1741,7 @@
           <div class="pipeline three">
             <div class="step">
               <span class="step-n">Step 1</span>
-              <div class="step-bar" style="background: var(--grad)"></div>
+              <div class="step-bar"></div>
               <h3>Deploy</h3>
               <p>
                 Press Deploy to Render. Your DefiMind starts on its own server, makes its own keys
@@ -1947,7 +1755,7 @@
             </div>
             <div class="step">
               <span class="step-n">Step 2</span>
-              <div class="step-bar" style="background: #6d84ff"></div>
+              <div class="step-bar"></div>
               <h3>Follow the guide</h3>
               <p>
                 Nine short steps in your panel. Each one is checked on the chain before it counts as
@@ -1961,7 +1769,7 @@
             </div>
             <div class="step">
               <span class="step-n">Step 3</span>
-              <div class="step-bar" style="background: var(--mint)"></div>
+              <div class="step-bar"></div>
               <h3>Your agent pays</h3>
               <p>
                 Inside your rules and the vault's daily limit, and it asks you, with your passkey,
@@ -1978,10 +1786,10 @@
           <ul class="checks setup-after">
             <li>
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <circle cx="10" cy="10" r="9" stroke="url(#g)" stroke-width="1.6" />
+                <circle cx="10" cy="10" r="9" stroke="#9db7f0" stroke-width="1.6" />
                 <path
                   d="m6.5 10.2 2.3 2.3 4.7-4.9"
-                  stroke="#34c98e"
+                  stroke="#3fb68b"
                   stroke-width="1.6"
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -1993,10 +1801,10 @@
             </li>
             <li>
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <circle cx="10" cy="10" r="9" stroke="url(#g)" stroke-width="1.6" />
+                <circle cx="10" cy="10" r="9" stroke="#9db7f0" stroke-width="1.6" />
                 <path
                   d="m6.5 10.2 2.3 2.3 4.7-4.9"
-                  stroke="#34c98e"
+                  stroke="#3fb68b"
                   stroke-width="1.6"
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -2008,10 +1816,10 @@
             </li>
             <li>
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <circle cx="10" cy="10" r="9" stroke="url(#g)" stroke-width="1.6" />
+                <circle cx="10" cy="10" r="9" stroke="#9db7f0" stroke-width="1.6" />
                 <path
                   d="m6.5 10.2 2.3 2.3 4.7-4.9"
-                  stroke="#34c98e"
+                  stroke="#3fb68b"
                   stroke-width="1.6"
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -2023,10 +1831,10 @@
             </li>
             <li>
               <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <circle cx="10" cy="10" r="9" stroke="url(#g)" stroke-width="1.6" />
+                <circle cx="10" cy="10" r="9" stroke="#9db7f0" stroke-width="1.6" />
                 <path
                   d="m6.5 10.2 2.3 2.3 4.7-4.9"
-                  stroke="#34c98e"
+                  stroke="#3fb68b"
                   stroke-width="1.6"
                   stroke-linecap="round"
                   stroke-linejoin="round"
@@ -2044,9 +1852,7 @@
         <div class="wrap">
           <div class="sec-head">
             <span class="eyebrow">How it works</span>
-            <h2 class="h2">
-              Check it, test-run it, then <span class="grad-text">sign it. Or reject it.</span>
-            </h2>
+            <h2 class="h2">Check it, test-run it, then sign it. Or reject it.</h2>
             <p class="lede">
               The agent never holds a key. It asks DefiMind to pay, and DefiMind decides. The agent
               also sends text, like its reason and the URL. You see that text, but DefiMind never
@@ -2057,7 +1863,7 @@
           <div class="pipeline">
             <div class="step">
               <span class="step-n">Step 1</span>
-              <div class="step-bar" style="background: var(--grad)"></div>
+              <div class="step-bar"></div>
               <h3>Request</h3>
               <p>
                 Your agent asks DefiMind to pay. It holds no keys and no money. Asking is all it can
@@ -2070,7 +1876,7 @@
             </div>
             <div class="step">
               <span class="step-n">Step 2</span>
-              <div class="step-bar" style="background: #6d84ff"></div>
+              <div class="step-bar"></div>
               <h3>Policy</h3>
               <p>
                 DefiMind checks the payment against the limits you set for this agent. Any doubt
@@ -2084,7 +1890,7 @@
             </div>
             <div class="step">
               <span class="step-n">Step 3</span>
-              <div class="step-bar" style="background: var(--aqua)"></div>
+              <div class="step-bar"></div>
               <h3>Test run</h3>
               <p>
                 Before any money moves, DefiMind rehearses the exact payment to see what it would
@@ -2098,7 +1904,7 @@
             </div>
             <div class="step">
               <span class="step-n">Step 4</span>
-              <div class="step-bar" style="background: var(--mint)"></div>
+              <div class="step-bar"></div>
               <h3>Decide</h3>
               <p>
                 Each payment ends one of three ways. Every outcome is written to the audit log with
@@ -2212,9 +2018,7 @@
 
             <div class="card">
               <span class="eyebrow">Worst case, in writing</span>
-              <p class="formula">
-                Max loss per day = <span class="grad-text">daily cap + hot wallet balance.</span>
-              </p>
+              <p class="formula">Max loss per day = daily cap + hot wallet balance.</p>
               <p class="lede" style="font-size: 15.5px; margin-bottom: 30px">
                 This holds even if DefiMind's own software has a bug or is hacked: the blockchain
                 itself enforces the cap, with independently audited code. Move the sliders to see
@@ -2257,7 +2061,7 @@
         class="band"
         id="security"
         style="
-          background: var(--bg-2);
+          background: var(--surface);
           border-top: 1px solid var(--line);
           border-bottom: 1px solid var(--line);
         "
@@ -2265,9 +2069,7 @@
         <div class="wrap">
           <div class="sec-head">
             <span class="eyebrow">Security model</span>
-            <h2 class="h2">
-              Even if our software fails, <span class="grad-text">your vault holds.</span>
-            </h2>
+            <h2 class="h2">Even if our software fails, your vault holds.</h2>
             <p class="lede">
               Two layers that do not trust each other. The blockchain caps how much can ever be
               lost. The guard decides what gets paid at all.
@@ -2279,7 +2081,7 @@
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="url(#g)"
+                  stroke="#9db7f0"
                   stroke-width="1.8"
                   aria-hidden="true"
                 >
@@ -2298,7 +2100,7 @@
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="url(#g)"
+                  stroke="#9db7f0"
                   stroke-width="1.8"
                   aria-hidden="true"
                 >
@@ -2316,7 +2118,7 @@
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="url(#g)"
+                  stroke="#9db7f0"
                   stroke-width="1.8"
                   aria-hidden="true"
                 >
@@ -2335,7 +2137,7 @@
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="url(#g)"
+                  stroke="#9db7f0"
                   stroke-width="1.8"
                   aria-hidden="true"
                 >
@@ -2355,7 +2157,7 @@
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="url(#g)"
+                  stroke="#9db7f0"
                   stroke-width="1.8"
                   aria-hidden="true"
                 >
@@ -2374,7 +2176,7 @@
                 <svg
                   viewBox="0 0 24 24"
                   fill="none"
-                  stroke="url(#g)"
+                  stroke="#9db7f0"
                   stroke-width="1.8"
                   aria-hidden="true"
                 >
@@ -2397,7 +2199,7 @@
         <div class="wrap split">
           <div class="split-copy">
             <span class="eyebrow">Human in the loop</span>
-            <h2 class="h2">Big payments wait for <span class="grad-text">your thumb.</span></h2>
+            <h2 class="h2">Big payments wait for your thumb.</h2>
             <p class="lede">
               Set an approval threshold. Anything above it waits in your panel with what the payment
               will actually do, so you approve the effect, not the agent's story. A Telegram bot can
@@ -2406,10 +2208,10 @@
             <ul class="checks">
               <li>
                 <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  <circle cx="10" cy="10" r="9" stroke="url(#g)" stroke-width="1.6" />
+                  <circle cx="10" cy="10" r="9" stroke="#9db7f0" stroke-width="1.6" />
                   <path
                     d="m6.5 10.2 2.3 2.3 4.7-4.9"
-                    stroke="#34c98e"
+                    stroke="#3fb68b"
                     stroke-width="1.6"
                     stroke-linecap="round"
                     stroke-linejoin="round"
@@ -2421,10 +2223,10 @@
               </li>
               <li>
                 <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  <circle cx="10" cy="10" r="9" stroke="url(#g)" stroke-width="1.6" />
+                  <circle cx="10" cy="10" r="9" stroke="#9db7f0" stroke-width="1.6" />
                   <path
                     d="m6.5 10.2 2.3 2.3 4.7-4.9"
-                    stroke="#34c98e"
+                    stroke="#3fb68b"
                     stroke-width="1.6"
                     stroke-linecap="round"
                     stroke-linejoin="round"
@@ -2436,10 +2238,10 @@
               </li>
               <li>
                 <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  <circle cx="10" cy="10" r="9" stroke="url(#g)" stroke-width="1.6" />
+                  <circle cx="10" cy="10" r="9" stroke="#9db7f0" stroke-width="1.6" />
                   <path
                     d="m6.5 10.2 2.3 2.3 4.7-4.9"
-                    stroke="#34c98e"
+                    stroke="#3fb68b"
                     stroke-width="1.6"
                     stroke-linecap="round"
                     stroke-linejoin="round"
@@ -2451,10 +2253,10 @@
               </li>
               <li>
                 <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  <circle cx="10" cy="10" r="9" stroke="url(#g)" stroke-width="1.6" />
+                  <circle cx="10" cy="10" r="9" stroke="#9db7f0" stroke-width="1.6" />
                   <path
                     d="m6.5 10.2 2.3 2.3 4.7-4.9"
-                    stroke="#34c98e"
+                    stroke="#3fb68b"
                     stroke-width="1.6"
                     stroke-linecap="round"
                     stroke-linejoin="round"
@@ -2470,44 +2272,7 @@
           <div class="phone" aria-label="Example approval in the owner panel">
             <div class="phone-top">
               <div class="avatar">
-                <svg class="logo-mark" viewBox="0 0 100 100" aria-hidden="true">
-                  <defs>
-                    <linearGradient id="lgm2" x1="0" y1="0" x2="1" y2="0.25">
-                      <stop offset="0" stop-color="#3fd9ff" />
-                      <stop offset=".5" stop-color="#5b8cff" />
-                      <stop offset="1" stop-color="#9b6bff" />
-                    </linearGradient>
-                    <filter id="mglow2" x="-50%" y="-50%" width="200%" height="200%">
-                      <feGaussianBlur in="SourceGraphic" stdDeviation="3.2" />
-                    </filter>
-                  </defs>
-                  <g fill="none" stroke="url(#lgm2)">
-                    <g filter="url(#mglow2)" opacity=".95">
-                      <circle cx="50" cy="50" r="40" stroke-width="3.6" />
-                      <path
-                        d="M50 24 69 31 V48 c0 13-8.2 22-19 26.6 C39.2 70 31 61 31 48 V31 Z"
-                        stroke-width="4"
-                      />
-                      <path d="M49 47 38.5 72 M51 47 61.5 72" stroke-width="8" />
-                      <circle cx="50" cy="43" r="6.6" fill="#5fb3ff" stroke="none" />
-                    </g>
-                    <circle cx="50" cy="50" r="40" stroke-width="3" />
-                    <path
-                      d="M50 24 69 31 V48 c0 13-8.2 22-19 26.6 C39.2 70 31 61 31 48 V31 Z"
-                      stroke-width="3.4"
-                      stroke-linejoin="round"
-                    />
-                    <path d="M49 47 38.5 72 M51 47 61.5 72" stroke-width="7.5" />
-                    <circle
-                      cx="50"
-                      cy="43"
-                      r="6.6"
-                      fill="#5fb3ff"
-                      stroke="#050505"
-                      stroke-width="2.4"
-                    />
-                  </g>
-                </svg>
+                <i class="logo" aria-hidden="true"></i>
               </div>
               <div><b>DefiMind</b><small>owner panel</small></div>
             </div>
@@ -2540,8 +2305,8 @@
                 </div>
               </div>
               <div class="tg-btns" id="tgBtns">
-                <button class="tg-btn ok" type="button" id="tgOk">Approve with passkey</button>
                 <button class="tg-btn no" type="button" id="tgNo">Reject</button>
+                <button class="tg-btn ok" type="button" id="tgOk">Approve with passkey</button>
               </div>
               <div class="tg-done" id="tgDone" hidden></div>
             </div>
@@ -2578,7 +2343,7 @@
         class="band"
         id="developers"
         style="
-          background: var(--bg-2);
+          background: var(--surface);
           border-top: 1px solid var(--line);
           border-bottom: 1px solid var(--line);
         "
@@ -2586,7 +2351,7 @@
         <div class="wrap">
           <div class="dev-copy" style="max-width: 760px">
             <span class="eyebrow">For developers</span>
-            <h2 class="h2">Connect your agent. <span class="grad-text">Coming soon.</span></h2>
+            <h2 class="h2">Connect your agent. Coming soon.</h2>
             <p class="lede">
               An agent connector and a plain HTTP API are on the way: a few simple tools that let
               any AI agent pay through DefiMind while you keep full control. The code and the docs
@@ -2601,9 +2366,7 @@
         <div class="wrap">
           <div class="sec-head">
             <span class="eyebrow">Chains</span>
-            <h2 class="h2">
-              Solana. Robinhood Chain. Base. <span class="grad-text">One guard, every chain.</span>
-            </h2>
+            <h2 class="h2">Solana. Robinhood Chain. Base. One guard, every chain.</h2>
             <p class="lede">
               The same protection everywhere: the same limits, the same test run before signing, and
               the same kill switch, whether your agent pays on Solana, Robinhood Chain or Base.
@@ -2810,46 +2573,9 @@
       <section class="band" style="padding-top: 0">
         <div class="wrap">
           <div class="cta">
-            <svg class="logo-mark cta-logo" viewBox="0 0 100 100" aria-hidden="true">
-              <defs>
-                <linearGradient id="lgm3" x1="0" y1="0" x2="1" y2="0.25">
-                  <stop offset="0" stop-color="#3fd9ff" />
-                  <stop offset=".5" stop-color="#5b8cff" />
-                  <stop offset="1" stop-color="#9b6bff" />
-                </linearGradient>
-                <filter id="mglow3" x="-50%" y="-50%" width="200%" height="200%">
-                  <feGaussianBlur in="SourceGraphic" stdDeviation="3.2" />
-                </filter>
-              </defs>
-              <g fill="none" stroke="url(#lgm3)">
-                <g filter="url(#mglow3)" opacity=".95">
-                  <circle cx="50" cy="50" r="40" stroke-width="3.6" />
-                  <path
-                    d="M50 24 69 31 V48 c0 13-8.2 22-19 26.6 C39.2 70 31 61 31 48 V31 Z"
-                    stroke-width="4"
-                  />
-                  <path d="M49 47 38.5 72 M51 47 61.5 72" stroke-width="8" />
-                  <circle cx="50" cy="43" r="6.6" fill="#5fb3ff" stroke="none" />
-                </g>
-                <circle cx="50" cy="50" r="40" stroke-width="3" />
-                <path
-                  d="M50 24 69 31 V48 c0 13-8.2 22-19 26.6 C39.2 70 31 61 31 48 V31 Z"
-                  stroke-width="3.4"
-                  stroke-linejoin="round"
-                />
-                <path d="M49 47 38.5 72 M51 47 61.5 72" stroke-width="7.5" />
-                <circle
-                  cx="50"
-                  cy="43"
-                  r="6.6"
-                  fill="#5fb3ff"
-                  stroke="#050505"
-                  stroke-width="2.4"
-                />
-              </g>
-            </svg>
+            <i class="logo logo-lg" aria-hidden="true"></i>
             <span class="eyebrow">Get started</span>
-            <h2>Give your agent <span class="grad-text">spending power</span>, not your keys.</h2>
+            <h2>Give your agent spending power, not your keys.</h2>
             <p class="lede" style="text-align: center">
               Live on Solana and Robinhood Chain mainnet, with a capped daily limit to start. Plug
               in through MCP and set your first spending policy in minutes.
@@ -2882,44 +2608,7 @@
         <div class="foot">
           <div class="foot-brand">
             <a class="brand" href="#top">
-              <svg class="logo-mark" viewBox="0 0 100 100" aria-hidden="true">
-                <defs>
-                  <linearGradient id="lgm4" x1="0" y1="0" x2="1" y2="0.25">
-                    <stop offset="0" stop-color="#3fd9ff" />
-                    <stop offset=".5" stop-color="#5b8cff" />
-                    <stop offset="1" stop-color="#9b6bff" />
-                  </linearGradient>
-                  <filter id="mglow4" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="3.2" />
-                  </filter>
-                </defs>
-                <g fill="none" stroke="url(#lgm4)">
-                  <g filter="url(#mglow4)" opacity=".95">
-                    <circle cx="50" cy="50" r="40" stroke-width="3.6" />
-                    <path
-                      d="M50 24 69 31 V48 c0 13-8.2 22-19 26.6 C39.2 70 31 61 31 48 V31 Z"
-                      stroke-width="4"
-                    />
-                    <path d="M49 47 38.5 72 M51 47 61.5 72" stroke-width="8" />
-                    <circle cx="50" cy="43" r="6.6" fill="#5fb3ff" stroke="none" />
-                  </g>
-                  <circle cx="50" cy="50" r="40" stroke-width="3" />
-                  <path
-                    d="M50 24 69 31 V48 c0 13-8.2 22-19 26.6 C39.2 70 31 61 31 48 V31 Z"
-                    stroke-width="3.4"
-                    stroke-linejoin="round"
-                  />
-                  <path d="M49 47 38.5 72 M51 47 61.5 72" stroke-width="7.5" />
-                  <circle
-                    cx="50"
-                    cy="43"
-                    r="6.6"
-                    fill="#5fb3ff"
-                    stroke="#050505"
-                    stroke-width="2.4"
-                  />
-                </g>
-              </svg>
+              <i class="logo" aria-hidden="true"></i>
               DefiMind
             </a>
             <p>
@@ -2975,61 +2664,7 @@
         const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
         const usd = (n) => '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 })
 
-        // Ribbons: layered sine strokes, drawn once when motion is reduced.
-        const cv = document.getElementById('ribbons')
-        const ctx = cv.getContext('2d')
-        let w = 0,
-          h = 0,
-          t = 0
-        function size() {
-          const r = devicePixelRatio || 1
-          w = cv.clientWidth
-          h = cv.clientHeight
-          cv.width = w * r
-          cv.height = h * r
-          ctx.setTransform(r, 0, 0, r, 0, 0)
-        }
-        // Silk bands: wide translucent strands blended additively, purple and green.
-        function draw() {
-          ctx.clearRect(0, 0, w, h)
-          ctx.globalCompositeOperation = 'lighter'
-          const bands = [
-            { c: '100,45,180', amp: 120, yb: 0.42, sp: 0.55, ph: 4.2 },
-            { c: '153,69,255', amp: 95, yb: 0.56, sp: 1.0, ph: 0 },
-            { c: '20,241,149', amp: 70, yb: 0.7, sp: 0.75, ph: 2.1 },
-          ]
-          for (const b of bands) {
-            for (let i = 0; i < 7; i++) {
-              ctx.beginPath()
-              ctx.lineWidth = 36 + i * 11
-              ctx.strokeStyle = 'rgba(' + b.c + ',' + (0.03 + i * 0.007) + ')'
-              for (let x = -60; x <= w + 60; x += 10) {
-                const k = x / w
-                const y =
-                  h * b.yb +
-                  Math.sin(k * 2.6 + t * b.sp + b.ph + i * 0.17) * (b.amp + i * 9) +
-                  Math.cos(k * 5.1 - t * 0.6 * b.sp + i * 0.1) * (b.amp * 0.35)
-                x <= -50 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-              }
-              ctx.stroke()
-            }
-          }
-          ctx.globalCompositeOperation = 'source-over'
-        }
-        function loop() {
-          t += 0.004
-          draw()
-          requestAnimationFrame(loop)
-        }
-        size()
-        draw()
-        addEventListener('resize', () => {
-          size()
-          draw()
-        })
-        if (!reduce) loop()
-
-        // Intent feed: example intents, cycled.
+        // Intent feed: four example requests.
         const samples = [
           {
             k: 'x402',
@@ -3124,7 +2759,6 @@
         }
         for (let i = 0; i < 4; i++) push()
         meter.style.width = spent + '%'
-        if (!reduce) setInterval(push, 2600)
 
         // Loss calculator.
         const cap = document.getElementById('cap'),
@@ -3160,8 +2794,8 @@
           const d = document.getElementById('tgDone')
           d.hidden = false
           d.innerHTML = ok
-            ? '<span style="color:var(--mint)">Approved.</span> This pays once, on exactly these terms.'
-            : '<span style="color:var(--red)">Rejected.</span> OWNER_REJECTED written to the audit log.'
+            ? '<span style="color:var(--ok)">Approved.</span> This pays once, on exactly these terms.'
+            : '<span style="color:var(--stop)">Rejected.</span> OWNER_REJECTED written to the audit log.'
         }
         document.getElementById('tgOk').addEventListener('click', () => decide(true))
         document.getElementById('tgNo').addEventListener('click', () => decide(false))
