@@ -81,6 +81,8 @@ can start. The runbook is [`docs/migration.md`](../docs/migration.md) (Parts A t
 On 2026-11-23 the owner decided not to launch publicly yet. In his words: "eu nao quero lançar agora
 para o publico quero fazer o video para mostrar para os co fundadores". The demo video is private, for
 his co-founders. Until he decides to launch, no announcement, launch copy, release or tag goes out.
+The same day he chose to leave the repository's visibility as it is and only take the GitHub links
+off the site (SITE-5): "Deixa como está, so remove o github site eu nao vou por ainda para publico".
 
 What the public launch still needs, once he decides:
 
