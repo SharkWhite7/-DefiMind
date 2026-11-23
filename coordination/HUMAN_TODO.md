@@ -76,25 +76,6 @@ can start. The runbook is [`docs/migration.md`](../docs/migration.md) (Parts A t
 
 ---
 
-## ⏳ HUMAN-34 — Publish the hosted signing page `defimind-sign` (CR-020)
-
-Ready: ON-24 is on `main` (#87), so the first deploy is the right build. GC-58 waits for this step. This page serves the kill and the
-deposit for every deployment, so it holds no hot wallet and no key.
-
-1. On vercel.com: Add New → Project → import `SharkWhite7/-DefiMind`.
-2. Project name `defimind-sign`; Root Directory `packages/onchain/web`; Framework Preset: Other.
-   Leave Environment Variables empty.
-3. Deploy. Then Settings → Git: Production Branch `main`, and turn preview deployments off, so only
-   `main` ever reaches the URL.
-4. Check that `https://defimind-sign.vercel.app/?action=kill` shows "This link is not valid".
-5. Tell the integrator, who checks the deployed `app.js`, `style.css` and `index.template.html`
-   against the release's `SHA256SUMS`.
-
-If Vercel gives a different domain, the integrator changes `HOSTED_SIGN_PAGE` to it. Onchain confirmed
-these build settings.
-
----
-
 ## ⬜ HUMAN-32 — Retire the Telegram bot
 
 The owner dropped Telegram on 2026-11-20: approvals and alerts go through the web panel only. At
@@ -139,32 +120,33 @@ Only if simulation needs a second provider. Not needed so far.
 
 ## Done
 
-| id       | What                                                                              | When       | Record                                                               |
-| -------- | --------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------- |
-| HUMAN-1  | Repository created, sessions given write access                                   | 2026-11-03 | `SharkWhite7/-DefiMind`                                              |
-| HUMAN-2  | Development environment: Node 22, pnpm, Foundry                                   | 2026-11-03 | —                                                                    |
-| HUMAN-3  | Base test wallets                                                                 | 2026-11-03 | keys only in local `.env` files                                      |
-| HUMAN-3B | Solana test keypairs                                                              | 2026-11-03 | keys only in mode-600 files outside the repository                   |
-| HUMAN-4  | Devnet funds                                                                      | 2026-11-03 | —                                                                    |
-| HUMAN-9  | Solana genesis hashes confirmed against the networks                              | 2026-11-03 | SVM-7                                                                |
-| HUMAN-10 | Squads v4 program fixture for the onchain cap tests                               | 2026-11-04 | `8470861` on `fixture/squads-v4`                                     |
-| HUMAN-5  | Telegram bot created                                                              | 2026-11-04 | —                                                                    |
-| HUMAN-11 | First live run on Solana devnet: three payments, 3.5 USDC                         | 2026-11-04 | INT-3, INT-4                                                         |
-| HUMAN-12 | Safe on Base Sepolia                                                              | 2026-11-05 | `0x1df91C7e227370F138Ae546f3D2fa2Fde8a48C2D`                         |
-| HUMAN-13 | First live run on Base Sepolia, from an empty hot wallet                          | 2026-11-05 | INT-6, PR #63                                                        |
-| HUMAN-14 | Phantom signing page hosted                                                       | 2026-11-06 | `https://agentguard-onchain.vercel.app`                              |
-| HUMAN-15 | Devnet rehearsal with Phantom as owner: create, add limit, kill                   | 2026-11-07 | ADR 003                                                              |
-| HUMAN-16 | Base hot wallet key moved to a file                                               | 2026-11-07 | PR #81                                                               |
-| HUMAN-18 | Robinhood Chain USDG addresses confirmed against Paxos                            | 2026-11-07 | allowlist-only token rule                                            |
-| HUMAN-17 | guard-core and the bot on Fly.io (devnet)                                         | 2026-11-08 | INT-7                                                                |
-| HUMAN-19 | Bot redeployed with time-limited kill buttons                                     | 2026-11-08 | PRs #99, #100                                                        |
-| HUMAN-20 | Robinhood Chain testnet run                                                       | 2026-11-08 | ✖️ no USDG faucet; replaced by HUMAN-21                              |
-| HUMAN-21 | Real-money pilot on Robinhood Chain: 0.50 USDG x402 payment, then kill            | 2026-11-09 | `0xa9c7abffb5676651193e866e4f02d9925a72c100ba20972226075dad78083d86` |
-| HUMAN-7  | Deploy accounts                                                                   | 2026-11-08 | Fly.io (D3), done as HUMAN-17                                        |
-| HUMAN-8  | Mainnet decisions D1–D8 and the written go-ahead to launch                        | 2026-11-09 | `LAUNCH.md` §1                                                       |
-| HUMAN-22 | Launch: Robinhood Chain and Solana mainnet, repository public, `main` protected   | 2026-11-09 | `LAUNCH.md`, PR #139                                                 |
-| HUMAN-24 | Receipt signing key created and set on `defimind-guard-core` (HUMAN-31 A4, B3)    | 2026-11-19 | never printed; `/v1/receipts/key` serves the public key              |
-| HUMAN-30 | Anchoring keypair created, funded with 2 devnet SOL, set on `defimind-guard-core` | 2026-11-19 | fee-only, never the hot wallet                                       |
-| HUMAN-27 | Web Push (VAPID) key created and set on `defimind-guard-core`                     | 2026-11-19 | HUMAN-31 A4, B3                                                      |
-| HUMAN-28 | `SIGN_PAGE_URL` set on `defimind-guard-core` from the bot's live value            | 2026-11-19 | `agentguard-onchain.vercel.app`                                      |
-| HUMAN-23 | Passkey enrolled for the panel, on the owner's iPhone (HUMAN-31 D1)               | 2026-11-20 | `defimind-guard-core.fly.dev`; link carried by QR, never pasted      |
+| id       | What                                                                                  | When       | Record                                                                         |
+| -------- | ------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------ |
+| HUMAN-1  | Repository created, sessions given write access                                       | 2026-11-03 | `SharkWhite7/-DefiMind`                                                        |
+| HUMAN-2  | Development environment: Node 22, pnpm, Foundry                                       | 2026-11-03 | —                                                                              |
+| HUMAN-3  | Base test wallets                                                                     | 2026-11-03 | keys only in local `.env` files                                                |
+| HUMAN-3B | Solana test keypairs                                                                  | 2026-11-03 | keys only in mode-600 files outside the repository                             |
+| HUMAN-4  | Devnet funds                                                                          | 2026-11-03 | —                                                                              |
+| HUMAN-9  | Solana genesis hashes confirmed against the networks                                  | 2026-11-03 | SVM-7                                                                          |
+| HUMAN-10 | Squads v4 program fixture for the onchain cap tests                                   | 2026-11-04 | `8470861` on `fixture/squads-v4`                                               |
+| HUMAN-5  | Telegram bot created                                                                  | 2026-11-04 | —                                                                              |
+| HUMAN-11 | First live run on Solana devnet: three payments, 3.5 USDC                             | 2026-11-04 | INT-3, INT-4                                                                   |
+| HUMAN-12 | Safe on Base Sepolia                                                                  | 2026-11-05 | `0x1df91C7e227370F138Ae546f3D2fa2Fde8a48C2D`                                   |
+| HUMAN-13 | First live run on Base Sepolia, from an empty hot wallet                              | 2026-11-05 | INT-6, PR #63                                                                  |
+| HUMAN-14 | Phantom signing page hosted                                                           | 2026-11-06 | `https://agentguard-onchain.vercel.app`                                        |
+| HUMAN-15 | Devnet rehearsal with Phantom as owner: create, add limit, kill                       | 2026-11-07 | ADR 003                                                                        |
+| HUMAN-16 | Base hot wallet key moved to a file                                                   | 2026-11-07 | PR #81                                                                         |
+| HUMAN-18 | Robinhood Chain USDG addresses confirmed against Paxos                                | 2026-11-07 | allowlist-only token rule                                                      |
+| HUMAN-17 | guard-core and the bot on Fly.io (devnet)                                             | 2026-11-08 | INT-7                                                                          |
+| HUMAN-19 | Bot redeployed with time-limited kill buttons                                         | 2026-11-08 | PRs #99, #100                                                                  |
+| HUMAN-20 | Robinhood Chain testnet run                                                           | 2026-11-08 | ✖️ no USDG faucet; replaced by HUMAN-21                                        |
+| HUMAN-21 | Real-money pilot on Robinhood Chain: 0.50 USDG x402 payment, then kill                | 2026-11-09 | `0xa9c7abffb5676651193e866e4f02d9925a72c100ba20972226075dad78083d86`           |
+| HUMAN-7  | Deploy accounts                                                                       | 2026-11-08 | Fly.io (D3), done as HUMAN-17                                                  |
+| HUMAN-8  | Mainnet decisions D1–D8 and the written go-ahead to launch                            | 2026-11-09 | `LAUNCH.md` §1                                                                 |
+| HUMAN-22 | Launch: Robinhood Chain and Solana mainnet, repository public, `main` protected       | 2026-11-09 | `LAUNCH.md`, PR #139                                                           |
+| HUMAN-24 | Receipt signing key created and set on `defimind-guard-core` (HUMAN-31 A4, B3)        | 2026-11-19 | never printed; `/v1/receipts/key` serves the public key                        |
+| HUMAN-30 | Anchoring keypair created, funded with 2 devnet SOL, set on `defimind-guard-core`     | 2026-11-19 | fee-only, never the hot wallet                                                 |
+| HUMAN-27 | Web Push (VAPID) key created and set on `defimind-guard-core`                         | 2026-11-19 | HUMAN-31 A4, B3                                                                |
+| HUMAN-28 | `SIGN_PAGE_URL` set on `defimind-guard-core` from the bot's live value                | 2026-11-19 | `agentguard-onchain.vercel.app`                                                |
+| HUMAN-23 | Passkey enrolled for the panel, on the owner's iPhone (HUMAN-31 D1)                   | 2026-11-20 | `defimind-guard-core.fly.dev`; link carried by QR, never pasted                |
+| HUMAN-34 | Hosted signing page `defimind-sign` published on Vercel from this repository (CR-020) | 2026-11-23 | `https://defimind-sign.vercel.app`; `/?action=kill` says the link is not valid |
