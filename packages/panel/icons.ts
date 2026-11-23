@@ -1,13 +1,14 @@
 import { writeFile } from 'node:fs/promises'
 import { deflateSync } from 'node:zlib'
 
+import { BOUNDS, logoAt, type Rgb } from './logo.js'
+
 /**
- * The DefiMind mark (PANEL-18): a square in a square, in the ink blue on the panel's background,
- * drawn here so the repository holds no binary. It sits in the middle 45%, inside a maskable icon's
- * safe zone.
+ * The PWA icons: the DefiMind logo at about 60% on its navy, drawn here so the repository holds no
+ * binary. The logo sits inside a maskable icon's safe zone.
  */
-const BACKGROUND = [0x0a, 0x0f, 0x1a]
-const INK = [0x9d, 0xb7, 0xf0]
+const BACKGROUND: Rgb = [0x03, 0x0b, 0x26]
+const SAMPLES = 4
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n
@@ -34,16 +35,21 @@ function chunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([length, body, crc])
 }
 
+/** One pixel, averaged over a few samples so the edges are smooth. */
 function pixel(x: number, y: number, size: number): number[] {
-  const side = size * 0.45
-  // From the mockup's 14px mark: a 2px ring, a 1px gap, then the filled centre.
-  const ring = side / 7
-  const gap = side * (3 / 14) - ring
-  const d = Math.max(Math.abs(x + 0.5 - size / 2), Math.abs(y + 0.5 - size / 2))
-  const edge = side / 2
-  const inRing = d <= edge && d > edge - ring
-  const inCore = d <= edge - ring - gap
-  return inRing || inCore ? INK : BACKGROUND
+  const scale = BOUNDS.height / (size * 0.6)
+  const left = BOUNDS.x + BOUNDS.width / 2 - (size / 2) * scale
+  const top = BOUNDS.y + BOUNDS.height / 2 - (size / 2) * scale
+  const sum = [0, 0, 0]
+  for (let i = 0; i < SAMPLES; i++) {
+    for (let j = 0; j < SAMPLES; j++) {
+      const colour =
+        logoAt(left + (x + (i + 0.5) / SAMPLES) * scale, top + (y + (j + 0.5) / SAMPLES) * scale) ??
+        BACKGROUND
+      colour.forEach((c, k) => (sum[k]! += c))
+    }
+  }
+  return sum.map((c) => Math.round(c / SAMPLES ** 2))
 }
 
 export function icon(size: number): Buffer {

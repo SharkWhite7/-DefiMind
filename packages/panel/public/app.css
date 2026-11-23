@@ -1,7 +1,7 @@
 /*
  * The "ink" look (PANEL-18, approved 2026-11-23): deep blue-black surfaces, one solid blue for the
- * action, hairlines, small radii. No gradient, glow, blur or pill anywhere. System fonts only: the
- * CSP has no font-src.
+ * action, hairlines, small radii. No gradient, glow, blur or pill, except inside the logo itself.
+ * System fonts only: the CSP has no font-src.
  */
 :root {
   color-scheme: dark;
@@ -55,9 +55,19 @@ header {
   border-bottom: 1px solid var(--line);
 }
 
+/* Before sign-in, only the logo: no tabs to screens that need a session. */
 body[data-screen='login'] header,
 body[data-screen='enrol'] header,
 body[data-screen='setup'] header {
+  border-bottom: 0;
+}
+
+body[data-screen='login'] nav,
+body[data-screen='enrol'] nav,
+body[data-screen='setup'] nav,
+body[data-screen='login'] #network,
+body[data-screen='enrol'] #network,
+body[data-screen='setup'] #network {
   display: none;
 }
 
@@ -79,22 +89,11 @@ header .top {
   text-decoration: none;
 }
 
-/* The mark: a square in a square, in the ink blue. */
-.mark {
-  position: relative;
+/* The DefiMind logo, as it is: its own blue and cyan are the one gradient the panel keeps. */
+.brand .logo {
   flex: none;
-  width: 14px;
-  height: 14px;
-  border: 2px solid var(--blue-ink);
-  border-radius: 3px;
-}
-
-.mark::after {
-  content: '';
-  position: absolute;
-  inset: 3px;
-  border-radius: 1px;
-  background: var(--blue-ink);
+  width: auto;
+  height: 24px;
 }
 
 .network {
@@ -802,7 +801,7 @@ body[data-screen='login'] main,
 body[data-screen='enrol'] main,
 body[data-screen='setup'] main {
   max-width: 440px;
-  padding-top: max(56px, calc(env(safe-area-inset-top) + 40px));
+  padding-top: 32px;
 }
 
 body[data-screen='login'] h1,
