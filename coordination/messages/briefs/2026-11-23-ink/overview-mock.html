@@ -1,0 +1,360 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=390" />
+    <style>
+      :root {
+        --bg: #0a0f1a;
+        --surface: #0e1524;
+        --raise: #131c2e;
+        --line: #1d2739;
+        --line2: #2a3650;
+        --text: #e7ebf1;
+        --muted: #8792a5;
+        --faint: #5d6879;
+        --blue: #2c5ac8;
+        --blue-hi: #3a6ad6;
+        --blue-ink: #9db7f0;
+        --ok: #3fb68b;
+        --warn: #d9a441;
+        --stop: #e5605c;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        width: 390px;
+        min-height: 844px;
+        font:
+          14px/1.45 -apple-system,
+          BlinkMacSystemFont,
+          'SF Pro Text',
+          'Segoe UI',
+          Inter,
+          system-ui,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .mono {
+        font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+      }
+      .num {
+        font-variant-numeric: tabular-nums;
+      }
+      header {
+        position: sticky;
+        top: 0;
+        background: var(--bg);
+        border-bottom: 1px solid var(--line);
+      }
+      .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+      }
+      .mark {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        font-size: 15px;
+      }
+      .mark i {
+        width: 14px;
+        height: 14px;
+        border: 2px solid var(--blue-ink);
+        border-radius: 3px;
+        position: relative;
+      }
+      .mark i:after {
+        content: '';
+        position: absolute;
+        inset: 3px;
+        background: var(--blue-ink);
+        border-radius: 1px;
+      }
+      .env {
+        font-size: 11px;
+        color: var(--muted);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      .env b {
+        color: var(--ok);
+        font-weight: 600;
+      }
+      nav {
+        display: flex;
+        font-size: 13px;
+        color: var(--muted);
+        padding: 0 8px;
+      }
+      nav span {
+        padding: 10px 8px 11px;
+        border-bottom: 2px solid transparent;
+      }
+      nav .on {
+        color: var(--text);
+        border-color: var(--blue-ink);
+      }
+      nav .stop {
+        margin-left: auto;
+        color: var(--stop);
+      }
+      main {
+        padding: 22px 16px 40px;
+      }
+      .h {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        margin-bottom: 14px;
+      }
+      h1 {
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+        letter-spacing: -0.01em;
+      }
+      .date {
+        font-size: 12px;
+        color: var(--faint);
+      }
+      .lbl {
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .panel {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        margin-bottom: 12px;
+      }
+      .pad {
+        padding: 16px;
+      }
+      .big {
+        font-size: 34px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        margin: 6px 0 2px;
+      }
+      .big small {
+        font-size: 14px;
+        color: var(--muted);
+        font-weight: 500;
+        letter-spacing: 0;
+        margin-left: 6px;
+      }
+      .meter {
+        height: 3px;
+        background: var(--line);
+        margin-top: 14px;
+      }
+      .meter i {
+        display: block;
+        height: 100%;
+        width: 5%;
+        background: var(--blue-ink);
+      }
+      .split {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        border-top: 1px solid var(--line);
+      }
+      .split > div {
+        padding: 12px 16px;
+        border-left: 1px solid var(--line);
+      }
+      .split > div:first-child {
+        border-left: 0;
+      }
+      .split .v {
+        font-size: 16px;
+        font-weight: 600;
+        margin-top: 2px;
+      }
+      .state {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 13px;
+      }
+      .state:before {
+        content: '';
+        width: 7px;
+        height: 7px;
+        border-radius: 1px;
+        background: currentColor;
+      }
+      .ok {
+        color: var(--ok);
+      }
+      .warn {
+        color: var(--warn);
+      }
+      .req {
+        border-left: 2px solid var(--warn);
+      }
+      .reqhead {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 16px 0;
+      }
+      .amt {
+        font-size: 26px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        padding: 4px 16px 12px;
+      }
+      .amt span {
+        color: var(--muted);
+        font-size: 14px;
+        font-weight: 500;
+        margin-left: 4px;
+      }
+      dl {
+        margin: 0;
+        border-top: 1px solid var(--line);
+      }
+      .r {
+        display: grid;
+        grid-template-columns: 84px 1fr;
+        gap: 12px;
+        padding: 10px 16px;
+        border-top: 1px solid var(--line);
+      }
+      .r:first-child {
+        border-top: 0;
+      }
+      dt {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      dd {
+        margin: 0;
+        font-size: 13px;
+      }
+      dd.mono {
+        word-break: break-all;
+        color: #c6cfdd;
+        font-size: 12.5px;
+        line-height: 1.55;
+      }
+      .act {
+        display: grid;
+        grid-template-columns: 1fr 1.6fr;
+        gap: 8px;
+        padding: 14px 16px 16px;
+        border-top: 1px solid var(--line);
+      }
+      .btn {
+        height: 44px;
+        border-radius: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .pri {
+        background: var(--blue);
+        color: #fff;
+      }
+      .sec {
+        border: 1px solid var(--line2);
+        color: var(--stop);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="top">
+        <div class="mark"><i></i>DefiMind</div>
+        <div class="env"><b>●</b> Mainnet</div>
+      </div>
+      <nav>
+        <span class="on">Overview</span><span>Agents</span><span>Deposit</span
+        ><span>Executions</span><span class="stop">Stop</span>
+      </nav>
+    </header>
+    <main>
+      <div class="h">
+        <h1>Overview</h1>
+        <span class="date num">23 Nov 2026</span>
+      </div>
+
+      <div class="panel">
+        <div class="pad">
+          <div class="lbl">Spent today</div>
+          <div class="big num">$1.00<small>of $20.00</small></div>
+          <div class="meter"><i></i></div>
+        </div>
+        <div class="split">
+          <div>
+            <div class="lbl">Agents</div>
+            <div class="v num">1</div>
+          </div>
+          <div>
+            <div class="lbl">Waiting</div>
+            <div class="v num">1</div>
+          </div>
+          <div>
+            <div class="lbl">Chain</div>
+            <div class="v" style="font-size: 14px">Solana</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel req">
+        <div class="reqhead">
+          <span class="lbl">Waiting for you</span><span class="state warn">Needs approval</span>
+        </div>
+        <div class="amt num">2.50<span>USDC</span></div>
+        <dl>
+          <div class="r">
+            <dt>Agent</dt>
+            <dd>research-bot</dd>
+          </div>
+          <div class="r">
+            <dt>Chain</dt>
+            <dd>Solana</dd>
+          </div>
+          <div class="r">
+            <dt>To</dt>
+            <dd class="mono">ExYv4idyqxmuodpoZtxyGxeTGi6oYrqFAshAgCsRissc</dd>
+          </div>
+          <div class="r">
+            <dt>Decide by</dt>
+            <dd class="num">23 Nov 2026, 11:24</dd>
+          </div>
+        </dl>
+        <div class="act">
+          <div class="btn sec">Reject</div>
+          <div class="btn pri">Approve with passkey</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="reqhead" style="padding-bottom: 12px">
+          <span class="lbl">Agent</span><span class="state ok">Live · Running</span>
+        </div>
+        <dl>
+          <div class="r">
+            <dt>fly-agent</dt>
+            <dd class="num">$5.00 per payment · $20.00 per day</dd>
+          </div>
+        </dl>
+      </div>
+    </main>
+  </body>
+</html>
