@@ -76,6 +76,23 @@ can start. The runbook is [`docs/migration.md`](../docs/migration.md) (Parts A t
 
 ---
 
+## ⬜ HUMAN-35 — Decide when to launch publicly
+
+On 2026-11-23 the owner decided not to launch publicly yet. In his words: "eu nao quero lançar agora
+para o publico quero fazer o video para mostrar para os co fundadores". The demo video is private, for
+his co-founders. Until he decides to launch, no announcement, launch copy, release or tag goes out.
+
+What the public launch still needs, once he decides:
+
+1. SITE-4, copy fixes on the site. It still mentions Telegram's `/kill`, Base as live and SPEC v0.5.
+2. The site's Vercel project builds from the old repository (`agent443-dot/AgentGuard`). Reconnect it
+   to `SharkWhite7/-DefiMind` with Root Directory `site`.
+3. `defimind-sign.vercel.app` answered 404 at its root after HUMAN-34. Recheck the project's
+   deployments and domains, then the integrator verifies the files and merges GC-58 (#89).
+4. HUMAN-25, the Phantom review, now also for `defimind-sign.vercel.app`.
+
+---
+
 ## ⬜ HUMAN-32 — Retire the Telegram bot
 
 The owner dropped Telegram on 2026-11-20: approvals and alerts go through the web panel only. At
