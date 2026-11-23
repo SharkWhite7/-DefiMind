@@ -1,23 +1,23 @@
-/* The DefiMind brand, from site/index.html: dark surfaces, a 1px line, violet to mint. */
+/* The "ink" language (coordination/messages/briefs/2026-11-23-ink.md): flat, hairlines, one blue. */
 :root {
-  --bg: #050505;
-  --panel: #0d0d0d;
-  --panel-2: #121214;
-  --line: #1c1c1e;
-  --line-2: #2a2a2d;
-  --fg: #f5f5f5;
-  --muted: #a0a0a5;
-  --violet: #9945ff;
-  --mint: #14f195;
-  --amber: #e8b45a;
-  --red: #f87171;
-  --grad: linear-gradient(90deg, #9945ff 0%, #43b4ca 50%, #14f195 100%);
-  --text:
+  --bg: #0a0f1a;
+  --surface: #0e1524;
+  --raise: #131c2e;
+  --line: #1d2739;
+  --line2: #2a3650;
+  --text: #e7ebf1;
+  --muted: #8792a5;
+  --faint: #5d6879;
+  --blue: #2c5ac8;
+  --blue-hi: #3a6ad6;
+  --blue-ink: #9db7f0;
+  --ok: #3fb68b;
+  --warn: #d9a441;
+  --stop: #e5605c;
+  --sans:
     -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Inter, system-ui, sans-serif;
-  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   color-scheme: dark;
-  font-family: var(--text);
-  font-variant-numeric: tabular-nums;
 }
 * {
   box-sizing: border-box;
@@ -25,180 +25,179 @@
 body {
   margin: 0;
   min-height: 100vh;
-  padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
-    max(32px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
-  background:
-    radial-gradient(60rem 30rem at 50% -10rem, rgba(153, 69, 255, 0.16), transparent 70%), var(--bg);
-  color: var(--fg);
-  line-height: 1.55;
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.55 var(--sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
 }
 
+/* A solid header with a hairline under it. */
 .brand {
+  padding: max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 14px
+    max(16px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--line);
+}
+.mark {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
-  margin: 8px auto 24px;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-.brand svg {
-  width: 30px;
-  height: 30px;
-  overflow: visible;
-  filter: drop-shadow(0 0 7px rgba(153, 69, 255, 0.6));
-}
-
-/* The card, with a thin accent on top that follows the state. */
-main {
-  position: relative;
+  gap: 9px;
   max-width: 40rem;
   margin: 0 auto;
-  padding: 28px 24px 24px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
-main::before {
+/* The square-in-square mark. */
+.mark i {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--blue-ink);
+  border-radius: 3px;
+}
+.mark i::after {
   content: '';
   position: absolute;
-  inset: 0 0 auto;
-  height: 3px;
-  background: var(--grad);
+  inset: 3px;
+  border-radius: 1px;
+  background: var(--blue-ink);
 }
-main[data-state='stop']::before {
-  background: var(--red);
+
+main {
+  max-width: 40rem;
+  margin: 22px auto 40px;
+  padding: 20px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow-wrap: anywhere;
 }
-main[data-state='done']::before {
-  background: var(--mint);
+@media (max-width: 680px) {
+  main {
+    margin: 16px 16px 32px;
+  }
+}
+/* A stop, the kill after Phantom was refused or any refusal: the stop rail and title. */
+main[data-state='stop'] {
+  border-left: 2px solid var(--stop);
 }
 
 h1 {
-  margin: 0 0 18px;
-  font-size: clamp(1.6rem, 5.5vw, 2.1rem);
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+  margin: 0 0 14px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 main[data-state='stop'] h1 {
-  color: var(--red);
+  color: var(--stop);
 }
 main[data-state='done'] h1 {
-  color: var(--mint);
+  color: var(--ok);
 }
 p {
-  margin: 0 0 12px;
-  color: #d4d4d8;
+  margin: 0 0 10px;
+  color: #c6cfdd;
 }
 
-/* The one action on a screen: the wallet button, or the link into Phantom. */
+/* The one action: solid blue. */
 button,
 a {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 48px;
+  min-height: 44px;
   margin-top: 8px;
-  padding: 0 22px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--grad);
-  color: #050505;
-  font: 600 1.05rem var(--text);
+  padding: 0 20px;
+  border: 1px solid var(--blue);
+  border-radius: 5px;
+  background: var(--blue);
+  color: #fff;
+  font: 600 14px var(--sans);
   text-decoration: none;
   cursor: pointer;
   transition:
-    transform 150ms ease,
-    filter 150ms ease,
-    box-shadow 150ms ease;
+    background-color 120ms ease,
+    border-color 120ms ease;
 }
 button:hover,
 a:hover {
-  filter: brightness(1.08);
-  box-shadow: 0 6px 24px rgba(153, 69, 255, 0.35);
+  background: var(--blue-hi);
+  border-color: var(--blue-hi);
 }
-button:active,
-a:active {
-  transform: translateY(1px);
-}
-/* Retrying a refused kill or deposit is a destructive step: red outline, never the gradient. */
+/* After a refusal, retrying is not the page's recommendation: a secondary, in stop text. */
 main[data-state='stop'] button,
 main[data-state='stop'] a {
   background: transparent;
-  color: var(--red);
-  box-shadow: inset 0 0 0 1px var(--red);
+  border-color: var(--line2);
+  color: var(--stop);
+}
+main[data-state='stop'] button:hover,
+main[data-state='stop'] a:hover {
+  background: var(--raise);
 }
 :focus-visible {
-  outline: 2px solid var(--mint);
-  outline-offset: 3px;
+  outline: 2px solid var(--blue-ink);
+  outline-offset: 2px;
 }
 
 form {
-  margin-top: 8px;
+  margin-top: 6px;
 }
 label {
   display: block;
   margin-bottom: 0.5rem;
   color: var(--muted);
-  font-size: 0.95rem;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 input {
   display: block;
   width: 100%;
   max-width: 16rem;
-  min-height: 52px;
+  min-height: 46px;
   margin-top: 8px;
-  padding: 0 14px;
-  border: 1px solid var(--line-2);
-  border-radius: 12px;
-  background: var(--panel-2);
-  color: var(--fg);
-  font: 600 1.5rem var(--mono);
+  padding: 0 12px;
+  border: 1px solid var(--line2);
+  border-radius: 5px;
+  background: var(--raise);
+  color: var(--text);
+  font: 600 20px var(--sans);
   font-variant-numeric: tabular-nums;
+  letter-spacing: normal;
+  text-transform: none;
 }
 [role='alert'] {
-  color: var(--red);
+  color: var(--stop);
 }
 
-/* What the transaction carries, read from its bytes: large, mono, never cut. */
+/* What the transaction carries, read from its bytes: a raised mono panel, never cut. */
 .decoded {
-  margin: 20px 0 8px;
-  padding: 16px 18px;
-  border: 1px solid var(--line-2);
-  border-left: 3px solid var(--violet);
-  border-radius: 14px;
-  background: var(--panel-2);
+  margin: 16px 0 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--raise);
 }
 .decoded h2 {
   margin: 0 0 8px;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 .decoded ol {
   margin: 0;
-  padding-left: 1.4rem;
+  padding-left: 1.3rem;
 }
 .decoded li {
-  margin: 8px 0;
-  font: 600 1.02rem/1.45 var(--mono);
-}
-
-@media (min-width: 720px) {
-  body {
-    padding-top: 48px;
-  }
-  .decoded li {
-    font-size: 1.15rem;
-  }
-  main {
-    padding: 36px 40px 32px;
-  }
+  margin: 6px 0;
+  color: var(--text);
+  font: 500 14px/1.55 var(--mono);
+  word-break: break-all;
 }
 
 @media (prefers-reduced-motion: reduce) {
