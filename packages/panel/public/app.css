@@ -121,10 +121,20 @@ nav a.stop {
   margin-left: auto;
   background: var(--bg);
   color: var(--stop);
-  /* Opaque on both sides: the links scrolling under it must not show through. */
-  box-shadow:
-    -20px 0 14px -2px var(--bg),
-    24px 0 0 8px var(--bg);
+  /* Covers the gutter to its right, where the links scrolling under it would show through. */
+  box-shadow: 24px 0 0 8px var(--bg);
+}
+
+/* A fade to its left, so a link half under it never shows as a stray letter. */
+nav a.stop::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  right: 100%;
+  width: 40px;
+  background: linear-gradient(to right, rgb(5 5 5 / 0%), var(--bg) 55%);
+  pointer-events: none;
 }
 
 /* The screen open now, marked from the body's data-screen. */
@@ -247,7 +257,8 @@ p {
   transition: color var(--ease);
 }
 
-h2 + .item {
+h2 + .item,
+.card > .item:first-child {
   border-top: 0;
 }
 
@@ -299,7 +310,55 @@ dd {
   overflow-wrap: anywhere;
 }
 
-/* Status pills, each with its dot. */
+/* Status pills, each with its dot: mint for live and running, amber for shadow and paused. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 4px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.pill::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentcolor;
+}
+
+h2.pill {
+  margin-bottom: 14px;
+  font-size: 0.95rem;
+}
+
+.pill.ok {
+  border-color: rgb(20 241 149 / 30%);
+  background: rgb(20 241 149 / 10%);
+  color: var(--ok);
+}
+
+.pill.wait {
+  border-color: rgb(232 180 90 / 35%);
+  background: rgb(232 180 90 / 10%);
+  color: var(--warn);
+}
+
+.pill.chain {
+  color: var(--text);
+  background: var(--raised);
+}
+
+.pill.chain::before {
+  background: var(--grad);
+}
+
 .badge {
   display: inline-flex;
   align-items: center;
