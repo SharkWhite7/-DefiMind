@@ -49,7 +49,7 @@ export async function approval(ctx: Context, id: string): Screen {
         'dl',
         {},
         row('Agent', intent.agentId),
-        row('Chain', chainName(intent.chain)),
+        row('Chain', el('span', { class: 'pill chain' }, chainName(intent.chain))),
         row(intent.kind === 'x402' ? 'Pays' : 'To', intent.recipient),
         intent.domain !== undefined && row('For', intent.domain),
         row('Agent says', intent.reason),

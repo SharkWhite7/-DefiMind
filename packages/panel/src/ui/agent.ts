@@ -119,7 +119,7 @@ export async function agent(ctx: Context, id: string): Screen {
   return [
     el('h1', {}, id),
     card(
-      el('h2', {}, shadow ? 'Shadow mode' : 'Live'),
+      el('h2', { class: `pill ${shadow ? 'wait' : 'ok'}` }, shadow ? 'Shadow mode' : 'Live'),
       el(
         'p',
         {},
@@ -147,7 +147,14 @@ export async function agent(ctx: Context, id: string): Screen {
         {},
         row('Spent', `${formatUsd(budget.spentToday)} of ${formatUsd(budget.dailyMax)}`),
         row('Per payment', formatUsd(budget.perTxMax)),
-        row('State', budget.paused ? 'Paused' : 'Running'),
+        row(
+          'State',
+          el(
+            'span',
+            { class: `pill ${budget.paused ? 'wait' : 'ok'}` },
+            budget.paused ? 'Paused' : 'Running',
+          ),
+        ),
       ),
       budget.paused
         ? button(
