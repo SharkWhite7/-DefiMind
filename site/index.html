@@ -69,7 +69,7 @@
         text-decoration: none;
       }
       :focus-visible {
-        outline: 2px solid var(--aqua);
+        outline: 2px solid var(--mint);
         outline-offset: 3px;
         border-radius: 6px;
       }
@@ -309,9 +309,10 @@
       }
       .nav-links {
         display: flex;
-        gap: 34px;
+        gap: clamp(18px, 2vw, 34px);
         font-size: 14.5px;
         color: var(--muted);
+        white-space: nowrap;
       }
       .nav-links a:hover {
         color: var(--fg);
@@ -341,7 +342,7 @@
         width: 13px;
         height: 13px;
       }
-      @media (max-width: 1080px) {
+      @media (max-width: 1180px) {
         .nav-top-link {
           display: none;
         }
@@ -356,6 +357,7 @@
         padding: 6px 12px;
         border: 1px solid var(--line);
         border-radius: 999px;
+        white-space: nowrap;
       }
       .dot {
         width: 7px;
@@ -742,8 +744,7 @@
         border: 1px solid var(--line-2);
         border-radius: 12px;
         padding: 16px 18px;
-        overflow-x: auto;
-        white-space: nowrap;
+        overflow-wrap: anywhere;
         display: flex;
         align-items: center;
       }
@@ -1248,11 +1249,11 @@
       }
       .tg-btns {
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 3fr 2fr;
         gap: 8px;
       }
       .tg-btn {
-        height: 44px;
+        min-height: 48px;
         border-radius: 12px;
         background: #151518;
         border: 1px solid var(--line-2);
@@ -1266,11 +1267,25 @@
       .tg-btn:hover {
         background: #202024;
       }
+      /* The same two actions as the panel's approval: the gradient, and a red outline. */
       .tg-btn.ok {
-        color: var(--mint);
+        border-color: transparent;
+        background: var(--grad) border-box;
+        color: var(--bg);
+        font-weight: 700;
+      }
+      .tg-btn.ok:hover {
+        background: var(--grad) border-box;
+        filter: brightness(1.08);
       }
       .tg-btn.no {
+        border-color: rgb(248 113 113 / 60%);
+        background: transparent;
         color: var(--red);
+      }
+      .tg-btn.no:hover {
+        border-color: var(--red);
+        background: rgb(248 113 113 / 8%);
       }
       .tg-done {
         font-family: var(--mono);
