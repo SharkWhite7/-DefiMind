@@ -7,3 +7,5 @@ onlyBuiltDependencies:
   - esbuild
   # better-sqlite3 needs its native binding built or downloaded at install time.
   - better-sqlite3
+# Not bigint-buffer: its native toBigIntLE has GHSA-3gc7-fjrx-p6mg, and unbuilt it uses its safe
+# JavaScript path (docs/security/dependency-triage.md).
