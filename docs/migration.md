@@ -412,30 +412,26 @@ solana transaction-history "$(solana-keygen pubkey ~/.defimind/anchor.json)" --u
 ## Part F: afterwards
 
 **F0. Without Telegram (CR-017).** For an owner who runs the panel only, this step drops the bot's
-three settings from guard-core. It runs in two deploys, so guard-core never meets a partial set:
-
-1. Deploy the CR-017 code with all three settings still present. `BOT_URL` now lives in the
-   secrets instead of `fly.toml`.
-2. Then unset all three together. The new code runs without any of them.
+settings from guard-core, in the same deploy that brings guard-core to `main`. Since CR-017,
+`main`'s `fly.toml` no longer sets `BOT_URL`, and guard-core takes the bot's three settings all
+together or none. Deploying `main` while `BOT_TOKEN` and `BOT_WEBHOOK_SECRET` are still secrets would
+therefore stop it at start. Stage their removal first, so the deploy starts with none of the three:
 
 ```bash
-cd ~/DefiMind && git pull && fly secrets set --app defimind-guard-core --stage BOT_URL=http://defimind-bot.internal:8788
+cd ~/DefiMind && git pull && fly secrets unset BOT_TOKEN BOT_WEBHOOK_SECRET --app defimind-guard-core --stage
 cd ~/DefiMind && fly deploy . --config packages/guard-core/fly.toml --dockerfile packages/guard-core/Dockerfile --ha=false
-fly status --app defimind-guard-core && fly logs --app defimind-guard-core --no-tail | tail -n 20
-```
-
-Check: one machine is `started`, and the log shows no config error. Then unset the three:
-
-```bash
-fly secrets unset BOT_URL BOT_TOKEN BOT_WEBHOOK_SECRET --app defimind-guard-core
 fly status --app defimind-guard-core && fly logs --app defimind-guard-core --no-tail | tail -n 20
 ```
 
 Check:
 
-- the machine restarts to `started`, with no config error;
+- one machine is `started`, and the log shows no config error;
 - the log no longer shows `approval webhook failed` warnings;
 - the panel's Doctor has no bot check.
+
+If a deploy of `main` was already made with the two secrets still set and the machine will not
+start, run the same `fly secrets unset` without `--stage`: it restarts the machine with neither.
+Stop the bot app first (`fly scale count 0 --app defimind-bot`); destroying it waits for F2.
 
 An owner who keeps Telegram skips F0 and runs B6 and C5 instead.
 

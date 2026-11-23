@@ -22,13 +22,17 @@ export async function agents(ctx: Context): Screen {
     id: 'agent-id',
     autocomplete: 'off',
     maxlength: '64',
-    placeholder: 'research-bot',
+    placeholder: 'for example research-bot',
   })
   const slot = el('div')
   const create = button(
     'Create with passkey',
     async () => {
       const id = input.value.trim()
+      if (id === '') {
+        ctx.say('Type a name for the agent first.', 'stop')
+        return
+      }
       if (!AGENT_ID.test(id)) {
         ctx.say('Use letters, digits, - and _ only, up to 64.', 'stop')
         return
