@@ -13,9 +13,6 @@ export const PRESETS = {
 export const next = (ctx: Context, step: StepId, label = 'Next') =>
   button(label, () => ctx.go({ name: 'guide', step }), 'primary')
 
-/** The getting-started page (INT-44): connecting each MCP client, until the server is on npm. */
-const MCP_HELP = 'https://github.com/SharkWhite7/-DefiMind/blob/main/docs/getting-started.md'
-
 export async function agent(ctx: Context): Promise<Child[]> {
   const [{ agents }, { chains }] = await Promise.all([ctx.api.agents(), ctx.api.settings()])
   const input = el('input', {
@@ -43,7 +40,6 @@ export async function agent(ctx: Context): Promise<Child[]> {
           el('h3', {}, 'Connect it to Claude Code'),
           el('p', {}, 'Run this once in a terminal, in your DefiMind folder:'),
           el('code', { class: 'token' }, mcpCommand(location.origin, created.agentId, chains)),
-          el('a', { href: MCP_HELP, rel: 'noreferrer' }, 'Step by step, and for other AI apps'),
           next(ctx, 'rules'),
         ),
       )
