@@ -76,6 +76,8 @@ export function applyTrade(
     side: 'buy' | 'sell'
     amount: bigint
     cost: bigint
+    decimals: number
+    symbol?: string
   },
   now: Date,
 ) {
@@ -100,6 +102,7 @@ export function applyTrade(
     }
     const values = {
       ...trade,
+      symbol: trade.symbol ?? null,
       amount: toAmount(amount),
       cost: toAmount(cost),
       updatedAt: now.toISOString(),
@@ -108,7 +111,13 @@ export function applyTrade(
       .values(values)
       .onConflictDoUpdate({
         target: [positions.agentId, positions.chain, positions.token],
-        set: { amount: values.amount, cost: values.cost, updatedAt: values.updatedAt },
+        set: {
+          amount: values.amount,
+          cost: values.cost,
+          decimals: values.decimals,
+          symbol: values.symbol ?? null,
+          updatedAt: values.updatedAt,
+        },
       })
       .run()
   })
@@ -125,11 +134,13 @@ export function listPositions(db: Db, agentId?: string): (Position & { agentId: 
         : and(eq(positions.agentId, agentId), sql`${positions.amount} != '0'`),
     )
     .all()
-    .map(({ agentId: id, chain, token, amount, cost }) => ({
+    .map(({ agentId: id, chain, token, amount, cost, decimals, symbol }) => ({
       agentId: id,
       chain,
       token,
       amount,
       cost,
+      decimals,
+      ...(symbol === null ? {} : { symbol }),
     }))
 }

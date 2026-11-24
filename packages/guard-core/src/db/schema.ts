@@ -375,6 +375,10 @@ export const positions = sqliteTable(
     token: text('token').$type<Address>().notNull(),
     amount: text('amount').$type<Amount>().notNull(),
     cost: text('cost').$type<Amount>().notNull(),
+    /** From the mint onchain, never a venue's list. */
+    decimals: integer('decimals').notNull(),
+    /** Display only, untrusted. */
+    symbol: text('symbol'),
     updatedAt: text('updated_at').notNull(),
   },
   (t) => [primaryKey({ columns: [t.agentId, t.chain, t.token] })],

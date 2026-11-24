@@ -13,6 +13,8 @@ CREATE TABLE `positions` (
 	`token` text NOT NULL,
 	`amount` text NOT NULL,
 	`cost` text NOT NULL,
+	`decimals` integer NOT NULL,
+	`symbol` text,
 	`updated_at` text NOT NULL,
 	PRIMARY KEY(`agent_id`, `chain`, `token`),
 	FOREIGN KEY (`agent_id`) REFERENCES `agents`(`id`) ON UPDATE no action ON DELETE no action

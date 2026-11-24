@@ -31,6 +31,7 @@ const trade = (side: 'buy' | 'sell', amount: bigint, cost = 0n, agentId = 'agent
   side,
   amount,
   cost,
+  decimals: 5,
 })
 
 describe('the day of buys (CR-021)', () => {
@@ -83,7 +84,7 @@ describe('positions at cost (CR-021)', () => {
     applyTrade(d, trade('buy', 100n, 1n), NOW)
     applyTrade(d, trade('buy', 7n, 2n, 'agent-2'), NOW)
     expect(listPositions(d, 'agent-2')).toEqual([
-      { agentId: 'agent-2', chain: CHAIN, token: BONK, amount: '7', cost: '2' },
+      { agentId: 'agent-2', chain: CHAIN, token: BONK, amount: '7', cost: '2', decimals: 5 },
     ])
     expect(listPositions(d)).toHaveLength(2)
   })
