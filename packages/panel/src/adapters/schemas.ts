@@ -9,6 +9,7 @@ const atomic = z.string().regex(/^(0|[1-9]\d*)$/)
 const isoTime = z.iso.datetime({ offset: true })
 const text = (max: number) => z.string().max(max)
 const agentId = z.string().min(1).max(64)
+const bps = z.number().int().min(0).max(10_000)
 
 export const allowance = z
   .discriminatedUnion('status', [
@@ -26,7 +27,7 @@ export const agentSummary = z.object({
 export const intent = z.object({
   id: z.uuid(),
   agentId,
-  kind: z.enum(['x402', 'transfer']),
+  kind: z.enum(['x402', 'transfer', 'swap']),
   chain: text(64),
   token: text(128),
   amount: text(78),
@@ -34,6 +35,16 @@ export const intent = z.object({
   domain: text(253).optional(),
   reason: text(500),
   status: text(32),
+  swap: z
+    .object({
+      venue: text(64),
+      tokenOut: text(128),
+      minAmountOut: atomic,
+      slippageBps: bps,
+      priceImpactBps: bps,
+      quotedAt: isoTime,
+    })
+    .optional(),
   expiresAt: isoTime,
 })
 
@@ -84,7 +95,39 @@ export const policy = z.object({
   priceIncreaseMaxPct: z.number().optional(),
   maxPaymentsPerMinute: z.number().optional(),
   requireMandate: z.boolean().optional(),
+  trading: z
+    .object({
+      enabled: z.boolean(),
+      venues: z.array(text(64)).max(16),
+      tokens: z.array(text(128)).max(256),
+      allowAnyToken: z.boolean(),
+      maxTradeUsd: atomic,
+      dailyTradeMax: atomic,
+      maxPositionUsd: atomic,
+      maxSlippageBps: bps,
+      maxPriceImpactBps: bps,
+    })
+    .optional(),
 })
+
+/** CR-021, one owner read for every agent; amount is in the token's base units, cost in dollars. */
+export const portfolio = z.object({
+  agents: z
+    .array(
+      z.object({
+        agentId,
+        positions: z
+          .array(z.object({ chain: text(64), token: text(128), amount: atomic, cost: atomic }))
+          .max(256),
+        tradedToday: atomic,
+        dailyTradeMax: atomic,
+      }),
+    )
+    .max(1000),
+})
+
+/** CR-021: the sells the close started, one intent per token, each through the usual checks. */
+export const closed = z.object({ intents: z.array(intent).max(256) })
 
 export const budget = z.object({
   spentToday: atomic,
@@ -243,6 +286,7 @@ export type AgentView = z.infer<typeof agentSummary>
 export type PolicyView = z.infer<typeof policy>
 export type BudgetView = z.infer<typeof budget>
 export type KillView = z.infer<typeof kill>
+export type PortfolioView = z.infer<typeof portfolio>['agents'][number]
 export type ReceiptView = z.infer<typeof receipt>
 export type IntegrityView = z.infer<typeof integrity>
 export type SettingsView = z.infer<typeof settingsView>

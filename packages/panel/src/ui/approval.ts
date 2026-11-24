@@ -1,5 +1,7 @@
 import { chainName } from '../domain/chains.js'
 import { amountText, formatUsd } from '../domain/money.js'
+import { FLAGS, isBuy, percent, swapTitle, units } from '../domain/trading.js'
+import type { ApprovalView } from '../adapters/schemas.js'
 import type { Context, Screen } from './context.js'
 import { button, card, el, row, when } from './dom.js'
 
@@ -36,30 +38,56 @@ function decide(ctx: Context, approve: () => Promise<unknown>, reject: () => Pro
   )
 }
 
+const mono = (text: string) => el('span', { class: 'mono' }, text)
+
+/** Both sides of a swap in full, and the limits its quote must keep to. */
+function swapRows({ chain, token, amount, swap }: ApprovalView['intent']) {
+  if (swap === undefined) {
+    return []
+  }
+  const buy = isBuy({ chain, token })
+  return [
+    row(
+      buy ? 'Spends' : 'Sells',
+      buy ? amountText({ chain, token, amount }) : mono(units(amount, token)),
+    ),
+    row(buy ? 'Buys' : 'For', mono(swap.tokenOut)),
+    row('Receives at least', mono(units(swap.minAmountOut, swap.tokenOut))),
+    row('Slippage', `up to ${percent(swap.slippageBps)}`),
+    row('Price impact', percent(swap.priceImpactBps)),
+    row('Venue', swap.venue),
+    row('Quoted', when(swap.quotedAt)),
+  ]
+}
+
+const flagText = (flag: string) => {
+  const meaning = FLAGS[flag]
+  return meaning === undefined ? flag : `${flag}: ${meaning}`
+}
+
 export async function approval(ctx: Context, id: string): Screen {
   const found = (await ctx.api.overview()).pending.find(({ intent }) => intent.id === id)
   if (!found) {
     return gone(ctx)
   }
   const { intent, simulation, flags, approveBefore } = found
+  const swap = intent.kind === 'swap'
   return [
-    el('h1', {}, amountText(intent)),
+    el('h1', {}, swap ? swapTitle(intent) : amountText(intent)),
     card(
       el(
         'dl',
         {},
         row('Agent', intent.agentId),
         row('Chain', el('span', { class: 'pill chain' }, chainName(intent.chain))),
-        row(
-          intent.kind === 'x402' ? 'Pays' : 'To',
-          el('span', { class: 'mono' }, intent.recipient),
-        ),
+        ...swapRows(intent),
+        !swap && row(intent.kind === 'x402' ? 'Pays' : 'To', mono(intent.recipient)),
         intent.domain !== undefined && row('For', intent.domain),
         row('Agent says', intent.reason),
         row('Simulation', simulation.summary),
         row('Decide before', when(approveBefore)),
       ),
-      ...flags.map((flag) => el('p', { class: 'flag' }, flag)),
+      ...flags.map((flag) => el('p', { class: 'flag' }, flagText(flag))),
     ),
     decide(
       ctx,

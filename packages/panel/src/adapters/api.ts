@@ -10,6 +10,7 @@ export type OwnerAction =
   | 'resume'
   | 'create_agent'
   | 'change_settings'
+  | 'close_positions'
 
 /** An answer guard-core gave as an error: its status and the code in its body. */
 export class ApiError extends Error {
@@ -181,6 +182,12 @@ export function ownerApi(passkey: Authenticator, fetchImpl: typeof fetch = fetch
     proof: (seq: number) => get(s.proof, `/v1/owner/executions/${seq}/proof`),
     passkeys: () => get(s.passkeys, '/v1/owner/passkeys'),
     kill: () => post(s.kill, '/v1/owner/kill'),
+
+    portfolio: () => get(s.portfolio, '/v1/owner/portfolio'),
+    closePositions: () =>
+      stepUp('close_positions', {}, (assertion) =>
+        post(s.closed, '/v1/owner/positions/close', { assertion }),
+      ),
 
     pushKey: () => get(s.pushKey, '/v1/owner/push/key'),
     subscribe: (subscription: PushSubscriptionJSON) =>

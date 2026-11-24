@@ -5,6 +5,7 @@ import { formatUsd } from '../domain/money.js'
 import { chainRules, loosens } from '../domain/policy.js'
 import type { Context, Screen } from './context.js'
 import { button, card, el, row, when } from './dom.js'
+import { tradingForm } from './trading.js'
 
 function field(id: string, label: string, value: string, multiline = false) {
   const input = multiline
@@ -173,6 +174,7 @@ export async function agent(ctx: Context, id: string): Screen {
           }),
     ),
     policyForm(ctx, policy, known),
+    tradingForm(ctx, policy, (after, message) => save(ctx, policy, after, message)),
     card(
       el('h2', {}, 'Revoke'),
       el('p', {}, 'Cuts the agent off at its next request. Its token never works again.'),
