@@ -227,6 +227,26 @@ describe('swaps (CR-021)', () => {
     expect(chain.sent).toEqual([])
   })
 
+  it('refuses an approved buy when the owner has since required mandates', async () => {
+    const { h, chain } = await setup()
+    const res = await h.agent('POST', '/v1/agent/swap', buy())
+    const owner = await signedIn(h)
+    const policy = (await owner.call('GET', '/v1/owner/policy/agent-1')).json()
+    await owner.call('PUT', '/v1/owner/policy/agent-1', {
+      policy: { ...policy, requireMandate: true },
+    })
+    const id = res.json().intentId
+    const decided = await owner.call('POST', `/v1/owner/intents/${id}/decision`, {
+      decision: 'approve',
+      assertion: await owner.stepUp('approve_intent', { intentId: id }),
+    })
+    expect(decided.json()).toMatchObject({
+      status: 'rejected',
+      rejectReasons: ['MANDATE_REQUIRED'],
+    })
+    expect(chain.sent).toEqual([])
+  })
+
   it('answers a quote read-only, and refuses it without trading', async () => {
     const { h } = await setup()
     const quote = await h.agent('POST', '/v1/agent/quote', buy())
@@ -251,5 +271,19 @@ describe('the owner Close (CR-021)', () => {
       expect.objectContaining({ kind: 'swap', token: BONK, status: 'executed' }),
     ])
     expect(getPosition(h.db, 'agent-1', CHAIN, BONK)).toEqual({ amount: 0n, cost: 0n })
+  })
+
+  it('sells even when the policy requires mandates: Close is the owner own action', async () => {
+    const { h, chain } = await setup()
+    const owner = await bought(h)
+    const policy = (await owner.call('GET', '/v1/owner/policy/agent-1')).json()
+    await owner.call('PUT', '/v1/owner/policy/agent-1', {
+      policy: { ...policy, requireMandate: true },
+    })
+    chain.held.set(BONK, 995_000_000n)
+    const res = await owner.call('POST', '/v1/owner/positions/close', {
+      assertion: await owner.stepUp('close_positions', {}),
+    })
+    expect(res.json().intents).toEqual([expect.objectContaining({ status: 'executed' })])
   })
 })
