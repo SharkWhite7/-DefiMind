@@ -113,6 +113,13 @@
       "when": 1795535098823,
       "tag": "0015_trading",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1795539432405,
+      "tag": "0016_x402_requests",
+      "breakpoints": true
     }
   ]
 }
