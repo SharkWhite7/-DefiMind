@@ -5,6 +5,8 @@ type Send = (status: number, data: unknown) => void
 type Bound = { action: string; body: unknown } | undefined
 
 export const MINT = '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU'
+/** An unverified copy: same symbol and name, another mint. */
+export const FAKE = 'JUPfake1111111111111111111111111111111111111'
 const BONK = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263'
 const HOT = '9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM'
 
@@ -22,7 +24,30 @@ export function tradingMock(later: string) {
       { chain, token: BONK, amount: '912000000000', cost: '10000000', decimals: 5 },
     ],
     closes: [] as Bound[],
+    quotes: [] as Record<string, unknown>[],
+    trades: [] as { body: Record<string, unknown>; bound: Bound }[],
   }
+  const token = (mint: string, verified: boolean) => ({
+    chain,
+    mint,
+    symbol: 'JUP',
+    name: 'Jupiter',
+    decimals: 6,
+    verified,
+    venue: verified ? { holders: 812000, liquidityUsd: '41250000000000', organicScore: 91 } : {},
+  })
+  const risk = (mint: string) => ({
+    chain,
+    mint,
+    decimals: 6,
+    freezeAuthority: false,
+    mintAuthority: mint === FAKE,
+    extensions: [],
+    risks: mint === FAKE ? ['NO_EXIT_ROUTE'] : [],
+    flags: ['NEW_TOKEN', ...(mint === FAKE ? ['MINT_AUTHORITY'] : [])],
+    exit: mint === FAKE ? null : { amountUsd: '10000000', priceImpactBps: 8 },
+    venue: { ...token(mint, mint !== FAKE).venue, verified: mint !== FAKE },
+  })
 
   const intent = (token: string, amount: string, tokenOut: string, extra = {}) => ({
     id: randomUUID(),
@@ -56,7 +81,51 @@ export function tradingMock(later: string) {
     flags: ['NEW_TOKEN', 'MINT_AUTHORITY'],
   })
 
-  function route(method: string, path: string, send: Send, stepUp: () => Bound): boolean {
+  function route(
+    method: string,
+    path: string,
+    body: Record<string, unknown>,
+    send: Send,
+    stepUp: () => Bound,
+  ): boolean {
+    if (path === '/v1/owner/tokens/search') {
+      send(200, { tokens: [token(FAKE, false), token(MINT, true)] })
+      return true
+    }
+    const risky = /^\/v1\/owner\/tokens\/([^/]+)\/risk$/.exec(path)
+    if (risky) {
+      send(200, risk(decodeURIComponent(risky[1]!)))
+      return true
+    }
+    if (method === 'POST' && path === '/v1/owner/quote') {
+      state.quotes.push(body)
+      const amountIn = String(body['amountIn'])
+      send(200, {
+        venue: 'jupiter',
+        tokenIn: body['tokenIn'],
+        amountIn,
+        tokenOut: body['tokenOut'],
+        expectedOut: '1853000000',
+        minAmountOut: '1843920113',
+        slippageBps: 50,
+        priceImpactBps: 12,
+        exitImpactBps: 9,
+        risks: [],
+        flags: ['NEW_TOKEN'],
+        quotedAt: later,
+      })
+      return true
+    }
+    if (method === 'POST' && path === '/v1/owner/trade') {
+      const bound = stepUp()
+      if (bound?.action !== 'manual_trade') {
+        send(403, { error: 'step_up_required' })
+        return true
+      }
+      state.trades.push({ body, bound })
+      send(200, { intentId: randomUUID(), status: 'executed', rejectReasons: [], txId: 'sig' })
+      return true
+    }
     if (method === 'GET' && path === '/v1/owner/portfolio') {
       send(200, {
         agents: [

@@ -117,6 +117,11 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
 }
 
 app.log.info({ listeners: listenerLayout(config) }, 'listener layout')
+if (config.ADMIN_ROUTES === 'true' && config.SETUP_CODE === undefined && countPasskeys(db) === 0) {
+  app.log.warn(
+    'no passkey yet and no SETUP_CODE: whoever holds the admin token can enrol the first passkey',
+  )
+}
 if (publicAdmin(config)) {
   app.log.warn(
     'ALLOW_PUBLIC_ADMIN: the admin routes face every interface; anyone who reaches this address ' +
