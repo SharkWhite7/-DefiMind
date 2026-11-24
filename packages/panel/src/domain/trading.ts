@@ -53,9 +53,9 @@ export function percent(bps: number): string {
   return `${(bps / 100).toFixed(2)}%`
 }
 
-/** "1.5" or "1.50%" to basis points, from 0 to 100%; undefined for anything else. */
+/** "1.5", "1,5" or "1.50%" to basis points, from 0 to 100%; undefined for anything else. */
 export function parsePercent(text: string): number | undefined {
-  const match = /^(\d{1,3})(?:\.(\d{1,2}))?%?$/.exec(text.trim())
+  const match = /^(\d{1,3})(?:[.,](\d{1,2}))?%?$/.exec(text.trim())
   if (match === null) {
     return undefined
   }

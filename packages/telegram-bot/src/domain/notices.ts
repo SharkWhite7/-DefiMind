@@ -26,6 +26,21 @@ export function chainBrokenText(detail: string): string {
   ].join('\n')
 }
 
+/**
+ * CR-022: someone holding the admin token tried to widen a policy, resume an agent or open a task
+ * budget, and guard-core refused it. The token is a machine credential: this is an attack until the
+ * owner knows otherwise.
+ */
+export function adminLoosenText(detail: string): string {
+  return [
+    '<b>Possible attack blocked</b>',
+    "Someone with guard-core's admin token tried to give an agent more room. guard-core refused " +
+      'it: no rule changed. Only your passkey can do that, in the DefiMind panel.',
+    'If it was not you, replace ADMIN_TOKEN on the server now, and consider /kill.',
+    ...(detail === '' ? [] : [`guard-core says: <i>${escapeHtml(detail)}</i>`]),
+  ].join('\n')
+}
+
 // Telegram refuses a message over 4096 characters, and /status adds the chains after this.
 const PENDING_LIMIT = 2000
 
