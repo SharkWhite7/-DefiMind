@@ -1,6 +1,7 @@
 import { CHAINS } from '@defimind/shared'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
+import { GuardError } from '../adapters/guard.js'
 import type { Portfolio, Quote } from '../adapters/trading.js'
 import { CHAIN_NAMES, chainName } from '../domain/chains.js'
 import { explainFlags, explainReject, explainStatus } from '../domain/explain.js'
@@ -58,6 +59,19 @@ const swapInput = {
 
 type Resolved = Extract<ResolvedSwap, { ok: true }>
 
+export const NOT_AVAILABLE = 'Trading is not available on this DefiMind yet. Tell the user.'
+
+/**
+ * A guard-core older than trading has no such route, and its 404 would otherwise read as "no record
+ * of that". On these routes a 404 can only mean trading is not there.
+ */
+function noTradingYet(error: unknown): never {
+  if (error instanceof GuardError && error.httpStatus === 404) {
+    throw new GuardError('http', NOT_AVAILABLE, 404)
+  }
+  throw error
+}
+
 export function registerTrading(server: McpServer, deps: ToolDeps): void {
   const { guard, log, defaultChain, usd } = deps
 
@@ -90,14 +104,16 @@ export function registerTrading(server: McpServer, deps: ToolDeps): void {
       }
       const at = args.chain ?? defaultChain
       return guarded(log, async () => {
-        const result = await guard.swap({
-          chain: at,
-          tokenIn: swap.tokenIn,
-          tokenOut: swap.tokenOut,
-          amountIn: swap.amountIn.toString(),
-          reason: args.reason,
-          ...(args.maxSlippageBps === undefined ? {} : { maxSlippageBps: args.maxSlippageBps }),
-        })
+        const result = await guard
+          .swap({
+            chain: at,
+            tokenIn: swap.tokenIn,
+            tokenOut: swap.tokenOut,
+            amountIn: swap.amountIn.toString(),
+            reason: args.reason,
+            ...(args.maxSlippageBps === undefined ? {} : { maxSlippageBps: args.maxSlippageBps }),
+          })
+          .catch(noTradingYet)
         const lines = [
           `${describeTrade(swap, deps, at)} on ${chainName(at)} (${at}): ${result.status}.`,
           `Intent id: ${result.intentId}`,
@@ -124,12 +140,14 @@ export function registerTrading(server: McpServer, deps: ToolDeps): void {
       }
       const at = args.chain ?? defaultChain
       return guarded(log, async () => {
-        const quote = await guard.quote({
-          chain: at,
-          tokenIn: swap.tokenIn,
-          tokenOut: swap.tokenOut,
-          amountIn: swap.amountIn.toString(),
-        })
+        const quote = await guard
+          .quote({
+            chain: at,
+            tokenIn: swap.tokenIn,
+            tokenOut: swap.tokenOut,
+            amountIn: swap.amountIn.toString(),
+          })
+          .catch(noTradingYet)
         return text(describeQuote(quote, swap, deps, at))
       })
     },
@@ -143,7 +161,10 @@ export function registerTrading(server: McpServer, deps: ToolDeps): void {
       inputSchema: {},
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
-    () => guarded(log, async () => text(describePortfolio(await guard.portfolio(), deps))),
+    () =>
+      guarded(log, async () =>
+        text(describePortfolio(await guard.portfolio().catch(noTradingYet), deps)),
+      ),
   )
 }
 

@@ -270,7 +270,8 @@ day). It then passes the returned `mandateId` to each `paid_fetch` and `transfer
 ### Trading (CR-021)
 
 With the owner's `trading` policy turned on, the agent can swap tokens on Solana through Jupiter,
-from the same spending wallet and under the same daily cap.
+from the same spending wallet and under the same daily cap. Against a guard-core without the trading routes, all three tools
+say "Trading is not available on this DefiMind yet" rather than a 404's "no record".
 
 - **One side is always the chain's dollar.** A buy is `from: "USDC"` with `amountUsd`, the dollars
   to spend. A sell is `to: "USDC"` with `amount`, in the smallest units of the token sold, as

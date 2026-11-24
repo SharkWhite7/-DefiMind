@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Quote, SwapOrder } from '../src/adapters/trading.js'
 import { usdTokenFor } from '../src/domain/chains.js'
 import { formatUnits, resolveSwap, tokenLabel } from '../src/domain/trading.js'
+import { GuardError } from '../src/adapters/guard.js'
+import { NOT_AVAILABLE } from '../src/tools/trading.js'
 import { call, connect, fakeGuard } from './support.js'
 
 const USDC = usdTokenFor(CHAINS.solanaDevnet, undefined)?.address ?? ''
@@ -290,5 +292,30 @@ describe('check_intent on a swap', () => {
       `Swap of $5.00 USDC for at least 2475 of ${BONK} (calls itself "BONK") (247500000 smallest units) through jupiter, on Solana devnet`,
     )
     expect(text).toContain('The swap is waiting for the owner to approve it')
+  })
+})
+
+describe('a guard-core without trading', () => {
+  const missing = async (): Promise<never> => {
+    throw new GuardError('http', 'AgentGuard has no record of that.', 404)
+  }
+
+  it.each([
+    ['swap', { from: 'USDC', to: BONK, amountUsd: '5', reason: 'r' }],
+    ['quote', { from: 'USDC', to: BONK, amountUsd: '5' }],
+    ['get_portfolio', {}],
+  ])('%s says trading is not available yet, not "no record"', async (tool, args) => {
+    const client = await connect(fakeGuard({ swap: missing, quote: missing, portfolio: missing }))
+    const result = await call(client, tool, args)
+    expect(result.isError).toBe(true)
+    expect(result.text).toBe(NOT_AVAILABLE)
+  })
+
+  it('keeps any other guard-core error as it was', async () => {
+    const down = async (): Promise<never> => {
+      throw new GuardError('http', 'AgentGuard returned an error (HTTP 500).', 500)
+    }
+    const result = await call(await connect(fakeGuard({ portfolio: down })), 'get_portfolio')
+    expect(result.text).toBe('AgentGuard returned an error (HTTP 500).')
   })
 })
