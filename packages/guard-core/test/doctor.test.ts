@@ -6,7 +6,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { StubChain } from '../src/adapters/stub.js'
 import { openDb, schema } from '../src/db/client.js'
 import { doctor, type DoctorDeps } from '../src/service/doctor.js'
-import { basePolicy, CHAIN, MINT, NOW } from './harness.js'
+import { basePolicy, CHAIN, harness, MINT, NOW } from './harness.js'
+import { signedIn } from './owner.js'
 
 function deps(overrides: Partial<DoctorDeps> = {}): DoctorDeps & { chain: StubChain } {
   const db = openDb(':memory:')
@@ -157,5 +158,17 @@ describe('the doctor', () => {
         'Run the database backup, and schedule it daily.',
       )
     })
+  })
+})
+
+describe('public admin routes (CR-022)', () => {
+  it('warns when ALLOW_PUBLIC_ADMIN let the admin routes face every interface', async () => {
+    const h = await harness({ env: { HOST: '0.0.0.0', ALLOW_PUBLIC_ADMIN: 'true' } })
+    const owner = await signedIn(h)
+    const { checks } = (await owner.call('GET', '/v1/owner/doctor')).json()
+    expect(checks).toContainEqual(expect.objectContaining({ id: 'public_admin', status: 'warn' }))
+    const quiet = await harness()
+    const { checks: none } = (await (await signedIn(quiet)).call('GET', '/v1/owner/doctor')).json()
+    expect(none.map((c: { id: string }) => c.id)).not.toContain('public_admin')
   })
 })

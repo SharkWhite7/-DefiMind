@@ -4,7 +4,7 @@ import { withKeys } from './adapters/keystore.js'
 import { publicKeys } from './adapters/public-keys.js'
 import { readVapidKeyFile, webPushService } from './adapters/push.js'
 import { buildChains } from './chains.js'
-import { loadConfig } from './config.js'
+import { listenerLayout, loadConfig, publicAdmin } from './config.js'
 import { migrateDb, openDb } from './db/client.js'
 import { countPasskeys } from './db/passkeys.js'
 import { requirePersistentDb } from './db/placement.js'
@@ -114,6 +114,14 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.once(signal, () => {
     void Promise.all([app.close(), publicApp?.close()])
   })
+}
+
+app.log.info({ listeners: listenerLayout(config) }, 'listener layout')
+if (publicAdmin(config)) {
+  app.log.warn(
+    'ALLOW_PUBLIC_ADMIN: the admin routes face every interface; anyone who reaches this address ' +
+      'and holds the admin token can pause, kill and read every agent',
+  )
 }
 
 await app.listen({ port: config.PORT, host: config.HOST })

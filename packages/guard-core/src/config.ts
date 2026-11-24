@@ -49,6 +49,11 @@ const settings = z
     ADMIN_TOKEN: secret,
     /** CR-019. False leaves /v1/admin/* unregistered, as a one-listener host must. */
     ADMIN_ROUTES: z.enum(['true', 'false']).default('true'),
+    /**
+     * CR-022. One listener beyond loopback with the admin routes on puts them on the public
+     * interface; that refuses to start unless this says it is meant, and then it warns at start.
+     */
+    ALLOW_PUBLIC_ADMIN: z.enum(['true', 'false']).default('false'),
     /** CR-019. Issues the first enrol link from the panel, until a passkey exists. */
     SETUP_CODE: optional(secret),
     PUBLIC_URL: optional(z.url({ protocol: /^https$/ })),
@@ -170,6 +175,12 @@ const settings = z
       c.PUBLIC_URL !== undefined,
     { path: ['VAPID_SUBJECT'] },
   )
+  .refine((c) => !publicAdmin(c) || c.ALLOW_PUBLIC_ADMIN === 'true', {
+    path: ['HOST'],
+    message:
+      'the admin routes would face every interface: set PUBLIC_PORT to split the listeners, ' +
+      'HOST to loopback, ADMIN_ROUTES=false, or ALLOW_PUBLIC_ADMIN=true if it is meant',
+  })
   .refine((c) => c.TRUST_FLY_CLIENT_IP === 'false' || c.TRUST_FORWARDED_FOR === 'false', {
     path: ['TRUST_FORWARDED_FOR'],
     message: 'trust one proxy header, not both',
@@ -200,6 +211,29 @@ const settings = z
   )
 
 export const configSchema = z.preprocess(defaults, settings)
+
+const LOOPBACK = /^(localhost|::1|127(\.\d{1,3}){3})$/
+
+/** One listener, beyond loopback, with the admin routes on it. */
+export function publicAdmin(c: {
+  PUBLIC_PORT?: number | undefined
+  ADMIN_ROUTES: 'true' | 'false'
+  HOST: string
+}): boolean {
+  return c.PUBLIC_PORT === undefined && c.ADMIN_ROUTES === 'true' && !LOOPBACK.test(c.HOST)
+}
+
+/** What listens where, for the start-up log: never a secret, only addresses and route groups. */
+export function listenerLayout(c: Config) {
+  const admin = c.ADMIN_ROUTES === 'true' ? ['admin'] : []
+  const bot = botSettings(c) === undefined ? [] : ['bot']
+  return c.PUBLIC_PORT === undefined
+    ? [{ address: `${c.HOST}:${c.PORT}`, routes: ['agent', 'owner', ...admin, ...bot] }]
+    : [
+        { address: `${c.PUBLIC_HOST}:${c.PUBLIC_PORT}`, routes: ['agent', 'owner'] },
+        { address: `${c.HOST}:${c.PORT}`, routes: [...admin, ...bot] },
+      ]
+}
 
 function originMatches(origin: string, rpId: string | undefined): boolean {
   const url = new URL(origin)
