@@ -44,7 +44,7 @@ describe.each([390, 1280])('trading at %i px', (width) => {
     await app.getByText('up to 0.50%').waitFor()
     await app.getByText('0.12%').waitFor()
     expect(await page.locator('.flag').allTextContents()).toEqual([
-      'NEW_TOKEN: First buy of this token by this agent.',
+      'NEW_TOKEN: First buy of this token by any of your agents.',
       'MINT_AUTHORITY: The token can still be minted: its supply is not fixed.',
     ])
     expect(await fits(page)).toBeLessThanOrEqual(width)
