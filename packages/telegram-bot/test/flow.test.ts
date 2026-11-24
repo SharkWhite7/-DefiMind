@@ -444,6 +444,21 @@ describe('admin loosening refused', () => {
   })
 })
 
+describe('backup failed', () => {
+  it('tells every owner the backup failed and that the data is still there', async () => {
+    const { calls, deliver } = await harness()
+    const failed = { kind: 'backup_failed', detail: 'disk full <b>', sentAt: NOW.toISOString() }
+    expect((await deliver('/hooks/alert', failed)).statusCode).toBe(200)
+    expect((await deliver('/hooks/alert', failed)).statusCode).toBe(409)
+    const posted = sent(calls, 'sendMessage')
+    expect(posted.map((call) => call.payload['chat_id'])).toEqual([OWNER.id, OTHER_OWNER.id])
+    expect(posted[0]?.payload['text']).toBe(
+      '<b>Database backup failed.</b> Your data is still on the server. Open the doctor in the ' +
+        'DefiMind panel.\nguard-core says: <i>disk full &lt;b&gt;</i>',
+    )
+  })
+})
+
 describe('shadow mode events', () => {
   it('accepts a shadowed payment without messaging anyone', async () => {
     const { calls, deliver } = await harness()

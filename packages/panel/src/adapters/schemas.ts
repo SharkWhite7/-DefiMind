@@ -238,7 +238,8 @@ export const doctor = z.object({
   checks: z
     .array(
       z.object({
-        id: text(64),
+        // CR-022 names an agent's own wallet in the id: chain, agent and check.
+        id: text(256),
         status: z.enum(['ok', 'warn', 'fail']),
         message: text(500),
         fix: text(500).optional(),
@@ -269,6 +270,8 @@ export const kill = z.object({
         payload: z.unknown(),
         link: https.optional(),
         pageLink: https.optional(),
+        // CR-022: the agent whose own wallet this limit belongs to; absent for the shared one.
+        wallet: z.object({ agentId, address: text(128) }).optional(),
       }),
     )
     .max(16),
