@@ -11,7 +11,7 @@ let api: PaidApi
 beforeEach(async () => {
   s = await stack()
   api = await paidApi()
-  await s.setPolicy()
+  s.setPolicy()
 })
 
 afterEach(async () => {
@@ -46,7 +46,7 @@ describe('recipient and price pinning', () => {
 
 describe('task budgets', () => {
   it('refuses a payment with no budget, pays inside one, and refuses what would pass it', async () => {
-    await s.setPolicy({ requireMandate: true })
+    s.setPolicy({ requireMandate: true })
     expect(codes(await fetchPaid())).toEqual(['MANDATE_REQUIRED'])
 
     const opened = await s.tool('start_task', {
@@ -66,7 +66,7 @@ describe('task budgets', () => {
 
 describe('the circuit breaker', () => {
   it('pauses the agent on the payment that would pass the rate, and pays nothing more', async () => {
-    await s.setPolicy({ maxPaymentsPerMinute: 2 })
+    s.setPolicy({ maxPaymentsPerMinute: 2 })
     api.quote = [offer({ amount: '100000' })]
     expect(await fetchPaid()).toContain(': executed.')
     expect(await fetchPaid()).toContain(': executed.')

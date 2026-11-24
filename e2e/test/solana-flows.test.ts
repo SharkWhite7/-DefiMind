@@ -11,7 +11,7 @@ let api: PaidApi
 beforeEach(async () => {
   s = await stack()
   api = await paidApi()
-  await s.setPolicy()
+  s.setPolicy()
 })
 
 afterEach(async () => {

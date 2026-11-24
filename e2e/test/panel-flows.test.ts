@@ -13,7 +13,7 @@ let api: PaidApi
 beforeEach(async () => {
   s = await stack({ panel: true })
   api = await paidApi()
-  await s.setPolicy()
+  s.setPolicy()
 })
 
 afterEach(async () => {

@@ -1,9 +1,8 @@
-import { isTestnet } from '@defimind/shared'
 import type { RegistrationResponseJSON } from '@simplewebauthn/server'
 import type { FastifyInstance } from 'fastify'
 import { revokeMandate } from '../db/mandates.js'
-import { loosened } from '../domain/loosen.js'
 import { countPasskeys } from '../db/passkeys.js'
+import { loosened } from '../domain/loosen.js'
 import { alert } from '../service/events.js'
 import * as repo from '../db/repo.js'
 import { openMandate } from '../service/mandates.js'
@@ -31,8 +30,6 @@ export function adminRoutes(
     databaseUrl: string
     passkeyRpId?: string
     passkeyOrigin?: string
-    /** A configured chain outside the testnets: the admin token then never loosens (CR-022). */
-    mainnet: boolean
     /** SETUP_CODE is set: only it may enrol the first passkey (CR-022). */
     setupCode: boolean
     publicAdmin?: boolean
@@ -41,15 +38,8 @@ export function adminRoutes(
   const { db, now } = deps
   const control = controls(deps, 'admin')
 
-  /**
-   * Refuses a loosening by the admin token once any passkey is enrolled, or on any chain outside
-   * the testnets even before then. Every refusal is audited and alerts the owner as an attack.
-   */
-  function guard(agentId: string, fields: string[], chains: string[]) {
-    const mainnet = setup.mainnet || chains.some((chain) => !isTestnet(chain))
-    if (countPasskeys(db) === 0 && !mainnet) {
-      return
-    }
+  /** Refuses a loosening by the admin token; audited, and the owner hears of it as an attack. */
+  function refuse(agentId: string, fields: string[]): never {
     repo.audit(
       db,
       { event: 'admin_loosen_refused', agentId, detail: { fields, via: 'admin' } },
@@ -76,7 +66,7 @@ export function adminRoutes(
       detail:
         'the admin token tried to enrol the first passkey; refused, the setup code is required',
     })
-    throw new HttpError(403, 'setup_code_required')
+    throw new HttpError(403, 'use_setup_code')
   }
 
   function passkeyAddress() {
@@ -146,12 +136,11 @@ export function adminRoutes(
 
     app.get('/chains', async (request) => ({ chains: await control.chains(request.log) }))
 
-    // A mandate lets an agent pay, so it falls under the same rule as a loosening (CR-022).
-    app.post('/mandates', async (request, reply) => {
-      const body = mandateRequest.parse(request.body)
-      guard(body.agentId, ['mandate'], control.existing(body.agentId).chains)
-      return mandateReply(reply, await openMandate(deps, body, true))
-    })
+    // A mandate lets an agent pay, so one opened with the admin token waits for the owner's
+    // approval in the panel, like an agent's own (CR-022).
+    app.post('/mandates', async (request, reply) =>
+      mandateReply(reply, await openMandate(deps, mandateRequest.parse(request.body), false)),
+    )
 
     app.post('/mandates/:id/revoke', async (request) => {
       const { id } = idParam.parse(request.params)
@@ -172,16 +161,15 @@ export function adminRoutes(
 
     app.get('/receipts', async (request) => control.receipts(request.query))
 
-    // CR-022: the admin token alone may not loosen once the owner has a passkey, nor ever where real
-    // money is: that takes the panel's passkey (CR-015), so a leaked admin token cannot widen what an
-    // agent may pay. A fresh testnet deployment keeps it, so setup scripts work before the panel.
+    // CR-022: the admin token alone only tightens. Anything loosened() counts takes the owner's
+    // passkey in the panel (CR-015), so a leaked admin token cannot widen what an agent may pay.
     app.put('/policy/:agentId', async (request) => {
       const { agentId } = agentIdParam.parse(request.params)
       const next = { agentId, ...policyBody.parse(request.body) }
       const before = control.existing(agentId)
       const fields = loosened(before, next)
       if (fields.length > 0) {
-        guard(agentId, fields, [...before.chains, ...next.chains])
+        refuse(agentId, fields)
       }
       return control.putPolicy(next)
     })
@@ -192,8 +180,8 @@ export function adminRoutes(
     // Resuming lets a stopped agent pay again.
     app.post('/resume', async (request) => {
       const { agentId } = agentIdParam.parse(request.body)
-      guard(agentId, ['paused'], control.existing(agentId).chains)
-      return control.setPaused(agentId, false)
+      control.existing(agentId)
+      refuse(agentId, ['paused'])
     })
 
     app.post('/kill', async (request) => control.kill(request.log))

@@ -1,4 +1,4 @@
-import { CHAINS, isTestnet } from '@defimind/shared'
+import { CHAINS } from '@defimind/shared'
 import { z } from 'zod'
 
 const secret = z.string().min(32, 'use at least 32 characters; generate with openssl rand -hex 32')
@@ -213,13 +213,6 @@ const settings = z
 export const configSchema = z.preprocess(defaults, settings)
 
 const LOOPBACK = /^(localhost|::1|127(\.\d{1,3}){3})$/
-
-/** Whether any chain this deployment runs is outside the testnets (CR-022). */
-export function onMainnet(c: Config): boolean {
-  return [c.SOLANA_CHAIN, c.BASE_CHAIN, c.ROBINHOOD_CHAIN].some(
-    (chain) => chain !== undefined && !isTestnet(chain),
-  )
-}
 
 /** One listener, beyond loopback, with the admin routes on it. */
 export function publicAdmin(c: {

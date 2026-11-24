@@ -3,18 +3,21 @@ import { formatUsd } from '../domain/amount.js'
 import { tilde } from '../domain/env.js'
 import { WizardError } from '../domain/errors.js'
 import { agentTokenFile, sshCreateAgent, type Setup } from '../domain/plan.js'
-import { createdAgent, policyResponse, presetPolicy, tokenFromScript } from '../domain/policy.js'
+import { createdAgent, presetPolicy, tokenFromScript } from '../domain/policy.js'
 import type { State } from '../domain/state.js'
 import { saveState, type Ctx } from './context.js'
 import { ADMIN_BASE } from './doctor.js'
 
-/** The first agent and its policy, through the admin API on the proxy. */
+/**
+ * The first agent, through the admin API on the proxy. It starts deny-all in shadow mode, and its
+ * rules are the owner's to set in the panel: the admin token only tightens a policy (CR-022), so a
+ * leaked one cannot open it.
+ */
 export async function firstAgent(ctx: Ctx, setup: Setup, state: State, token: string) {
   const { agentId } = setup.answers
-  const policy = presetPolicy(setup.answers)
   if (ctx.dry) {
     ctx.say(`  → POST ${ADMIN_BASE}/v1/admin/agents ${JSON.stringify({ agentId })}`)
-    ctx.say(`  → PUT ${ADMIN_BASE}/v1/admin/policy/${agentId} ${JSON.stringify(policy)}`)
+    suggestRules(ctx, setup)
     return
   }
   if (!state.done.includes('agent')) {
@@ -32,27 +35,20 @@ export async function firstAgent(ctx: Ctx, setup: Setup, state: State, token: st
     state.done.push('agent')
     await saveState(ctx, setup.paths, state)
   }
-  if (!state.done.includes('policy')) {
-    const response = await ctx.http.request('PUT', `${ADMIN_BASE}/v1/admin/policy/${agentId}`, {
-      token,
-      body: policy,
-    })
-    const saved = policyResponse.safeParse(response.json)
-    if (response.status !== 200 || !saved.success) {
-      throw new WizardError('ADMIN_API', `guard-core answered ${response.status} to the policy`)
-    }
-    if (saved.data.mode !== 'shadow') {
-      ctx.say('⚠️  This guard-core predates shadow mode (SPEC v0.6): the agent pays for real,')
-      ctx.say('   within the limits below. Update guard-core before you give it an API to pay.')
-    }
-    state.done.push('policy')
-    await saveState(ctx, setup.paths, state)
-  }
+  suggestRules(ctx, setup)
+}
+
+/** The preset, for the owner to set in the panel with the passkey. */
+function suggestRules(ctx: Ctx, setup: Setup) {
+  const policy = presetPolicy(setup.answers)
   ctx.say(
-    `Policy: ${formatUsd(BigInt(policy.perTxMax))} per payment, ${formatUsd(BigInt(policy.dailyMax))} a day, your approval from ${formatUsd(BigInt(policy.approvalThreshold))}.`,
+    `It may pay nothing yet. In the owner panel, open Agents → ${setup.answers.agentId} → Rules`,
   )
-  ctx.say("No API domain is allowed yet: add one to the agent's rules in the owner panel.")
-  ctx.say('It starts in shadow mode and signs nothing until you switch it to live there.')
+  ctx.say(
+    `and set: $${formatUsd(BigInt(policy.perTxMax))} per payment, $${formatUsd(BigInt(policy.dailyMax))} a day, your approval from $${formatUsd(BigInt(policy.approvalThreshold))},`,
+  )
+  ctx.say('then the API domains it may pay. It stays in shadow mode, signing nothing, until you')
+  ctx.say('switch it to live there.')
 }
 
 /** The new agent's token, or undefined when an agent of that name exists already. */

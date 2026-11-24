@@ -17,6 +17,9 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { pino } from 'pino'
 import { SOLANA, type Net } from './paid-api.js'
 import { telegram } from './telegram.js'
+// The admin token only tightens (CR-022), so the suite writes its policies where the panel's
+// passkey-checked route would: straight into the database.
+import { putPolicy } from '../../../packages/guard-core/src/db/repo.js'
 
 const ADMIN_TOKEN = 'a'.repeat(64)
 const BOT_TOKEN = 'b'.repeat(64)
@@ -131,7 +134,7 @@ export async function stack(options: { chain?: StubChain; net?: Net; panel?: boo
     telegram: tg,
     admin,
     setPolicy: (overrides: Partial<Policy> = {}) =>
-      admin('PUT', `/v1/admin/policy/${AGENT}`, policy(overrides, net)),
+      putPolicy(db, { agentId: AGENT, ...policy(overrides, net) }, clock.now.toISOString()),
     /** Calls an MCP tool the way an agent would, and returns the text it reads back. */
     async tool(name: string, args: Record<string, unknown> = {}) {
       const result = (await client.callTool({ name, arguments: args })) as CallToolResult

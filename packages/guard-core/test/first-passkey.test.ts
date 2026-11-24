@@ -19,7 +19,7 @@ describe('the first passkey with SETUP_CODE set (CR-022)', () => {
       const h = await harness({ env: { SETUP_CODE } })
       const res = await admin(h, url)
       expect(res.statusCode).toBe(403)
-      expect(res.json()).toEqual({ error: 'setup_code_required' })
+      expect(res.json()).toEqual({ error: 'use_setup_code' })
       expect(h.auditEvents()).toContain('admin_enrol_refused')
       expect(h.bot.alert).toHaveBeenCalledWith(
         expect.objectContaining({ kind: 'admin_loosen_refused' }),
@@ -31,7 +31,7 @@ describe('the first passkey with SETUP_CODE set (CR-022)', () => {
     const h = await harness({ env: { SETUP_CODE } })
     const device = softAuthenticator(PASSKEY_RP.id, PASSKEY_RP.origin)
     const res = await admin(h, '/v1/admin/passkeys', { response: device.register('AAAA') })
-    expect(res.json()).toEqual({ error: 'setup_code_required' })
+    expect(res.json()).toEqual({ error: 'use_setup_code' })
   })
 
   it('lets the setup code enrol the first one', async () => {

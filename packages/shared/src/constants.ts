@@ -17,17 +17,6 @@ export const CHAINS = {
 
 export type SupportedChain = (typeof CHAINS)[keyof typeof CHAINS]
 
-/** CR-022. Chains where the admin token may still loosen a policy before the first passkey. */
-export const TESTNET_CHAINS: readonly ChainId[] = [
-  CHAINS.solanaDevnet,
-  CHAINS.baseSepolia,
-  CHAINS.robinhoodTestnet,
-]
-
-export function isTestnet(chain: ChainId): boolean {
-  return TESTNET_CHAINS.includes(chain)
-}
-
 export function isEvm(chain: ChainId): boolean {
   return chain.startsWith('eip155:')
 }
