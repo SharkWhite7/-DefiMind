@@ -8,6 +8,7 @@ import {
   type Hash,
   type PublicClient,
 } from 'viem'
+import type { Control } from '../ChainAdapter.js'
 import { chainOf, type EvmConfig } from './config.js'
 
 /** Safe's reset period, one day, as the Allowance Module counts it: minutes. */
@@ -25,7 +26,11 @@ export const allowanceModuleAbi = parseAbi([
   'function delegates(address safe, uint48 key) view returns (address delegate, uint48 prev, uint48 next)',
 ])
 
-const safeAbi = parseAbi(['function enableModule(address module)'])
+const safeAbi = parseAbi([
+  'function enableModule(address module)',
+  'function getThreshold() view returns (uint256)',
+  'function getOwners() view returns (address[])',
+])
 const erc20Abi = parseAbi(['function decimals() view returns (uint8)'])
 
 export function publicClient(config: EvmConfig): PublicClient {
@@ -52,6 +57,14 @@ export async function requireDecimals(client: PublicClient, token: Address, deci
   if (actual !== decimals) {
     throw new Error(`token ${token} has ${actual} decimals, expected ${decimals}`)
   }
+}
+
+export async function readControl(client: PublicClient, safe: Address): Promise<Control> {
+  const [threshold, owners] = await Promise.all([
+    client.readContract({ address: safe, abi: safeAbi, functionName: 'getThreshold' }),
+    client.readContract({ address: safe, abi: safeAbi, functionName: 'getOwners' }),
+  ])
+  return { threshold: Number(threshold), signers: owners.length }
 }
 
 export function requireCap(amount: bigint): bigint {

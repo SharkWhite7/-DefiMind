@@ -30,6 +30,7 @@ import {
   type KillTx,
   type SimulationOutcome,
 } from '../ChainAdapter.js'
+import { squadsControl } from './control.js'
 import { hotWalletGas } from './gas.js'
 import { inspectTransfer } from './inspect.js'
 import { simulateMessage, topUpFor } from './simulate.js'
@@ -193,10 +194,15 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
 
     async getVault() {
       const [vault] = multisig.getVaultPda({ multisigPda, index: VAULT_INDEX })
+      const [balance, account] = await Promise.all([
+        balanceOf(mint, vault),
+        multisig.accounts.Multisig.fromAccountAddress(connection, multisigPda),
+      ])
       return {
         address: vault.toBase58(),
         token: mint.toBase58(),
-        balance: await balanceOf(mint, vault),
+        balance,
+        control: squadsControl(account),
       }
     },
 

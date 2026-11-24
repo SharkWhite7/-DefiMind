@@ -58,18 +58,48 @@ describe('getHotWalletBalance', () => {
 })
 
 describe('getVault', () => {
+  const { Permission, Permissions } = multisig.types
+  const member = (...permissions: multisig.types.Permission[]) => ({
+    key: Keypair.generate().publicKey,
+    permissions: Permissions.fromPermissions(permissions),
+  })
+
   it('is the Squads vault at index 0, with its USDC balance', async () => {
+    plantMultisig(c, Keypair.generate().publicKey)
     const [vault] = multisig.getVaultPda({ multisigPda: c.multisigPda, index: 0 })
     c.fund(vault, 25n * USDC)
     expect(await c.adapter.getVault()).toEqual({
       address: vault.toBase58(),
       token: c.mint.toBase58(),
       balance: '25000000',
+      control: { threshold: 1, signers: 1 },
     })
   })
 
   it('holds nothing before the first deposit', async () => {
+    plantMultisig(c, Keypair.generate().publicKey)
     expect((await c.adapter.getVault()).balance).toBe('0')
+  })
+
+  it('counts a controlled multisig as its config authority alone, whatever its threshold', async () => {
+    const voters = [Permission.Vote, Permission.Vote, Permission.Vote].map((p) => member(p))
+    plantMultisig(c, Keypair.generate().publicKey, { threshold: 2, members: voters })
+    expect((await c.adapter.getVault()).control).toEqual({ threshold: 1, signers: 1 })
+  })
+
+  it("reads an autonomous multisig's threshold out of the members who can vote", async () => {
+    const members = [
+      member(Permission.Initiate, Permission.Vote, Permission.Execute),
+      member(Permission.Vote),
+      member(Permission.Vote),
+      member(Permission.Initiate, Permission.Execute),
+    ]
+    plantMultisig(c, PublicKey.default, { threshold: 2, members })
+    expect((await c.adapter.getVault()).control).toEqual({ threshold: 2, signers: 3 })
+  })
+
+  it('fails without the multisig, rather than report no control', async () => {
+    await expect(c.adapter.getVault()).rejects.toThrow()
   })
 })
 
