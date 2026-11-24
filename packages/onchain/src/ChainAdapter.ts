@@ -19,6 +19,18 @@ export interface Control {
   signers: number
 }
 
+/** CR-025: what the chain says about a token, before anyone allows it. Facts, never a verdict. */
+export interface TokenRiskFacts {
+  chain: ChainId
+  mint: Address
+  decimals: number
+  freezeAuthority: boolean
+  mintAuthority: boolean
+  extensions: string[]
+  risks: RejectCode[]
+  exit: { amountUsd: Amount; priceImpactBps: number } | null
+}
+
 export interface Vault {
   address: Address
   token: Address
@@ -81,6 +93,8 @@ export interface ChainAdapter {
    * none zero. A swap lands at its own price, never exactly the test run's.
    */
   getLandedChanges?(txId: TxId): Promise<BalanceChange[]>
+  /** CR-025: a token's mint and exit, read for the owner's risk card. Facts only, never a verdict. */
+  tokenRisk?(mint: Address): Promise<TokenRiskFacts>
 
   buildKillTx(): Promise<KillTx>
 
