@@ -41,10 +41,10 @@ describe('POST /v1/admin/kill', () => {
 })
 
 describe('audit of admin actions', () => {
-  it('records a pause, and the resume it refuses (CR-022)', async () => {
+  it('records pause and resume', async () => {
     await admin('/v1/admin/pause', { agentId: 'agent-1' })
     await admin('/v1/admin/resume', { agentId: 'agent-1' })
-    expect(h.auditEvents()).toEqual(['paused', 'admin_loosen_refused'])
+    expect(h.auditEvents()).toEqual(['paused', 'resumed'])
   })
 })
 

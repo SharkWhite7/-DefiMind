@@ -169,8 +169,8 @@ describe('agent routes', () => {
 })
 
 describe('admin routes', () => {
-  it('reads and tightens a policy', async () => {
-    const updated = { ...policy, perTxMax: '3000000' }
+  it('reads and replaces a policy', async () => {
+    const updated = { ...policy, perTxMax: '7000000' }
     const put = await app.inject({
       method: 'PUT',
       url: '/v1/admin/policy/agent-1',
@@ -184,7 +184,7 @@ describe('admin routes', () => {
       url: '/v1/admin/policy/agent-1',
       headers: auth(ADMIN_TOKEN),
     })
-    expect(get.json().perTxMax).toBe('3000000')
+    expect(get.json().perTxMax).toBe('7000000')
   })
 
   it('refuses a policy with a non-atomic limit', async () => {
@@ -197,7 +197,7 @@ describe('admin routes', () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it('pauses one agent, and leaves the resume to the panel (CR-022)', async () => {
+  it('pauses and resumes one agent', async () => {
     await app.inject({
       method: 'POST',
       url: '/v1/admin/pause',
@@ -211,20 +211,18 @@ describe('admin routes', () => {
     })
     expect(paused.json().paused).toBe(true)
 
-    const resume = await app.inject({
+    await app.inject({
       method: 'POST',
       url: '/v1/admin/resume',
       headers: auth(ADMIN_TOKEN),
       payload: { agentId: 'agent-1' },
     })
-    expect(resume.statusCode).toBe(403)
-    expect(resume.json()).toEqual({ error: 'loosen_in_panel' })
-    const still = await app.inject({
+    const resumed = await app.inject({
       method: 'GET',
       url: '/v1/agent/budget/agent-1',
       headers: auth(AGENT_TOKEN),
     })
-    expect(still.json().paused).toBe(true)
+    expect(resumed.json().paused).toBe(false)
   })
 
   it('reports 404 when pausing an agent that does not exist', async () => {
