@@ -93,8 +93,8 @@ is lost: the panel's push goes out first.
 ## ⬜ HUMAN-33 — Verify the one-click deploy on Render (CR-019) — risk accepted, run optional
 
 On 2026-11-20 the owner chose to ship the Deploy to Render button without a verified run, in his
-words: "o render tá testado vamos usar mesmo assim eu aceito o risco ja deixa implementado se der
-algum problema nos testamos novamente". The button is in the README (#73), and
+words: "Render is tested, let's use it anyway, I accept the risk; ship it, and if a problem comes up
+we test again". The button is in the README (#73), and
 `docs/getting-started.md` says the route is new and asks people to report a failing step. No
 complete run on Render has been recorded yet.
 

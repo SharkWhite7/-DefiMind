@@ -1,16 +1,17 @@
 import type { ChainAdapter, Vault } from '@defimind/onchain'
 import type { Amount, ChainId, DoctorCheck } from '@defimind/shared'
 import { isSvm, usdSymbol } from '@defimind/shared'
-import { readdir, stat } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import { dbFile, type Db } from '../db/client.js'
+import { readdir, readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+import type { Db } from '../db/client.js'
 import * as repo from '../db/repo.js'
 import { auditLog } from '../db/schema.js'
 import { formatDollars, parseAmount } from '../domain/amount.js'
 import { chainName } from '../domain/chains.js'
+import { BACKUP_NAME, backupsDir, UPLOADED } from './backup.js'
 import type { Wallets } from './wallets.js'
 
-const BACKUP_MAX_AGE_MS = 2 * 86_400_000
+const BACKUP_MAX_AGE_MS = 26 * 3_600_000
 const READ_TIMEOUT_MS = 5_000
 
 export interface DoctorDeps {
@@ -27,6 +28,8 @@ export interface DoctorDeps {
   hosted?: boolean
   /** ALLOW_PUBLIC_ADMIN let the admin routes face every interface (CR-022). */
   publicAdmin?: boolean
+  /** A bucket is set for the backups: the check names the last upload. */
+  bucket?: boolean
   wallets?: Wallets | undefined
 }
 
@@ -151,12 +154,12 @@ function vaultControl(
     ? {
         status: 'warn',
         message: `One key, the multisig's config authority, can empty the vault on ${chain}.`,
-        fix: 'Keep the config authority on a hardware wallet, such as a Ledger connected through Phantom.',
+        fix: 'For larger balances, hand the vault to a hardware wallet, such as a Ledger connected through Phantom. It must replace the current key both as config authority and as member, or the current key can still empty the vault.',
       }
     : {
         status: 'warn',
         message: `One key can empty the vault on ${chain}.`,
-        fix: 'Add another owner to the Safe, or make it a 2-of-3, so no single key can move its funds.',
+        fix: 'For larger balances, make the Safe a 2-of-3, or replace its owner with a hardware wallet. Another owner added at threshold 1 does not help: either key could still move the funds alone.',
       }
 }
 
@@ -238,38 +241,45 @@ const PUBLIC_ADMIN: DoctorCheck = {
 }
 
 async function backup(deps: DoctorDeps): Promise<DoctorCheck> {
-  const file = dbFile(deps.databaseUrl)
   const none: DoctorCheck = {
     id: 'backup',
     status: 'warn',
     message: 'No database backup was found.',
     fix: deps.hosted
-      ? "Turn on your host's daily disk snapshots, or run the database backup daily from its shell."
-      : 'Run the database backup, and schedule it daily.',
+      ? "Check that the data disk is mounted and writable, or turn on your host's disk snapshots."
+      : 'Check that the data volume is writable, or run the database backup by hand.',
   }
-  if (file === ':memory:') {
+  const dir = backupsDir(deps.databaseUrl)
+  const names = dir === undefined ? [] : await readdir(dir).catch(() => [])
+  const backups = names.filter((name) => BACKUP_NAME.test(name))
+  if (dir === undefined || backups.length === 0) {
     return none
   }
-  const dir = join(dirname(file), 'backups')
-  let newest = 0
-  try {
-    for (const name of await readdir(dir)) {
-      newest = Math.max(newest, (await stat(join(dir, name))).mtimeMs)
-    }
-  } catch {
-    return none
+  const age = async (name: string) => deps.now().getTime() - (await stat(join(dir, name))).mtimeMs
+  const newest = Math.min(...(await Promise.all(backups.map(age))))
+  const uploaded = deps.bucket ? await lastUpload(join(dir, UPLOADED)) : undefined
+  const stale = newest > BACKUP_MAX_AGE_MS
+  const unsent =
+    deps.bucket === true &&
+    (uploaded === undefined || deps.now().getTime() - uploaded.getTime() > BACKUP_MAX_AGE_MS)
+  const upload = !deps.bucket
+    ? ''
+    : uploaded === undefined
+      ? ' None has been uploaded to the bucket yet.'
+      : ` The last upload to the bucket was at ${uploaded.toISOString()}.`
+  return {
+    id: 'backup',
+    status: stale || unsent ? 'warn' : 'ok',
+    message: `${stale ? 'The newest database backup is more than 26 hours old.' : 'A database backup from the last 26 hours exists.'}${upload}`,
+    ...(stale || unsent ? { fix: 'Check the log for "database backup failed".' } : {}),
   }
-  if (newest === 0) {
-    return none
-  }
-  return deps.now().getTime() - newest > BACKUP_MAX_AGE_MS
-    ? {
-        id: 'backup',
-        status: 'warn',
-        message: 'The newest database backup is more than two days old.',
-        fix: deps.hosted
-          ? "Check your host's disk snapshots, or run the database backup from its shell."
-          : 'Run the database backup, and check the daily schedule.',
-      }
-    : { id: 'backup', status: 'ok', message: 'A database backup from the last two days exists.' }
+}
+
+/** The marker holds one ISO time; anything else, or more, counts as no upload. */
+async function lastUpload(file: string): Promise<Date | undefined> {
+  const text = await readFile(file, 'utf8').catch(() => '')
+  const at = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(text)
+    ? new Date(text)
+    : undefined
+  return at === undefined || Number.isNaN(at.getTime()) ? undefined : at
 }

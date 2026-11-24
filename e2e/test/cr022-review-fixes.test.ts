@@ -1,6 +1,7 @@
 import { loadConfig } from '@defimind/guard-core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { stack, type Stack } from './support/stack.js'
+import { offer, paidApi, type PaidApi } from './support/paid-api.js'
+import { intentIdIn, stack, type Stack } from './support/stack.js'
 
 /**
  * CR-022, the fixes from an independent review, end to end: guard-core, the bot and its Telegram
@@ -94,5 +95,36 @@ describe('one listener never serves the admin API publicly by accident (MEDIUM-1
     expect(() =>
       loadConfig({ ...ADMIN_ENV, HOST: '0.0.0.0', ALLOW_PUBLIC_ADMIN: 'true' }),
     ).not.toThrow()
+  })
+})
+
+describe('an approval pays only the request the owner saw (LOW-1)', () => {
+  let api: PaidApi
+
+  beforeEach(async () => {
+    api = await paidApi()
+    api.quote = [offer({ amount: '3000000' })]
+  })
+
+  afterEach(async () => {
+    await api.close()
+  })
+
+  it('is not redeemed by another path, query or method, and is by the same request', async () => {
+    const id = intentIdIn(await s.tool('paid_fetch', { url: api.url }))
+    await vi.waitFor(() => expect(s.telegram.approvalFor(id)).toBeDefined())
+    await s.telegram.press(id, 'approve')
+
+    const other = await s.tool('paid_fetch', { url: `${api.url}?all=1` })
+    expect(other).toContain(': pending_approval.')
+    expect(intentIdIn(other)).not.toBe(id)
+    expect(await s.tool('paid_fetch', { url: api.url, method: 'POST' })).toContain(
+      ': pending_approval.',
+    )
+    expect(api.payments).toHaveLength(0)
+
+    expect(await s.tool('paid_fetch', { url: api.url })).toContain(': executed.')
+    expect(api.payments).toHaveLength(1)
+    expect((await s.intent(id)).status).toBe('executed')
   })
 })

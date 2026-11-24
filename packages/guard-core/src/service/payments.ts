@@ -151,7 +151,8 @@ export async function clear(
   }
 
   if (shadow) {
-    return { cleared: false, intent: shadowed(deps, intent, flags) }
+    const asks = verdict.decision === 'needs_approval' || flags.length > 0
+    return { cleared: false, intent: shadowed(deps, intent, flags, asks) }
   }
 
   if ((verdict.decision === 'needs_approval' || flags.length > 0) && !ownerApproved) {
@@ -179,7 +180,16 @@ export async function clear(
 }
 
 /** Shadow mode: everything up to the signature ran and passed. Nothing is sent or told to the bot. */
-export function shadowed(deps: PaymentDeps, intent: PayIntent, flags: ApprovalFlag[]): PayIntent {
+/**
+ * Records what live would have done (CR-024): `wouldAsk` and the flags behind it, so the owner sees
+ * "Live would have asked you" before switching the agent live.
+ */
+export function shadowed(
+  deps: PaymentDeps,
+  intent: PayIntent,
+  flags: ApprovalFlag[],
+  wouldAsk = flags.length > 0,
+): PayIntent {
   const done: PayIntent = { ...intent, status: 'shadowed', rejectReasons: [] }
   repo.saveIntent(deps.db, done)
   repo.audit(
@@ -192,6 +202,7 @@ export function shadowed(deps: PaymentDeps, intent: PayIntent, flags: ApprovalFl
         chain: intent.chain,
         amount: intent.amount,
         ...(flags.length > 0 ? { flags } : {}),
+        wouldAsk,
       },
     },
     deps.now(),

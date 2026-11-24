@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   checkFacts,
+  dollars,
   identicon,
   listed,
   onchainFacts,
@@ -58,8 +59,8 @@ describe('tokens', () => {
     const venue = {
       verified: true,
       holders: 812000,
-      liquidityUsd: '41250000000000',
-      organicScore: 91,
+      liquidityUsd: '41250000',
+      organicScore: 91.4,
       createdAt: '2024-01-31T00:00:00Z',
     }
     expect(venueFacts({ ...risk, venue })).toEqual([
@@ -69,6 +70,11 @@ describe('tokens', () => {
       'Organic score 91 of 100.',
       'Listed since 2024-01-31.',
     ])
+  })
+
+  it("shows the venue's decimal dollars as dollars", () => {
+    expect(dollars('41250000.5')).toBe('$41,250,000.50')
+    expect(dollars('0')).toBe('$0.00')
   })
 
   it('lists verified tokens first, unverified only when asked', () => {

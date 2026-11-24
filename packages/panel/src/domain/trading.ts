@@ -116,6 +116,8 @@ export function swapTitle(intent: Swapped): string {
 
 /** What each approval flag means, said plainly: why this swap waits for the owner. */
 export const FLAGS: Record<string, string> = {
+  RECIPIENT_CHANGED: 'This API asks to pay a different recipient, chain or token than last time.',
+  PRICE_JUMP: 'This API asks for much more than its last payment.',
   NEW_TOKEN: 'First buy of this token by any of your agents.',
   MINT_AUTHORITY: 'The token can still be minted: its supply is not fixed.',
 }

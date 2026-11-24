@@ -40,6 +40,7 @@ const ERRORS: Record<string, string> = {
   vault_not_ours:
     "That vault's limit does not name this DefiMind. Check the address, or set the daily limit first.",
   setup_done: 'This DefiMind is already set up. Sign in with your passkey.',
+  no_vault: 'This chain has no vault yet. Set one up first, in the guided setup.',
   set_by_env: "That setting comes from your host's configuration. Change it there, not here.",
 }
 

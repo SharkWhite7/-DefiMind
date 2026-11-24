@@ -392,12 +392,33 @@ policy without `trading` trades nothing, and an adapter without `quoteSwap` refu
 - **Loosening needs the step-up.** Turning trading on, a new venue or token, `allowAnyToken`, or a
   raised limit is a loosening, so it needs the passkey step-up (CR-015). The bot can only tighten.
 
+### Owner trading tools (CR-025)
+
+Every route needs the owner's session. These routes serve Solana mainnet through Jupiter only.
+
+- `GET /v1/owner/tokens/search?q=&chain=` proxies Jupiter's `tokens/v2` search.
+  - Limited to 30 a minute per session, and each query is cached for 60 seconds.
+  - The answer is untrusted: it is validated, strings are cut short, and every field outside
+    `TokenInfo` is dropped, images included. Verified tokens come first.
+- `GET /v1/owner/tokens/:mint/risk?chain=` returns the adapter's `tokenRisk` facts, read onchain.
+  guard-core adds the approval flags (`NEW_TOKEN`, `MINT_AUTHORITY`) and Jupiter's own claims,
+  labelled as `venue`.
+- `POST /v1/owner/quote` returns the quote the agent would get under its policy. It decides and
+  records nothing.
+- `POST /v1/owner/trade` always needs the step-up `manual_trade` over
+  `{ agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut }`. It runs the agent's own swap
+  pipeline and wallet, with the passkey as the owner's approval, so nothing waits.
+  - A fresh quote below the owner's `minAmountOut` is `SLIPPAGE_TOO_HIGH`.
+  - A paused agent is refused, and an agent in shadow is shadowed.
+  - It is audited as `owner_trade` and counts in the agent's day.
+
 ### Agent wallets (CR-022)
 
 Opt-in, per agent and chain. `POST /v1/owner/agents/:id/wallets { chain, assertion }` (step-up
 `agent_wallet` over `{ agentId, chain }`) makes the agent's own hot wallet under
 `KEYS_DIR/agents/<agentId>/<chain>` (0600), or takes the file `AGENT_WALLET_<AGENT>_<CHAIN>_FILE`
-names, for example `AGENT_WALLET_FLY_AGENT_SOLANA_MAINNET_FILE`. A second call returns the same
+names, for example `AGENT_WALLET_FLY_AGENT_SOLANA_MAINNET_FILE`. The variable is read only for an id
+in lowercase words joined by hyphens, so that two ids can never share one. A second call returns the same
 wallet. It answers the wallet's address, its gas and the `/sign` add-limit page that names it.
 
 - **Pending, then active.** Until guard-core reads the wallet's limit onchain, the agent keeps paying
@@ -641,6 +662,17 @@ to start otherwise. Devnet and local runs may keep the default `./data/guard.db`
 `pnpm --filter @defimind/guard-core db:backup [destination]` copies the live database with SQLite's
 online backup API. It is safe while guard-core is running and never overwrites an existing file.
 With no destination, the copy goes to `backups/guard-<time>.db` next to the database.
+
+**Daily backup (CR-024).** guard-core backs itself up every day at `BACKUP_HOUR_UTC` (default 3),
+to `backups/guard-<UTC date>.db` beside the database (0600). It keeps the newest 14, and a restart
+on the same day keeps the day's first. A failure is logged as `database backup failed` and tried
+again the next day, and the owner gets a `backup_failed` alert, which says whether the backup
+itself or only its upload failed. With `BACKUP_BUCKET_URL` (an S3-compatible bucket, path-style:
+`https://<endpoint>/<bucket>[/<prefix>]`), each backup is also uploaded as `<name>.enc`, sealed with
+AES-256-GCM under `BACKUP_ENCRYPTION_KEY`: 12-byte IV, then the ciphertext, then the 16-byte tag.
+The bucket needs `BACKUP_ACCESS_KEY_ID`, `BACKUP_SECRET_ACCESS_KEY` and the encryption key, or the
+start is refused; `BACKUP_REGION` defaults to `auto`. Keys and URLs are never logged. The doctor
+warns when the newest backup, or with a bucket the last upload, is over 26 hours old.
 
 Env vars are documented in [`.env.example`](./.env.example).
 
