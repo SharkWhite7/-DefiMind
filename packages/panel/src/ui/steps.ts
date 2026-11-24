@@ -65,7 +65,7 @@ async function vault(ctx: Context): Promise<Child[]> {
       'Open the signing page with Phantom and approve. It creates your vault and shows its address.',
     ),
     ...walletLinks(signLink(location.origin, chain, { action: 'create' }), 'Create'),
-    ...ownerKeyNote(),
+    ...ownerKeyNote(chain),
     el('label', { for: 'vault' }, `Your vault address on ${chainName(chain)}`),
     input,
     button(

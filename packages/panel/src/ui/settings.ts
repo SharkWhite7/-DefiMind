@@ -89,7 +89,7 @@ export async function settings(ctx: Context): Screen {
   return [
     el('h1', {}, 'Settings'),
     chainsCard(ctx, chains),
-    chains.length > 0 && ownerKeyCard(),
+    chains.length > 0 && ownerKeyCard(chains.map((c) => c.chain)),
     card(el('h2', {}, 'Notifications'), pushSwitch(ctx, push)),
     card(
       el('h2', {}, 'Passkeys'),
