@@ -176,6 +176,7 @@ export const ownerSettings = z.object({
 
 /** CR-021. The step-up is over the body {}: Close has nothing to choose. */
 export const ownerClose = z.object({ assertion: webAuthnResponse.optional() })
+export const ownerAgentWallet = z.object({ chain: caip2, assertion: webAuthnResponse.optional() })
 
 export const ownerSetup = z.object({ setupCode: z.string().min(1).max(256) })
 
@@ -196,6 +197,7 @@ const OWNER_ACTIONS = [
   'create_agent',
   'change_settings',
   'close_positions',
+  'agent_wallet',
 ] as const
 
 /** CR-012. `body` is hashed as sent, so it is only bounded here, never reshaped. */

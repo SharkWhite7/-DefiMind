@@ -1,5 +1,6 @@
 import type { ChainAdapter } from '@defimind/onchain'
 import type { PayIntent, SimulationResult } from '@defimind/shared'
+import { listWallets } from '../db/wallets.js'
 import { applyTrade, capPositions } from '../db/trades.js'
 import { parseAmount } from '../domain/amount.js'
 import { net } from '../domain/simulation.js'
@@ -15,6 +16,11 @@ async function reconcile(
   intent: PayIntent,
   token: string,
 ) {
+  // With an agent's own wallet on the chain (CR-022) a token can sit in several wallets, and one
+  // wallet's balance says nothing about the others': the booking then stands as simulated.
+  if (listWallets(deps.db).some((w) => w.chain === intent.chain)) {
+    return
+  }
   try {
     const held = (await adapter.getPositions?.())?.find((p) => p.token === token)
     if (adapter.getPositions !== undefined) {

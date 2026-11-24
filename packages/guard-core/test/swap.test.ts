@@ -3,6 +3,7 @@ import type { PayIntent, SwapQuote, TradingPolicy } from '@defimind/shared'
 import { describe, expect, it } from 'vitest'
 import { StubChain } from '../src/adapters/stub.js'
 import { getPosition } from '../src/db/trades.js'
+import { addWallet } from '../src/db/wallets.js'
 import { CHAIN, harness, MINT as USDC, NOW } from './harness.js'
 import { signedIn } from './owner.js'
 
@@ -196,6 +197,15 @@ describe('swaps (CR-021)', () => {
     chain.held.set(BONK, 0n)
     await h.agent('POST', '/v1/agent/swap', sell('1000000'))
     expect(getPosition(h.db, 'agent-1', CHAIN, BONK)).toEqual({ amount: 0n, cost: 0n })
+  })
+
+  it('leaves positions alone on a chain where an agent has its own wallet (CR-022)', async () => {
+    const { h, chain } = await setup()
+    await bought(h)
+    addWallet(h.db, { agentId: 'agent-1', chain: CHAIN, address: 'own' }, NOW)
+    chain.held.set(BONK, 0n)
+    await h.agent('POST', '/v1/agent/swap', sell('1000000'))
+    expect(getPosition(h.db, 'agent-1', CHAIN, BONK).amount).toBe(994_000_000n)
   })
 
   it('tops the hot wallet up for a buy before the test run', async () => {

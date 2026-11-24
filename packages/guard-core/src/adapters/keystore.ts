@@ -54,7 +54,7 @@ export async function ensureKey(dir: string, name: string, kind: Kind): Promise<
   return path
 }
 
-function slug(chain: ChainId): string {
+export function slug(chain: ChainId): string {
   const name = Object.entries(CHAINS).find(([, id]) => id === chain)?.[0] ?? chain
   return name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`).replace(/[^a-z0-9-]/g, '-')
 }
