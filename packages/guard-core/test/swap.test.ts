@@ -1,7 +1,9 @@
 import type { TradingPolicy } from '@defimind/shared'
 import { describe, expect, it } from 'vitest'
-import { getPosition } from '../src/db/trades.js'
-import { addWallet } from '../src/db/wallets.js'
+import { schema } from '../src/db/client.js'
+import { applyTrade, getPosition } from '../src/db/trades.js'
+import { activateWallet, addWallet } from '../src/db/wallets.js'
+import { hashToken } from '../src/domain/auth.js'
 import { CHAIN, harness, MINT as USDC, NOW, wouldHave } from './harness.js'
 import { signedIn } from './owner.js'
 import { BONK, trading, Venue } from './venue.js'
@@ -271,6 +273,30 @@ describe('the owner Close (CR-021)', () => {
       expect.objectContaining({ kind: 'swap', token: BONK, status: 'executed' }),
     ])
     expect(getPosition(h.db, 'agent-1', CHAIN, BONK)).toEqual({ amount: 0n, cost: 0n })
+  })
+
+  it("sells the shared wallet's tokens as an agent that holds them there (CR-022)", async () => {
+    const { h, chain } = await setup()
+    const owner = await bought(h)
+    h.db
+      .insert(schema.agents)
+      .values({
+        id: 'agent-2',
+        name: 'agent-2',
+        tokenHash: hashToken('b'.repeat(40)),
+        createdAt: NOW.toISOString(),
+      })
+      .run()
+    addWallet(h.db, { agentId: 'agent-2', chain: CHAIN, address: 'own' }, NOW)
+    activateWallet(h.db, 'agent-2', CHAIN)
+    const theirs = { chain: CHAIN, token: BONK, amount: 2_000_000_000n, cost: 1n, decimals: 5 }
+    applyTrade(h.db, { agentId: 'agent-2', side: 'buy', ...theirs }, NOW)
+    chain.held.set(BONK, 995_000_000n)
+    const res = await owner.call('POST', '/v1/owner/positions/close', {
+      assertion: await owner.stepUp('close_positions', {}),
+    })
+    expect(res.json().intents).toEqual([expect.objectContaining({ agentId: 'agent-1' })])
+    expect(getPosition(h.db, 'agent-2', CHAIN, BONK).amount).toBe(2_000_000_000n)
   })
 
   it('sells even when the policy requires mandates: Close is the owner own action', async () => {
