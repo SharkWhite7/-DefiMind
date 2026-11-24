@@ -37,8 +37,9 @@ export function walletsMock(origin: () => string) {
         pausedAgents: 1,
         ownerTransactions: state.wallets.map((w) => ({
           chain: w.chain,
-          description: `Remove the limit of ${agentId}'s wallet.`,
+          description: `${agentId}'s own wallet: Remove the limit of ${agentId}'s wallet.`,
           payload: { to: w.address },
+          wallet: { agentId, address: w.address },
         })),
       })
       return true
