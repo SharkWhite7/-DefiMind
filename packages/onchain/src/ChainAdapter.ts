@@ -9,6 +9,7 @@ import type {
   RejectCode,
   SimulationResult,
   SwapQuote,
+  TokenRisk,
   TxId,
 } from '@defimind/shared'
 import type { PaymentRequirements, SchemeNetworkClient } from '@x402/core/types'
@@ -18,6 +19,9 @@ export interface Control {
   threshold: number
   signers: number
 }
+
+/** CR-025: what the chain says about a token, before anyone allows it. Facts, never a verdict. */
+export type TokenRiskFacts = Omit<TokenRisk, 'venue' | 'flags'>
 
 export interface Vault {
   address: Address
@@ -81,6 +85,8 @@ export interface ChainAdapter {
    * none zero. A swap lands at its own price, never exactly the test run's.
    */
   getLandedChanges?(txId: TxId): Promise<BalanceChange[]>
+  /** CR-025: a token's mint and exit, read for the owner's risk card. Facts only, never a verdict. */
+  tokenRisk?(mint: Address): Promise<TokenRiskFacts>
 
   buildKillTx(): Promise<KillTx>
 

@@ -2,6 +2,7 @@ import type { Amount, BudgetView, ChainId, Policy } from '@defimind/shared'
 import { activeMandates } from '../db/mandates.js'
 import * as repo from '../db/repo.js'
 import type { PaymentDeps } from './payments.js'
+import { adapterFor } from './wallets.js'
 
 /**
  * `chains` is what guard-core runs intersected with what this agent's policy allows (CR-006): an
@@ -20,17 +21,17 @@ export async function budget(deps: PaymentDeps, policy: Policy): Promise<BudgetV
     mandates: activeMandates(deps.db, policy.agentId, deps.now()),
     dailyMax: policy.dailyMax,
     perTxMax: policy.perTxMax,
-    hotWalletBalances: await hotWalletBalances(deps, policy.chains),
+    hotWalletBalances: await hotWalletBalances(deps, policy.agentId, policy.chains),
     paused: policy.paused,
   }
 }
 
 /** USDC per chain. A chain that cannot answer is left out rather than reported as empty. */
-async function hotWalletBalances(deps: PaymentDeps, chains: ChainId[]) {
+async function hotWalletBalances(deps: PaymentDeps, agentId: string, chains: ChainId[]) {
   const balances: Record<ChainId, Amount> = {}
   await Promise.all(
     chains.map(async (chain) => {
-      const adapter = deps.chains.get(chain)
+      const adapter = adapterFor(deps, agentId, chain)
       const usdc = deps.usdc.get(chain)
       if (adapter === undefined || usdc === undefined) {
         return

@@ -39,6 +39,7 @@ import { confirm, connect, findSpendingLimit, spendingLimitPda, VAULT_INDEX } fr
 import { useSpendingLimit } from './draw.js'
 import { expectedTransfer, transferInstructions, type Payment } from './transfer.js'
 import { jupiter, type Venue } from './swap/jupiter.js'
+import { tokenRisk } from './swap/risk.js'
 import { swaps } from './swap/service.js'
 import { gatedScheme } from './x402.js'
 
@@ -171,7 +172,14 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
 
   return {
     chain,
-    ...(trading ? { quoteSwap: trading.quoteSwap, getPositions: trading.getPositions } : {}),
+    ...(trading
+      ? {
+          quoteSwap: trading.quoteSwap,
+          getPositions: trading.getPositions,
+          tokenRisk: (token: Address) =>
+            tokenRisk({ connection, dollar: mint, venue: deps.venue!, chain }, token),
+        }
+      : {}),
 
     async getLandedChanges(txId: TxId) {
       const tx = await connection.getTransaction(txId, {

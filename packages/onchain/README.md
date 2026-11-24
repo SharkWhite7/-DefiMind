@@ -175,6 +175,15 @@ and by the slot its code was deployed at. The test reads that code from mainnet 
 
 To refresh the fixtures, run `pnpm record:swap` again.
 
+### Token risk (CR-025)
+
+`tokenRisk(mint)` (Solana mainnet, with the swap venue) feeds the owner's risk card with facts only:
+the mint's decimals, whether a freeze or mint authority is set, its Token-2022 extensions by name,
+and the CR-021 rejections a buy would meet (`TOKEN_FREEZABLE`, `TOKEN_EXTENSION_RISK`,
+`NO_EXIT_ROUTE`). `exit` is the price impact of selling what 10 USD buys back to the dollar, or null
+with no route. A venue that is down throws; it is never read as "no route". The approval flags and
+the venue's own facts are guard-core's. Tested against mainnet USDC, JUP and PYUSD mint accounts.
+
 ### Landed changes (ON-32)
 
 `getLandedChanges(txId)` (Solana) returns what a confirmed transaction really moved for the hot

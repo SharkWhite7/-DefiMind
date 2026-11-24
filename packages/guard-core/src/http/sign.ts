@@ -41,30 +41,36 @@ export const DEFAULT_SIGN_DIR = SIGN_PAGE_DIR
  * What this deployment's page acts for: its own hot wallets, and the public RPC of each cluster.
  * Never guard-core's own RPC: /sign is public, and that URL can carry the operator's API key.
  */
-export function signConfig(keys: PublicKeys): SignPageConfig {
+export function signConfig(keys: PublicKeys, agents: AgentKey[] = []): SignPageConfig {
   const rpc = rpcUrls({})
   const config: SignPageConfig = { solana: {}, evm: {}, maxDailyCap: maxDailyCap({}) }
-  for (const { chain, address } of keys.hotWallets) {
+  const own = (chain: ChainId) => agents.filter((a) => a.chain === chain).map((a) => a.address)
+  const chains = new Set([...keys.hotWallets, ...agents].map((w) => w.chain))
+  for (const chain of chains) {
+    const hot = keys.hotWallets.find((w) => w.chain === chain)?.address
+    const entry = { ...(hot === undefined ? {} : { hot }), agents: own(chain) }
     const solana = SOLANA.get(chain)
     const evm = EVM.get(chain)
     if (solana !== undefined) {
-      config.solana = { ...config.solana, [solana]: { rpc: rpc[solana] as string, hot: address } }
+      config.solana = { ...config.solana, [solana]: { rpc: rpc[solana] as string, ...entry } }
     }
     if (evm !== undefined) {
-      config.evm = { ...config.evm, [evm]: { rpc: rpc[evm] as string, hot: address } }
+      config.evm = { ...config.evm, [evm]: { rpc: rpc[evm] as string, ...entry } }
     }
   }
   return config
 }
 
+type AgentKey = { chain: ChainId; address: string }
+
 /**
- * The signing page at /sign (CR-019), from onchain's build, with this deployment's hot wallets
- * filled in at serve time. A link never names the hot wallet, so a crafted one cannot make the page
+ * The signing page at /sign (CR-019), from onchain's build, with this deployment's hot wallets,
+ * shared and per agent (CR-022), filled in at serve time. A link never names the hot wallet, so a crafted one cannot make the page
  * grant an attacker's key (ADR 006).
  */
-export function signRoutes(keys: PublicKeys, dir: string) {
-  const page = fromSignPage(signConfig(keys))
-  const policy = `${csp(page.rpc)}; frame-ancestors 'none'`
+export function signRoutes(keys: PublicKeys, dir: string, agents: () => AgentKey[] = () => []) {
+  // The RPCs are public and fixed, so the policy is too; the agents' wallets are read per request.
+  const policy = `${csp(fromSignPage(signConfig(keys)).rpc)}; frame-ancestors 'none'`
 
   function send(reply: FastifyReply, type: string, body: string | Buffer) {
     return reply
@@ -90,7 +96,11 @@ export function signRoutes(keys: PublicKeys, dir: string) {
       )
       return template === undefined
         ? missing(reply)
-        : send(reply, 'text/html; charset=utf-8', pageHtml(template, page))
+        : send(
+            reply,
+            'text/html; charset=utf-8',
+            pageHtml(template, fromSignPage(signConfig(keys, agents()))),
+          )
     })
     app.get('/sign/:file', async (request, reply) => {
       const { file } = request.params as { file: string }
