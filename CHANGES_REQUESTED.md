@@ -1432,3 +1432,49 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   - A landed amount that differs from the test run settles at the landed amount.
   - A shadowed swap carries its would-have flags.
   - A backup is written on schedule, pruned at 15, restored by the drill, and refused over HTTP.
+
+### CR-025 — Owner trading tools: search a token, read its risk, trade it by hand
+
+- **From:** integrator, from the owner's request and the manager's design notes
+- **Date:** 2026-11-24
+- **Status:** approved by the owner on 2026-11-24. He asked "shall we add trade options so degens
+  can choose the token?" and picked three of four options on the manager's card: token search, a
+  token risk card, and a manual trade button. He did not pick a list of popular tokens. Applied to
+  SPEC v0.19 on 2026-11-24, after CR-024's work.
+- **What:**
+  - **Search.** `GET /v1/owner/tokens/search`, a proxy for Jupiter's token search: the panel's CSP
+    reaches only its own origin.
+    - Untrusted: validated, bounded, rate-limited (30 a minute per session) and cached (60 s).
+    - Verified tokens first; unverified ones only after an explicit choice, with a warning.
+    - Symbols always beside the full mint. No remote images.
+  - **Risk card.** `GET /v1/owner/tokens/:mint/risk`, read onchain through
+    `ChainAdapter.tokenRisk`:
+    - decimals, freeze and mint authority, Token-2022 extensions;
+    - the rejections and flags a buy would meet;
+    - the price impact of selling 10 USD back.
+    - Jupiter's own facts are shown apart and labelled as Jupiter's. Facts only, never "safe".
+  - **Allowing a token** stays a loosening: the policy PUT with the passkey, with the risk card shown
+    first.
+  - **Manual trade.** `POST /v1/owner/quote`, read-only, then `POST /v1/owner/trade` with a passkey
+    step-up for every trade, bound to the exact pair, amount and minimum the owner saw.
+    - Same pipeline as an agent's swap: policy, limits, risk checks, a fresh quote that must keep the
+      minimum, inspection, test run.
+    - Audited as the owner's, counted in that agent's day, from that agent's wallet.
+    - Refused while the agent is paused; Close positions stays the exit.
+- **Why it is safe:** nothing here skips a check. The owner gets the same pipeline the agents get,
+  plus a passkey on every trade. Search results and venue facts never decide anything; the onchain
+  reads do.
+- **Rows:**
+  - GC-69: the search proxy, the risk route, the owner quote and trade routes, and the
+    `manual_trade` step-up (guard-core).
+  - ON-33: `ChainAdapter.tokenRisk`, from the existing mint and exit reads (onchain).
+  - PANEL-23: search with the unverified toggle, the risk card before allowing a token, and the
+    trade screen with quote, confirm and passkey. The copy describes controls, never returns
+    (panel).
+  - INT-50: SPEC, the shared types, and e2e for a manual trade over the fork, a stale minimum, a
+    paused agent, an unallowed token, and a search answer that lies (integrator).
+- **Risks for the owner to accept:**
+  - The panel can now place trades. A stolen session alone still cannot: every trade needs the
+    passkey.
+  - Jupiter's search can be wrong or hostile. It only lists candidates; adding one still takes the
+    passkey and the onchain risk read.

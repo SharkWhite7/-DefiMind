@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.18 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.19 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -232,6 +232,8 @@ interface ChainAdapter {
     // to protect (a hardware wallet); on EVM, it advises another owner or a 2-of-3.
   getLandedChanges?(txId: TxId): Promise<BalanceChange[]>  // CR-024: the hot wallet's token deltas
                                                    // in a confirmed transaction, for settlement
+  tokenRisk?(mint: Address): Promise<Omit<TokenRisk, "venue" | "flags">>  // CR-025: the mint read
+                                                   // onchain, plus the exit for 10 USD
   buildKillTx(): Promise<{ description: string; payload: unknown }>  // owner signs this
   simulate(intent: PayIntent): Promise<SimulationOutcome>
   send(intent: PayIntent): Promise<string>         // returns txId
@@ -375,6 +377,7 @@ POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, sing
   OwnerAction = "approve_intent" | "approve_mandate" | "loosen_policy" | "resume" | "create_agent"
     | "change_settings" (CR-019) | "close_positions" (CR-021, body {})
     | "agent_wallet" (CR-022, body { agentId, chain })
+    | "manual_trade" (CR-025, body { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut })
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
 GET  /v1/owner/deposit -> { chains: { chain, vault, token, balance, dailyCap?, depositPage? }[] }
@@ -575,6 +578,53 @@ read with ChainAdapter.getLandedChanges(txId) -> BalanceChange[] (the hot wallet
 from the transaction's own pre- and post-balances). The test run's deltas are only the check. A
 position whose onchain balance is 0 after a sell is closed, dust included.
 
+## Owner trading tools (CR-025)
+The owner finds a token, reads its risk, allows it, and trades it from the panel. Solana mainnet
+through Jupiter only, as for agents (CR-021). Every route here needs the owner's session.
+
+GET  /v1/owner/tokens/search?q=&chain= -> { tokens: TokenInfo[] }
+  guard-core proxies Jupiter's token search, since the panel's CSP allows no other origin. q is 1 to
+  64 characters. The search is rate-limited per session to 30 a minute and cached for 60 seconds.
+  The venue's answer is untrusted: it is validated with zod, its strings are bounded, and its
+  fields are dropped except those below. Verified tokens come first; the panel shows unverified
+  ones only after an explicit "Show unverified tokens", with a warning.
+  TokenInfo = { chain, mint, symbol, name, decimals, verified, venue: { holders?, liquidityUsd?,
+  organicScore?, createdAt? } }. The symbol and name are display only and always shown beside the
+  full mint. The decimals are the venue's and are re-read from the mint before any use. No remote
+  image is ever loaded: the CSP allows img-src 'self' data: only, so at most a mint-derived
+  identicon.
+GET  /v1/owner/tokens/:mint/risk?chain= -> TokenRisk
+  TokenRisk = { chain, mint, decimals, freezeAuthority: boolean, mintAuthority: boolean,
+  extensions: string[], risks: RejectCode[], flags: TradingFlag[],
+  exit: { amountUsd: Amount, priceImpactBps: number } | null, venue: TokenInfo["venue"] & { verified } }
+  Every field outside venue is read onchain by ChainAdapter.tokenRisk?(mint) or computed by guard-core:
+  - decimals, the authorities and the Token-2022 extensions come from the mint;
+  - risks are the CR-021 rejections a buy would meet (TOKEN_FREEZABLE, TOKEN_EXTENSION_RISK,
+    NO_EXIT_ROUTE);
+  - flags are the CR-021 approval flags (NEW_TOKEN, MINT_AUTHORITY);
+  - exit is the price impact of selling 10 USD worth back to the dollar, or null without a route.
+  venue holds what Jupiter says, labelled as such. The card states facts only and never calls a token
+  safe.
+Allowing a token adds it to policy.trading.tokens: PUT /v1/owner/policy/:agentId with the step-up,
+as any loosening. The panel shows the risk card before the passkey prompt.
+POST /v1/owner/quote { agentId, chain, tokenIn, tokenOut, amountIn, maxSlippageBps? } -> SwapQuote
+  The same quote an agent gets for that agent's policy, read-only: it decides nothing and records
+  nothing.
+POST /v1/owner/trade { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut, maxSlippageBps?,
+  assertion } -> { intentId, status, rejectReasons, txId? }
+  A manual trade for that agent. It always needs the step-up, OwnerAction "manual_trade" over
+  { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut }, even below approvalThreshold. It runs
+  the same pipeline as an agent's swap:
+  - the policy, every limit and every risk check;
+  - a fresh quote, which must still promise minAmountOut (the amount the owner saw) or the trade is
+    SLIPPAGE_TOO_HIGH;
+  - the inspection, the top-up and the test run;
+  - with the assertion as the owner's approval, so no second request is made.
+  It is audited via "owner" with reason "owner: manual trade", counts in that agent's day (buys
+  against dailyTradeMax), and uses that agent's wallet (its own once it has one). A paused agent
+  is refused (PAUSED); Close positions stays the way out. In shadow mode it is shadowed like any
+  swap. The panel's copy describes controls, never returns.
+
 ## Agent wallets (CR-022, HIGH-2)
 Opt-in, per agent and chain. By default every agent spends from the chain's shared spending (hot)
 wallet, as before. An agent given its own wallet spends only from it, under its own onchain limit,
@@ -671,6 +721,10 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.19 (2026-11-24): CR-025, approved by the owner. Owner trading tools:
+  - token search, proxied by guard-core;
+  - a risk card read onchain;
+  - a manual trade from the panel, through the agent pipeline with a passkey per trade.
 - v0.18 (2026-11-24): CR-024, approved by the owner. From the first live trade and the owner's
   doctor:
   - a buy that waits for the owner draws nothing until approved;
