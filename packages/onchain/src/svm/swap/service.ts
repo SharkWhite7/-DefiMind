@@ -31,6 +31,7 @@ export interface SwapDeps {
 }
 
 const SIGNATURE_FEE = 5_000n
+const CHECKED_TTL_MS = 90_000
 const TOKEN_PROGRAMS = [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]
 
 /**
@@ -40,7 +41,9 @@ const TOKEN_PROGRAMS = [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]
  */
 export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
   const hot = hotWallet.publicKey
-  const checked = new Map<string, VersionedTransaction>()
+  // A checked transaction is good until its blockhash expires, about a minute; kept no longer.
+  const checked = new Map<string, { tx: VersionedTransaction; at: number }>()
+  const fresh = (entry?: { at: number }) => !!entry && Date.now() - entry.at < CHECKED_TTL_MS
 
   async function quoteSwap(req: {
     tokenIn: string
@@ -100,6 +103,7 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
   }
 
   async function simulate(intent: PayIntent): Promise<SimulationOutcome> {
+    for (const [id, entry] of checked) if (!fresh(entry)) checked.delete(id)
     checked.delete(intent.id)
     const swap = intent.swap
     if (!swap || swap.venue !== 'jupiter') return refused('VENUE_NOT_ALLOWED', 'not a Jupiter swap')
@@ -123,6 +127,8 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
       hotWallet: hot,
       tokenIn: new PublicKey(request.inputMint),
       tokenOut: new PublicKey(request.outputMint),
+      amountIn: request.amount,
+      minAmountOut,
     }
     const inspected = inspectSwap(tx.message, expanded, sides)
     if (inspected.length > 0) return { simulation: describe(intent, []), rejectReasons: inspected }
@@ -144,7 +150,7 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
       simulation: describe(intent, effects.changes),
       rejectReasons: effects.reasons,
     }
-    if (effects.reasons.length === 0) checked.set(intent.id, tx)
+    if (effects.reasons.length === 0) checked.set(intent.id, { tx, at: Date.now() })
     return outcome
   }
 
@@ -196,9 +202,10 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
   }
 
   async function send(intent: PayIntent): Promise<string> {
-    const tx = checked.get(intent.id)
-    if (!tx) throw new Error(`swap_not_simulated: ${intent.id}`)
+    const entry = checked.get(intent.id)
     checked.delete(intent.id)
+    if (!entry || !fresh(entry)) throw new Error(`swap_not_simulated: ${intent.id}`)
+    const { tx } = entry
     tx.sign([hotWallet])
     return confirm(connection, await connection.sendRawTransaction(tx.serialize()))
   }
@@ -250,7 +257,7 @@ function positive(amount: Amount): bigint {
 }
 
 function slippage(bps: number): number {
-  if (!Number.isInteger(bps) || bps < 1 || bps > 10_000) throw new Error(`invalid_slippage: ${bps}`)
+  if (!Number.isInteger(bps) || bps < 0 || bps > 10_000) throw new Error(`invalid_slippage: ${bps}`)
   return bps
 }
 

@@ -22,7 +22,19 @@ export interface SwapSides {
   hotWallet: PublicKey
   tokenIn: PublicKey
   tokenOut: PublicKey
+  amountIn: bigint
+  /** What the owner or the policy approved: the route itself must refuse to deliver less. */
+  minAmountOut: bigint
 }
+
+// Jupiter v6's exact-in routes (Anchor: sha256("global:<name>")[..8]). The token-ledger and exact-out
+// variants spend an amount the instruction does not state, so they are not ours to sign.
+const EXACT_IN_ROUTES = [
+  Buffer.from([229, 23, 203, 151, 122, 227, 173, 42]), // route
+  Buffer.from([193, 32, 155, 51, 65, 214, 156, 129]), // shared_accounts_route
+]
+// Both end with in_amount u64, quoted_out_amount u64, slippage_bps u16, platform_fee_bps u8.
+const TERMS_BYTES = 19
 
 // A route needs far more compute than a transfer. The priority fee is bounded in lamports rather
 // than per unit, so a high limit cannot multiply it: at the cap it costs 0.001 SOL.
@@ -53,6 +65,8 @@ export function inspectSwap(
     const program = ix.programId
     if (program.equals(JUPITER_PROGRAM_ID)) {
       routes++
+      const reason = routeReason(ix, sides)
+      if (reason) reasons.add(reason)
     } else if (program.equals(TOKEN_PROGRAM_ID) || program.equals(TOKEN_2022_PROGRAM_ID)) {
       reasons.add(tokenReason(ix))
     } else if (program.equals(ASSOCIATED_TOKEN_PROGRAM_ID)) {
@@ -77,6 +91,28 @@ export function inspectSwap(
     reasons.add('SIM_UNEXPECTED_EFFECT')
   }
   return [...reasons]
+}
+
+/**
+ * The route's own terms, held to the swap: the test run proves the output only at simulation time,
+ * so a route whose slippage lets it deliver less than the approved minimum would hand the
+ * difference to whoever moves the price before it lands.
+ */
+function routeReason(ix: TransactionInstruction, sides: SwapSides): RejectCode | undefined {
+  const data = ix.data
+  const exactIn = EXACT_IN_ROUTES.some((d) => data.subarray(0, 8).equals(d))
+  if (!exactIn || data.length < 8 + 4 + TERMS_BYTES) return 'SIM_UNEXPECTED_EFFECT'
+  const terms = data.subarray(data.length - TERMS_BYTES)
+  const inAmount = terms.readBigUInt64LE(0)
+  const quotedOut = terms.readBigUInt64LE(8)
+  const slippageBps = BigInt(terms.readUInt16LE(16))
+  const feeBps = terms.readUInt8(18)
+  if (inAmount !== sides.amountIn || feeBps !== 0 || slippageBps > 10_000n) {
+    return 'SIM_UNEXPECTED_EFFECT'
+  }
+  if ((quotedOut * (10_000n - slippageBps)) / 10_000n < sides.minAmountOut)
+    return 'SLIPPAGE_TOO_HIGH'
+  return undefined
 }
 
 /** No token instruction belongs at the top level of a swap: the route moves tokens itself. */

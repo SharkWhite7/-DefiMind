@@ -20,14 +20,29 @@ const key = () => Keypair.generate().publicKey
 const hotWallet = key()
 const tokenIn = key()
 const tokenOut = key()
-const sides = { hotWallet, tokenIn, tokenOut }
+const sides = { hotWallet, tokenIn, tokenOut, amountIn: 10_000_000n, minAmountOut: 995_000n }
 const inAccount = getAssociatedTokenAddressSync(tokenIn, hotWallet)
 
-const route = new TransactionInstruction({
-  programId: JUPITER_PROGRAM_ID,
-  keys: [{ pubkey: hotWallet, isSigner: true, isWritable: true }],
-  data: Buffer.from([1, 2, 3]),
-})
+/** A Jupiter route instruction as v6 encodes it: discriminator, route plan, then its terms. */
+function routeWith({
+  discriminator = [229, 23, 203, 151, 122, 227, 173, 42],
+  inAmount = 10_000_000n,
+  quotedOut = 1_000_000n,
+  slippageBps = 50,
+  feeBps = 0,
+} = {}) {
+  const terms = Buffer.alloc(19)
+  terms.writeBigUInt64LE(inAmount, 0)
+  terms.writeBigUInt64LE(quotedOut, 8)
+  terms.writeUInt16LE(slippageBps, 16)
+  terms.writeUInt8(feeBps, 18)
+  return new TransactionInstruction({
+    programId: JUPITER_PROGRAM_ID,
+    keys: [{ pubkey: hotWallet, isSigner: true, isWritable: true }],
+    data: Buffer.concat([Buffer.from(discriminator), Buffer.from([1, 0, 0, 0, 9, 9, 9]), terms]),
+  })
+}
+const route = routeWith()
 const create = (mint = tokenOut, owner = hotWallet) =>
   createAssociatedTokenAccountIdempotentInstruction(
     hotWallet,
@@ -94,12 +109,8 @@ describe('a swap transaction, read before the test run', () => {
 
   it('refuses a second signer', () => {
     const cosigned = new TransactionInstruction({
-      programId: JUPITER_PROGRAM_ID,
-      keys: [
-        { pubkey: hotWallet, isSigner: true, isWritable: true },
-        { pubkey: key(), isSigner: true, isWritable: false },
-      ],
-      data: Buffer.alloc(0),
+      ...route,
+      keys: [...route.keys, { pubkey: key(), isSigner: true, isWritable: false }],
     })
     expect(check([cosigned])).toEqual(['SIM_UNEXPECTED_EFFECT'])
   })
@@ -115,5 +126,35 @@ describe('a swap transaction, read before the test run', () => {
     expect(check(fee(1_400_001, 1))).toEqual(['SIM_UNEXPECTED_EFFECT'])
     const heap = ComputeBudgetProgram.requestHeapFrame({ bytes: 64 * 1024 })
     expect(check([heap, route])).toEqual(['SIM_UNEXPECTED_EFFECT'])
+  })
+
+  it.each([
+    [
+      'slippage that lets it deliver less than the minimum',
+      { slippageBps: 10_000 },
+      'SLIPPAGE_TOO_HIGH',
+    ],
+    ['a quoted output below the minimum', { quotedOut: 999_000n }, 'SLIPPAGE_TOO_HIGH'],
+    ['another input amount', { inAmount: 10_000_001n }, 'SIM_UNEXPECTED_EFFECT'],
+    ['a platform fee', { feeBps: 1 }, 'SIM_UNEXPECTED_EFFECT'],
+    [
+      'a token-ledger route, whose amount is not in the instruction',
+      { discriminator: [150, 86, 71, 116, 167, 93, 14, 104] },
+      'SIM_UNEXPECTED_EFFECT',
+    ],
+    [
+      'an exact-out route',
+      { discriminator: [208, 51, 239, 151, 123, 43, 237, 92] },
+      'SIM_UNEXPECTED_EFFECT',
+    ],
+  ])('refuses a route with %s', (_case, terms, reason) => {
+    expect(check([routeWith(terms)])).toEqual([reason])
+  })
+
+  it('passes the shared-accounts route, and refuses one too short to hold its terms', () => {
+    const shared = routeWith({ discriminator: [193, 32, 155, 51, 65, 214, 156, 129] })
+    expect(check([shared])).toEqual([])
+    const short = new TransactionInstruction({ ...route, data: route.data.subarray(0, 20) })
+    expect(check([short])).toEqual(['SIM_UNEXPECTED_EFFECT'])
   })
 })

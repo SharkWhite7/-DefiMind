@@ -20,7 +20,7 @@ import {
   type AccountInfo,
   type Connection,
 } from '@solana/web3.js'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { JUPITER_PROGRAM_ID } from '../src/svm/swap/inspect.js'
 import { SwapUnavailable, type JupiterQuote, type Venue } from '../src/svm/swap/jupiter.js'
 import { swaps } from '../src/svm/swap/service.js'
@@ -126,6 +126,19 @@ const connection = {
   }),
 } as unknown as Connection
 
+/** Jupiter v6's route: discriminator, an empty route plan, then 10 USDC in, 1 BONK quoted, 0.5%. */
+function routeData(slippageBps = 50) {
+  const terms = Buffer.alloc(19)
+  terms.writeBigUInt64LE(10_000_000n, 0)
+  terms.writeBigUInt64LE(1_000_000n, 8)
+  terms.writeUInt16LE(slippageBps, 16)
+  return Buffer.concat([
+    Buffer.from([229, 23, 203, 151, 122, 227, 173, 42]),
+    Buffer.alloc(4),
+    terms,
+  ])
+}
+
 const route = (extra: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = []) =>
   new TransactionInstruction({
     programId: JUPITER_PROGRAM_ID,
@@ -135,7 +148,7 @@ const route = (extra: { pubkey: PublicKey; isSigner: boolean; isWritable: boolea
       { pubkey: bonkAccount, isSigner: false, isWritable: true },
       ...extra,
     ],
-    data: Buffer.from([7]),
+    data: routeData(),
   })
 
 /** A venue whose quotes and transactions the test sets, as an untrusted Jupiter would send them. */
@@ -282,7 +295,8 @@ describe('quoteSwap', () => {
       s.quoteSwap({ tokenIn, tokenOut: bonk.toBase58(), amountIn, slippageBps })
     await expect(ask(other)).rejects.toThrow(/^invalid_swap/)
     await expect(ask(usdc.toBase58(), '0')).rejects.toThrow(/^invalid_amount/)
-    await expect(ask(usdc.toBase58(), '1', 0)).rejects.toThrow(/^invalid_slippage/)
+    await expect(ask(usdc.toBase58(), '1', -1)).rejects.toThrow(/^invalid_slippage/)
+    await expect(ask(usdc.toBase58(), '1', 10_001)).rejects.toThrow(/^invalid_slippage/)
   })
 })
 
@@ -317,6 +331,19 @@ describe('simulate and send a swap', () => {
   it('refuses a run that drains SOL past fees and rent', async () => {
     after.set(hot.toBase58(), wallet(90_000_000))
     expect((await s.simulate(buy())).rejectReasons).toEqual(['SIM_UNEXPECTED_EFFECT'])
+  })
+
+  it('refuses a transaction whose route would accept less than the approved minimum', async () => {
+    v.state.instructions = [new TransactionInstruction({ ...route(), data: routeData(10_000) })]
+    expect((await s.simulate(buy())).rejectReasons).toEqual(['SLIPPAGE_TOO_HIGH'])
+  })
+
+  it('forgets a checked transaction once its blockhash would have expired', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    expect((await s.simulate(buy())).rejectReasons).toEqual([])
+    vi.advanceTimersByTime(91_000)
+    await expect(s.send(buy())).rejects.toThrow(/^swap_not_simulated/)
+    vi.useRealTimers()
   })
 
   it('inspects the transaction before running it', async () => {
