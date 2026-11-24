@@ -1,13 +1,12 @@
 /**
  * Records one real Jupiter swap from mainnet for the fork test (test/swap-fork.test.ts): the quote,
  * Jupiter's transaction, and every account that transaction touches at one slot, programs included,
- * so the test can run the real route in LiteSVM without the network. The hot wallet is a key made
+ * so the test can run the real route in LiteSVM. Programs are recorded by id and deploy slot only. The hot wallet is a key made
  * here for the test; it never holds anything on mainnet.
  *
  *   NODE_USE_ENV_PROXY=1 pnpm tsx src/scripts/record-swap.ts
  */
 import { writeFile } from 'node:fs/promises'
-import { gzipSync } from 'node:zlib'
 import type { AddressLookupTableAccount } from '@solana/web3.js'
 import {
   Connection,
@@ -89,13 +88,15 @@ async function fetchAll(list: PublicKey[]) {
   }
 }
 await fetchAll([...keys.values()])
-// An upgradeable program's code lives in its program data account, after a 45-byte header. LiteSVM brings its own token and system programs.
+// Programs are pinned by id and the slot their code was last deployed at, never copied into the
+// repository: the fork test reads their code from mainnet (test/programs.ts). LiteSVM brings its own
+// token and system programs.
 const BUILT_IN = new Set([
   'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA',
   'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',
   'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL',
 ])
-const programs: string[] = []
+const programs: { id: string; deploySlot: number }[] = []
 for (const [id, account] of Object.entries(accounts)) {
   if (!account.executable) continue
   delete accounts[id]
@@ -103,12 +104,7 @@ for (const [id, account] of Object.entries(accounts)) {
   const dataKey = new PublicKey(Buffer.from(account.data, 'base64').subarray(4, 36))
   const info = await connection.getAccountInfo(dataKey, { minContextSlot: slot })
   if (!info) throw new Error(`no program data for ${id}`)
-  // Kept whole: the padding compresses to almost nothing, and an ELF may end in zeros of its own.
-  await writeFile(
-    new URL(`../../test/fixtures/${id}.so.gz`, import.meta.url),
-    gzipSync(info.data.subarray(45), { level: 9 }),
-  )
-  programs.push(id)
+  programs.push({ id, deploySlot: Number(info.data.readBigUInt64LE(4)) })
 }
 
 const blockTime = (await connection.getBlockTime(slot)) ?? Math.floor(Date.now() / 1000)

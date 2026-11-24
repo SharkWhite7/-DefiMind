@@ -158,8 +158,16 @@ doubt is a rejection.
 
 **Fork test.** `test/swap-fork.test.ts` runs a real Jupiter route in LiteSVM: 1 USDC for wrapped SOL
 through a Whirlpool, executed by Jupiter's and Whirlpool's own programs. `pnpm record:swap` recorded
-that route from mainnet, with every account it touches at one slot, into `test/fixtures/`. The hot
-wallet is a key made for the recording, so no real funds are involved. The test checks three things:
+that route from mainnet, with every account it touches at one slot, into `test/fixtures/`.
+
+Third-party program binaries are never kept in the repository. The fixture names each program by id
+and by the slot its code was deployed at. The test reads that code from mainnet into
+`packages/onchain/.cache/programs/` (gitignored), or from that cache when it is already there:
+
+- **Offline,** the test is skipped by name, with the reason.
+- **If a program was redeployed since the recording,** the test is skipped too.
+- **With `FORK_REQUIRED=1`,** either case fails the test instead. CI sets it. The hot
+  wallet is a key made for the recording, so no real funds are involved. The test checks three things:
 
 - the route passes the checks and the test run, and lands exactly the balances checked;
 - the same transaction, with its route's slippage opened to 100%, is refused;

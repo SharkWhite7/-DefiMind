@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs'
-import { gunzipSync } from 'node:zlib'
 import { CHAINS, type PayIntent } from '@defimind/shared'
 import {
   ACCOUNT_SIZE,
@@ -19,6 +18,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { JupiterQuote, Venue } from '../src/svm/swap/jupiter.js'
 import { swaps } from '../src/svm/swap/service.js'
 import { liteConnection } from './litesvm.js'
+import { mainnetPrograms, type PinnedProgram } from './programs.js'
 import { Clock, Svm } from './svm.js'
 
 /**
@@ -33,9 +33,21 @@ const recorded = JSON.parse(readFileSync(new URL('jupiter-swap.json', fixtures),
   hotSecretKey: number[]
   quote: JupiterQuote
   swapTransaction: string
-  programs: string[]
+  programs: PinnedProgram[]
   accounts: Record<string, { lamports: number; owner: string; executable: boolean; data: string }>
 }
+/**
+ * Jupiter and Whirlpool are read from mainnet at test time, never kept here. Offline, or after a
+ * redeploy, the fork test is skipped by name, never passed silently; FORK_REQUIRED=1 (CI) makes
+ * that a failure instead.
+ */
+const programs = await mainnetPrograms(recorded.programs)
+const skipped = typeof programs === 'string' ? programs : undefined
+if (skipped) {
+  if (process.env['FORK_REQUIRED'] === '1') throw new Error(`fork test required: ${skipped}`)
+  console.warn(`swap-fork skipped: ${skipped}`)
+}
+
 const USDC = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v')
 const WSOL = new PublicKey('So11111111111111111111111111111111111111112')
 const hotWallet = Keypair.fromSecretKey(Uint8Array.from(recorded.hotSecretKey))
@@ -50,9 +62,7 @@ let swapTransaction: string
 function fork() {
   svm = new Svm()
   svm.withBlockhashCheck(false)
-  for (const id of recorded.programs) {
-    svm.addProgram(new PublicKey(id), gunzipSync(readFileSync(new URL(`${id}.so.gz`, fixtures))))
-  }
+  for (const [id, code] of programs as Map<string, Buffer>) svm.addProgram(new PublicKey(id), code)
   for (const [address, account] of Object.entries(recorded.accounts)) {
     svm.setAccount(new PublicKey(address), {
       lamports: account.lamports,
@@ -156,42 +166,45 @@ beforeEach(() => {
   fork()
 })
 
-describe('a real Jupiter route, on a fork of mainnet', () => {
-  it('passes the checks and the test run, then lands exactly what was checked', async () => {
-    const s = swaps({ connection, hotWallet, dollar: USDC, venue })
-    const outcome = await s.simulate(intent())
-    expect(outcome.rejectReasons).toEqual([])
-    const [spent, bought] = outcome.simulation.balanceChanges
-    expect(spent).toEqual({ token: USDC.toBase58(), delta: `-${recorded.quote.inAmount}` })
-    expect(bought?.token).toBe(WSOL.toBase58())
-    expect(BigInt(bought!.delta)).toBeGreaterThanOrEqual(
-      BigInt(recorded.quote.otherAmountThreshold),
-    )
+describe.skipIf(skipped)(
+  `a real Jupiter route, on a fork of mainnet${skipped ? ` (skipped: ${skipped})` : ''}`,
+  () => {
+    it('passes the checks and the test run, then lands exactly what was checked', async () => {
+      const s = swaps({ connection, hotWallet, dollar: USDC, venue })
+      const outcome = await s.simulate(intent())
+      expect(outcome.rejectReasons).toEqual([])
+      const [spent, bought] = outcome.simulation.balanceChanges
+      expect(spent).toEqual({ token: USDC.toBase58(), delta: `-${recorded.quote.inAmount}` })
+      expect(bought?.token).toBe(WSOL.toBase58())
+      expect(BigInt(bought!.delta)).toBeGreaterThanOrEqual(
+        BigInt(recorded.quote.otherAmountThreshold),
+      )
 
-    await s.send(intent())
-    expect(balance(usdcAccount)).toBe(5_000_000n - BigInt(recorded.quote.inAmount))
-    expect(balance(wsolAccount)).toBe(BigInt(bought!.delta))
-  })
+      await s.send(intent())
+      expect(balance(usdcAccount)).toBe(5_000_000n - BigInt(recorded.quote.inAmount))
+      expect(balance(wsolAccount)).toBe(BigInt(bought!.delta))
+    })
 
-  it("refuses the same transaction with the route's slippage opened to 100%", async () => {
-    const tx = VersionedTransaction.deserialize(Buffer.from(recorded.swapTransaction, 'base64'))
-    const route = tx.message.compiledInstructions.find((ix) =>
-      tx.message.staticAccountKeys[ix.programIdIndex]?.toBase58().startsWith('JUP6'),
-    )!
-    // slippage_bps sits three bytes from the end of the route's data, before platform_fee_bps.
-    Buffer.from(route.data.buffer, route.data.byteOffset, route.data.length).writeUInt16LE(
-      10_000,
-      route.data.length - 3,
-    )
-    swapTransaction = Buffer.from(tx.serialize()).toString('base64')
-    const s = swaps({ connection, hotWallet, dollar: USDC, venue })
-    expect((await s.simulate(intent())).rejectReasons).toEqual(['SLIPPAGE_TOO_HIGH'])
-    expect(balance(usdcAccount)).toBe(5_000_000n)
-  })
+    it("refuses the same transaction with the route's slippage opened to 100%", async () => {
+      const tx = VersionedTransaction.deserialize(Buffer.from(recorded.swapTransaction, 'base64'))
+      const route = tx.message.compiledInstructions.find((ix) =>
+        tx.message.staticAccountKeys[ix.programIdIndex]?.toBase58().startsWith('JUP6'),
+      )!
+      // slippage_bps sits three bytes from the end of the route's data, before platform_fee_bps.
+      Buffer.from(route.data.buffer, route.data.byteOffset, route.data.length).writeUInt16LE(
+        10_000,
+        route.data.length - 3,
+      )
+      swapTransaction = Buffer.from(tx.serialize()).toString('base64')
+      const s = swaps({ connection, hotWallet, dollar: USDC, venue })
+      expect((await s.simulate(intent())).rejectReasons).toEqual(['SLIPPAGE_TOO_HIGH'])
+      expect(balance(usdcAccount)).toBe(5_000_000n)
+    })
 
-  it('refuses a route that cannot deliver the approved minimum', async () => {
-    const s = swaps({ connection, hotWallet, dollar: USDC, venue })
-    const more = (BigInt(recorded.quote.outAmount) + 1n).toString()
-    expect((await s.simulate(intent(more))).rejectReasons).toEqual(['SLIPPAGE_TOO_HIGH'])
-  })
-})
+    it('refuses a route that cannot deliver the approved minimum', async () => {
+      const s = swaps({ connection, hotWallet, dollar: USDC, venue })
+      const more = (BigInt(recorded.quote.outAmount) + 1n).toString()
+      expect((await s.simulate(intent(more))).rejectReasons).toEqual(['SLIPPAGE_TOO_HIGH'])
+    })
+  },
+)
