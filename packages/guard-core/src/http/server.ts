@@ -248,6 +248,7 @@ async function serve(
         await admin.register(
           adminRoutes(deps, {
             mainnet: onMainnet(config),
+            setupCode: config.SETUP_CODE !== undefined,
             ...doctor,
             ...(config.PASSKEY_RP_ID === undefined ? {} : { passkeyRpId: config.PASSKEY_RP_ID }),
             ...(config.PASSKEY_ORIGIN === undefined

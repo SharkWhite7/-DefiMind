@@ -33,6 +33,8 @@ export function adminRoutes(
     passkeyOrigin?: string
     /** A configured chain outside the testnets: the admin token then never loosens (CR-022). */
     mainnet: boolean
+    /** SETUP_CODE is set: only it may enrol the first passkey (CR-022). */
+    setupCode: boolean
     publicAdmin?: boolean
   },
 ) {
@@ -60,6 +62,23 @@ export function adminRoutes(
     throw new HttpError(403, 'loosen_in_panel')
   }
 
+  /**
+   * With SETUP_CODE set, the first passkey comes only from the setup code: an admin token that
+   * enrolled it would own the deployment. Refused, audited and alerted like a loosening.
+   */
+  function firstPasskeyBySetupCode() {
+    if (!setup.setupCode || countPasskeys(db) > 0) {
+      return
+    }
+    repo.audit(db, { event: 'admin_enrol_refused', detail: { via: 'admin' } }, now())
+    alert(deps, {
+      kind: 'admin_loosen_refused',
+      detail:
+        'the admin token tried to enrol the first passkey; refused, the setup code is required',
+    })
+    throw new HttpError(403, 'setup_code_required')
+  }
+
   function passkeyAddress() {
     if (setup.passkeyRpId === undefined || setup.passkeyOrigin === undefined) {
       throw new HttpError(409, 'passkeys_not_configured')
@@ -80,12 +99,14 @@ export function adminRoutes(
 
     // The passkey is bound to guard-core's public address, so enrolment needs it configured.
     app.post('/passkeys/options', async () => {
+      firstPasskeyBySetupCode()
       const setup = passkeyAddress()
       return enrolmentOptions(db, setup, now())
     })
 
     // For enrolling from a phone through the public page: the code goes to the owner in a link.
     app.post('/passkeys/code', async () => {
+      firstPasskeyBySetupCode()
       passkeyAddress()
       const issued = issueEnrolCode(db, now())
       repo.audit(
@@ -99,6 +120,7 @@ export function adminRoutes(
     // Only the first passkey: after that, a new one is vouched for by an enrolled one, on the
     // owner page, so a leaked admin token alone cannot add one.
     app.post('/passkeys', async (request) => {
+      firstPasskeyBySetupCode()
       const { response } = passkeyEnrolment.parse(request.body)
       // The library checks the whole response; the schema only bounded its size and outer shape.
       const registration = response as unknown as RegistrationResponseJSON
