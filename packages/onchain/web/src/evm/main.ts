@@ -23,7 +23,7 @@ import type { EvmPlan } from './plan.js'
 import { proveEvm } from './proof.js'
 import { onChain, phantomEvm, type Eip1193 } from './wallet.js'
 
-/** What the build fixed for one EVM chain: its id, the module, the dollar token, the hot wallet. */
+/** What the build fixed for one EVM chain: its id, the module, the dollar token, the hot wallets. */
 export interface EvmChain {
   name: string
   chainId: number
@@ -32,6 +32,7 @@ export interface EvmChain {
   usd: Address
   symbol: string
   hot?: Address
+  agents: Address[]
 }
 
 const address = z
@@ -134,7 +135,7 @@ async function prepare(
     )
   }
   const hot = whichHot(
-    chain.hot && getAddress(chain.hot),
+    { shared: chain.hot, agents: chain.agents },
     request.hot,
     request.action === 'kill',
     (a, b) => isAddressEqual(a, b),

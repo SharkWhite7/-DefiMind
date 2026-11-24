@@ -104,6 +104,7 @@ contract AllowanceCapTest {
 
     address private constant OWNER = address(0x0E0E);
     address payable private constant HOT = payable(address(0xB0B));
+    address payable private constant AGENT = payable(address(0xA6E));
 
     ISafe private safe;
     TestToken private token;
@@ -191,6 +192,30 @@ contract AllowanceCapTest {
         require(token.balanceOf(HOT) == 10e6, "a draw went through after the kill");
     }
 
+    /// An agent's own wallet (CR-022): a second delegate on the same Safe, with its own allowance. Each
+    /// draws only up to its own cap, and killing one leaves the other's untouched.
+    function test_agentDelegatesKeepTheirOwnCapsAndKills() public {
+        asOwner(address(MODULE), abi.encodeCall(IAllowanceModule.addDelegate, (AGENT)));
+        asOwner(
+            address(MODULE), abi.encodeCall(IAllowanceModule.setAllowance, (AGENT, address(token), 20e6, DAY_MIN, 0))
+        );
+        drawAs(AGENT, 20e6);
+        vm.expectRevert();
+        this.drawAsExternal(AGENT, 1);
+        draw(CAP);
+
+        asOwner(address(MODULE), abi.encodeCall(IAllowanceModule.removeDelegate, (AGENT, true)));
+        vm.expectRevert();
+        this.drawAsExternal(AGENT, 1);
+        (address listed,,) = MODULE.delegates(address(safe), uint48(uint160(address(HOT))));
+        require(listed == HOT, "killing the agent's wallet removed the shared one");
+
+        vm.warp(block.timestamp + 1 days);
+        draw(1e6);
+        require(token.balanceOf(HOT) == CAP + 1e6, "the shared wallet lost its allowance");
+        require(token.balanceOf(AGENT) == 20e6, "the agent drew past its own cap");
+    }
+
     /// Safe's official list has no Base Sepolia entry for the module, but its deterministic address
     /// holds code there. Equal runtime code means the testnet runs exactly what mainnet does.
     function test_moduleOnSepoliaIsTheMainnetCode() public {
@@ -215,9 +240,17 @@ contract AllowanceCapTest {
     }
 
     function draw(uint96 amount) private {
+        drawAs(HOT, amount);
+    }
+
+    function drawAsExternal(address payable delegate, uint96 amount) external {
+        drawAs(delegate, amount);
+    }
+
+    function drawAs(address payable delegate, uint96 amount) private {
         // An empty signature makes the module authenticate the caller as the delegate.
-        vm.prank(HOT);
-        MODULE.executeAllowanceTransfer(address(safe), address(token), HOT, amount, address(0), 0, HOT, "");
+        vm.prank(delegate);
+        MODULE.executeAllowanceTransfer(address(safe), address(token), delegate, amount, address(0), 0, delegate, "");
     }
 
     /// A Safe transaction from its only owner: with the owner as caller, an "approved hash" signature

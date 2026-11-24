@@ -60,7 +60,24 @@ describe("guard-core's /sign", () => {
     expect(config.evm['robinhood']).toEqual({ ...evmChains({})['robinhood'], hot: evmHot })
   })
 
+  it("takes every agent's own hot wallet next to the shared one (CR-022)", () => {
+    const agentSol = '11111111111111111111111111111113'
+    const agentEvm = '0x00000000000000000000000000000000000000B1'
+    const config = fromSignPage({
+      solana: { devnet: { rpc: 'https://devnet.example/', hot: sol, agents: [agentSol] } },
+      evm: { robinhood: { rpc: 'https://rh.example/', agents: [agentEvm] } },
+      maxDailyCap: '50000000',
+    })
+    expect(config.hot).toEqual({ devnet: sol })
+    expect(config.agents).toEqual({ devnet: [agentSol] })
+    expect(config.evm['robinhood']).toEqual({ ...evmChains({})['robinhood'], agents: [agentEvm] })
+  })
+
   it.each([
+    [
+      'an agent wallet that is not a key',
+      { evm: { robinhood: { rpc: 'https://x.example', agents: ['0x12'] } } },
+    ],
     ['an unknown cluster', { solana: { localnet: { rpc: 'https://x.example' } } }],
     ['a token of its own', { solana: { devnet: { rpc: 'https://x.example', usdc: sol } } }],
     [
