@@ -1,8 +1,8 @@
 import { type ChainAdapter, SwapUnavailable } from '@defimind/onchain'
-import type { PayIntent, Policy, SwapQuote } from '@defimind/shared'
+import type { Amount, PayIntent, Policy, SwapQuote } from '@defimind/shared'
 import { z } from 'zod'
 import { admit } from '../db/breaker.js'
-import { ownerApprovalMethod, saveClearance } from '../db/receipts.js'
+import { ownerApprovalMethod, recordOwnerApproval, saveClearance } from '../db/receipts.js'
 import * as repo from '../db/repo.js'
 import { addBought, boughtToday, everHeld, getPosition, shadowBoughtToday } from '../db/trades.js'
 import { parseAmount } from '../domain/amount.js'
@@ -115,8 +115,16 @@ export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy
   return answer
 }
 
-/** POST /v1/agent/swap: the same pipeline as a payment, with the trading policy (CR-021). */
-export async function swap(deps: PaymentDeps, req: SwapRequest): Promise<PayIntent> {
+/**
+ * POST /v1/agent/swap: the same pipeline as a payment, with the trading policy (CR-021). `manual`
+ * is the owner's own trade (CR-025): the passkey already approved it, for no less than the
+ * minimum the owner saw.
+ */
+export async function swap(
+  deps: PaymentDeps,
+  req: SwapRequest,
+  manual?: { minAmountOut: Amount },
+): Promise<PayIntent> {
   return deps.serial(req.agentId, async () => {
     const { db, now } = deps
     const adapter = adapterFor(deps, req.agentId, req.chain)
@@ -160,6 +168,9 @@ export async function swap(deps: PaymentDeps, req: SwapRequest): Promise<PayInte
     if (priced === undefined) {
       return reject(deps, intent, ['SIM_UNEXPECTED_EFFECT'])
     }
+    if (manual && parseAmount(answer.minAmountOut) < parseAmount(manual.minAmountOut)) {
+      return reject(deps, priced, ['SLIPPAGE_TOO_HIGH'])
+    }
     repo.saveIntent(db, priced)
     const shadow = policy.mode === 'shadow'
     const day = repo.utcDay(now())
@@ -184,14 +195,23 @@ export async function swap(deps: PaymentDeps, req: SwapRequest): Promise<PayInte
         agentId: intent.agentId,
         decision: verdict.decision,
         reasons: verdict.reasons,
-        detail: { side: pair.side, ...(verdict.flags.length > 0 ? { flags: verdict.flags } : {}) },
+        detail: {
+          side: pair.side,
+          ...(verdict.flags.length > 0 ? { flags: verdict.flags } : {}),
+          ...(manual ? { via: 'owner' } : {}),
+        },
       },
       now(),
     )
     if (verdict.reasons.length > 0) {
       return reject(deps, priced, verdict.reasons)
     }
-    return clearSwap(deps, adapter, priced, { side: pair.side, verdict, shadow, policy })
+    const how = { side: pair.side, verdict, shadow, policy }
+    if (manual === undefined) {
+      return clearSwap(deps, adapter, priced, how)
+    }
+    recordOwnerApproval(db, intent.id, 'passkey')
+    return clearSwap(deps, adapter, priced, how, 'approved')
   })
 }
 
