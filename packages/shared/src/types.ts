@@ -234,6 +234,41 @@ export interface SwapQuote {
 /** CR-021: these send a buy to the owner even below the threshold. */
 export type TradingFlag = 'NEW_TOKEN' | 'MINT_AUTHORITY'
 
+/** CR-025: what the venue says about a token. Untrusted, display only, labelled as the venue's. */
+export interface VenueTokenFacts {
+  holders?: number
+  /** As the venue reports it, a decimal string for display; never used in a decision. */
+  liquidityUsd?: string
+  organicScore?: number
+  createdAt?: string
+}
+
+/** CR-025: a token search result. The symbol and name are claims; decimals are re-read onchain. */
+export interface TokenInfo {
+  chain: ChainId
+  mint: Address
+  symbol: string
+  name: string
+  decimals: number
+  verified: boolean
+  venue: VenueTokenFacts
+}
+
+/** CR-025: what a buy of this token would meet, read onchain; venue holds the venue's own facts. */
+export interface TokenRisk {
+  chain: ChainId
+  mint: Address
+  decimals: number
+  freezeAuthority: boolean
+  mintAuthority: boolean
+  extensions: string[]
+  risks: RejectCode[]
+  flags: TradingFlag[]
+  /** Selling 10 USD worth back to the dollar; null without a route. */
+  exit: { amountUsd: Amount; priceImpactBps: number } | null
+  venue: VenueTokenFacts & { verified: boolean }
+}
+
 export interface Position {
   chain: ChainId
   token: Address
