@@ -39,14 +39,14 @@ verified:
    Others have done this for their domains; the outcome is unknown. It is public and shows the owner's
    GitHub account.
 
-   Title: `Manual review request: agentguard-onchain.vercel.app ("This dApp could be malicious")`
+   Title: `Manual review request: defimind-sign.vercel.app ("This dApp could be malicious")`
 
    ```text
-   Phantom shows "This dApp could be malicious" on agentguard-onchain.vercel.app when it asks to sign
+   Phantom shows "This dApp could be malicious" on defimind-sign.vercel.app when it asks to sign
    a Squads v4 multisigCreateV2 transaction, partly signed by a one-time create key. Adding a
    spending limit and the kill (removing it) on the same page are not flagged.
 
-   The page is open source: https://github.com/SharkWhite7/-DefiMind/tree/main/packages/onchain/web
+   The page's source: https://github.com/defimind2023/-DefiMind/tree/main/packages/onchain/web
    It builds each transaction from public addresses only, checks them onchain before asking the
    wallet to sign, and sends no funds to third parties. We would be grateful for a manual review.
    ```
@@ -71,8 +71,8 @@ is the owner's decision: which firm, what scope, what cost. Until then, the publ
 ## ⏳ HUMAN-31 — Run the infrastructure migration
 
 CR-012, CR-013 and CR-016 are complete in code, so the move of the live deployment to this repository
-can start. The runbook is [`docs/migration.md`](../docs/migration.md) (Parts A to F, with a rollback); the manager walks the owner through it one step at a time, and the integrator helps when a check fails; HUMAN-24, HUMAN-27, HUMAN-28 and HUMAN-30 were done in Parts A and B (2026-11-19). Progress: A, B and C1–C4 passed (the old apps are stopped, not destroyed; the database is on `defimind-guard-core`). The owner decided on 2026-11-20 to drop Telegram and use the web panel only, so C5 (the bot deploy) is skipped. D1 passed on 2026-11-20: the owner's passkey for `defimind-guard-core.fly.dev` is on his iPhone (the first one, made in Edge on Windows, was removed). D2 passed: the panel works on the iPhone in Safari. F0 is done: the bot's settings were unset and `main` was deployed, so guard-core runs without Telegram. E1 and E2 passed: `fly-agent` reaches `https://defimind-guard-core.fly.dev` from Claude Code and is live. E3 passed on 2026-11-23: a 1.00 USDC payment on Solana mainnet to the owner's own Phantom address, approved in the panel with the passkey, arrived in Phantom. The owner reported E3.5–E3.7 done the same day: receipt in Executions, today's spend in Overview, and the address removed again. F1 is done for guard-core (2026-11-23): `FLY_API_TOKEN_GUARD` is in the `defimind` environment, piped from flyctl, never shown; the bot needs none, since it is retired (HUMAN-32). Only F2 is left, after one to two stable weeks (from about 2026-12-07), together with HUMAN-32. One rule from CR-016: the new bot app gets `BOT_TOKEN` only, never
-`GUARD_ADMIN_TOKEN`. The signing page stays at `agentguard-onchain.vercel.app`; the migration creates no new domain.
+can start. The runbook was `docs/migration.md` (Parts A to F, with a rollback), removed from `main` on 2026-11-24 and last at commit `7b0b51c`; the manager walks the owner through it one step at a time, and the integrator helps when a check fails; HUMAN-24, HUMAN-27, HUMAN-28 and HUMAN-30 were done in Parts A and B (2026-11-19). Progress: A, B and C1–C4 passed (the old apps are stopped, not destroyed; the database is on `defimind-guard-core`). The owner decided on 2026-11-20 to drop Telegram and use the web panel only, so C5 (the bot deploy) is skipped. D1 passed on 2026-11-20: the owner's passkey for `defimind-guard-core.fly.dev` is on his iPhone (the first one, made in Edge on Windows, was removed). D2 passed: the panel works on the iPhone in Safari. F0 is done: the bot's settings were unset and `main` was deployed, so guard-core runs without Telegram. E1 and E2 passed: `fly-agent` reaches `https://defimind-guard-core.fly.dev` from Claude Code and is live. E3 passed on 2026-11-23: a 1.00 USDC payment on Solana mainnet to the owner's own Phantom address, approved in the panel with the passkey, arrived in Phantom. The owner reported E3.5–E3.7 done the same day: receipt in Executions, today's spend in Overview, and the address removed again. F1 is done for guard-core (2026-11-23): `FLY_API_TOKEN_GUARD` is in the `defimind` environment, piped from flyctl, never shown; the bot needs none, since it is retired (HUMAN-32). Only F2 is left, after one to two stable weeks (from about 2026-12-07), together with HUMAN-32. One rule from CR-016: the new bot app gets `BOT_TOKEN` only, never
+`GUARD_ADMIN_TOKEN`. Until GC-58 lands, `SIGN_PAGE_URL` still points at the legacy signing page from HUMAN-14, so that Vercel project stays up until then.
 
 ---
 
@@ -87,7 +87,7 @@ off the site (SITE-5): "Deixa como está, so remove o github site eu nao vou por
 What the public launch still needs, once he decides:
 
 1. SITE-4, copy fixes on the site. It still mentions Telegram's `/kill`, Base as live and SPEC v0.5.
-2. The site's Vercel project builds from the old repository (`agent443-dot/AgentGuard`). Reconnect it
+2. The site's Vercel project builds from the legacy repository. Reconnect it
    to `SharkWhite7/-DefiMind` with Root Directory `site`.
 3. `defimind-sign.vercel.app` answered 404 at its root after HUMAN-34. Recheck the project's
    deployments and domains, then the integrator verifies the files and merges GC-58 (#89).
@@ -152,7 +152,7 @@ Only if simulation needs a second provider. Not needed so far.
 | HUMAN-11 | First live run on Solana devnet: three payments, 3.5 USDC                             | 2026-11-04 | INT-3, INT-4                                                                   |
 | HUMAN-12 | Safe on Base Sepolia                                                                  | 2026-11-05 | `0x1df91C7e227370F138Ae546f3D2fa2Fde8a48C2D`                                   |
 | HUMAN-13 | First live run on Base Sepolia, from an empty hot wallet                              | 2026-11-05 | INT-6, PR #63                                                                  |
-| HUMAN-14 | Phantom signing page hosted                                                           | 2026-11-06 | `https://agentguard-onchain.vercel.app`                                        |
+| HUMAN-14 | Phantom signing page hosted                                                           | 2026-11-06 | the legacy signing page; replaced by `defimind-sign` (HUMAN-34)                |
 | HUMAN-15 | Devnet rehearsal with Phantom as owner: create, add limit, kill                       | 2026-11-07 | ADR 003                                                                        |
 | HUMAN-16 | Base hot wallet key moved to a file                                                   | 2026-11-07 | PR #81                                                                         |
 | HUMAN-18 | Robinhood Chain USDG addresses confirmed against Paxos                                | 2026-11-07 | allowlist-only token rule                                                      |
@@ -166,6 +166,6 @@ Only if simulation needs a second provider. Not needed so far.
 | HUMAN-24 | Receipt signing key created and set on `defimind-guard-core` (HUMAN-31 A4, B3)        | 2026-11-19 | never printed; `/v1/receipts/key` serves the public key                        |
 | HUMAN-30 | Anchoring keypair created, funded with 2 devnet SOL, set on `defimind-guard-core`     | 2026-11-19 | fee-only, never the hot wallet                                                 |
 | HUMAN-27 | Web Push (VAPID) key created and set on `defimind-guard-core`                         | 2026-11-19 | HUMAN-31 A4, B3                                                                |
-| HUMAN-28 | `SIGN_PAGE_URL` set on `defimind-guard-core` from the bot's live value                | 2026-11-19 | `agentguard-onchain.vercel.app`                                                |
+| HUMAN-28 | `SIGN_PAGE_URL` set on `defimind-guard-core` from the bot's live value                | 2026-11-19 | the legacy signing page, until GC-58                                           |
 | HUMAN-23 | Passkey enrolled for the panel, on the owner's iPhone (HUMAN-31 D1)                   | 2026-11-20 | `defimind-guard-core.fly.dev`; link carried by QR, never pasted                |
 | HUMAN-34 | Hosted signing page `defimind-sign` published on Vercel from this repository (CR-020) | 2026-11-23 | `https://defimind-sign.vercel.app`; `/?action=kill` says the link is not valid |
