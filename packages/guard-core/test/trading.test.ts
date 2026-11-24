@@ -93,6 +93,11 @@ describe('evaluateTrade (CR-021)', () => {
     expect(reasons(buy(), policy({ tokens: [], allowAnyToken: true }))).toEqual([])
   })
 
+  it('refuses every swap, sells too, when the policy requires a mandate', () => {
+    expect(reasons(buy(), policy({}, { requireMandate: true }))).toEqual(['MANDATE_REQUIRED'])
+    expect(reasons(sell(), policy({}, { requireMandate: true }))).toEqual(['MANDATE_REQUIRED'])
+  })
+
   it('lets an agent sell a token that is no longer listed', () => {
     expect(evaluateTrade(sell(), policy({ tokens: [] }), book, NOW).decision).toBe('approve')
   })

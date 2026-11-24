@@ -65,6 +65,11 @@ export function evaluateTrade(trade: Trade, policy: Policy, book: Book, now: Dat
   if (policy.paused) {
     add('PAUSED')
   }
+  // A swap cannot name a mandate yet, so an owner who allows payments only inside a task budget
+  // gets no swaps at all until mandates have a design for trades.
+  if (policy.requireMandate === true) {
+    add('MANDATE_REQUIRED')
+  }
   const { quote, request, side } = trade
   if (!trading.venues.includes(quote.venue)) {
     add('VENUE_NOT_ALLOWED')

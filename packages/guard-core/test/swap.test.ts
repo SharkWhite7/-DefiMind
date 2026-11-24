@@ -210,6 +210,23 @@ describe('swaps (CR-021)', () => {
     expect(chain.sent).toEqual([])
   })
 
+  it('never signs in shadow, even with the dollar in the hot wallet and a clean test run', async () => {
+    const { h, chain } = await setup({ mode: 'shadow' })
+    const res = await h.agent('POST', '/v1/agent/swap', buy())
+    expect(res.json()).toMatchObject({ status: 'shadowed' })
+    expect(h.auditEvents(res.json().intentId)).toContain('simulated')
+    expect(chain.sent).toEqual([])
+    expect(chain.topUps).toEqual([])
+  })
+
+  it('refuses a swap when the policy allows payments only inside a mandate', async () => {
+    const chain = new Venue()
+    const h = await harness({ chain, policy: { trading, requireMandate: true } })
+    const res = await h.agent('POST', '/v1/agent/swap', buy())
+    expect(res.json()).toMatchObject({ status: 'rejected', rejectReasons: ['MANDATE_REQUIRED'] })
+    expect(chain.sent).toEqual([])
+  })
+
   it('answers a quote read-only, and refuses it without trading', async () => {
     const { h } = await setup()
     const quote = await h.agent('POST', '/v1/agent/quote', buy())
