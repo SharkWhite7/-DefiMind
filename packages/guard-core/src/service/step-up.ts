@@ -12,6 +12,7 @@ export type OwnerAction =
   | 'create_agent'
   | 'change_settings'
   | 'close_positions'
+  | 'manual_trade'
   | 'agent_wallet'
 
 const STEP_UP_MS = 5 * 60_000
