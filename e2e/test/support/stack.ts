@@ -151,8 +151,8 @@ export async function stack(
     agentToken,
     telegram: tg,
     admin,
-    setPolicy: (overrides: Partial<Policy> = {}) =>
-      putPolicy(db, { agentId: AGENT, ...policy(overrides, net) }, clock.now.toISOString()),
+    setPolicy: (overrides: Partial<Policy> = {}, agentId = AGENT) =>
+      putPolicy(db, { agentId, ...policy(overrides, net) }, clock.now.toISOString()),
     /** Calls an MCP tool the way an agent would, and returns the text it reads back. */
     async tool(name: string, args: Record<string, unknown> = {}) {
       const result = (await client.callTool({ name, arguments: args })) as CallToolResult

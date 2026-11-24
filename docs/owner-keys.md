@@ -62,6 +62,29 @@ A Safe's threshold binds every owner, so more signers really do protect it:
 - An agent can have its own spending wallet and daily limit ("Own wallet" on the agent). Then a bug
   or a hijack in that agent stays within its own cap. It does not change who controls the vault.
 
+## Give an agent its own wallet
+
+By default every agent spends from one shared spending wallet per chain. An agent with its own
+wallet spends only from it, under its own daily limit, so one agent's bug or hijack cannot spend
+another agent's share. Existing agents keep the shared wallet until you change them; nothing moves
+on its own.
+
+1. In the panel, open the agent, then **Own wallet**, and press **Give it its own wallet on
+   Solana** (or the chain you want). Your passkey confirms it.
+2. Press **Sign the limit** and sign the agent's daily limit in your wallet. Until DefiMind reads
+   that limit on the chain, the card says _Waiting for its limit_ and the agent keeps paying from
+   the shared wallet.
+3. Send the new address a little of the chain's gas token (SOL or ETH); the card shows the minimum.
+   The agent's wallet pays its own fees.
+
+Once the card says _Active_, every payment, top-up and trade of that agent on that chain uses that
+wallet alone. **Stop this agent** on the same page pauses this agent only, and gives you one
+signature per own wallet to take its limit off. **Stop everything** on the Overview still stops
+every agent.
+
+Every agent key still sits on your one DefiMind server: if the server itself is broken into, the
+most at risk is the sum of every daily limit.
+
 ## What it cannot do
 
 DefiMind never holds your owner key, so it cannot stop someone who has it. Keep the recovery phrase

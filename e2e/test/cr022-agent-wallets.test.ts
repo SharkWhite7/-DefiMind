@@ -1,4 +1,5 @@
-import { StubChain } from '@defimind/guard-core'
+import { createAgent, StubChain } from '@defimind/guard-core'
+import { httpGuard } from '@defimind/mcp-server'
 import type { AllowanceState, OwnerTransaction } from '@defimind/shared'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { WalletKeys } from '../../packages/guard-core/src/service/wallets.js'
@@ -96,5 +97,25 @@ describe('an agent with its own wallet (CR-022 HIGH-2)', () => {
       false,
       true,
     ])
+  })
+  it("keeps another agent off that wallet, even with the first agent's id", async () => {
+    await giveOwnWallet()
+    signed.limit = true
+    await panel.call('/v1/owner/agents/agent-1/wallets', {}, 'GET')
+    const token = createAgent(s.db, 'agent-2')
+    s.setPolicy({ allowedRecipients: [MERCHANT] }, 'agent-2')
+    const as = (agentId: string) => httpGuard({ baseUrl: s.guardUrl, agentId, token })
+    const invoice = {
+      chain: SOLANA.chain,
+      token: SOLANA.token,
+      amount: '1000000',
+      recipient: MERCHANT,
+      reason: 'e2e: pay the invoice',
+    }
+
+    await expect(as('agent-1').transfer(invoice)).rejects.toThrow(/did not accept this agent/)
+    expect(await as('agent-2').transfer(invoice)).toMatchObject({ status: 'executed' })
+    expect(s.chain.sent).toHaveLength(1)
+    expect(wallet().sent).toHaveLength(0)
   })
 })
