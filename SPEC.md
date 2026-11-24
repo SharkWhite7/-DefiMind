@@ -362,6 +362,7 @@ POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, sing
   sha256(canonical JSON of { action, body }); the step-up assertion for that exact action and body
   OwnerAction = "approve_intent" | "approve_mandate" | "loosen_policy" | "resume" | "create_agent"
     | "change_settings" (CR-019) | "close_positions" (CR-021, body {})
+    | "agent_wallet" (CR-022, body { agentId, chain })
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
 GET  /v1/owner/deposit -> { chains: { chain, vault, token, balance, dailyCap?, depositPage? }[] }
@@ -544,6 +545,53 @@ Checks, in order, all default deny:
 Buys count against dailyTradeMax, not dailyMax. A top-up for a buy draws the chain's dollar under the
 same onchain cap.
 
+## Agent wallets (CR-022, HIGH-2)
+Opt-in, per agent and chain. By default every agent spends from the chain's shared spending (hot)
+wallet, as before. An agent given its own wallet spends only from it, under its own onchain limit,
+so a bug or a hijacked agent can never cost more than that agent's own cap.
+
+Keys. guard-core generates the agent's hot wallet on request and stores it at
+/data/keys/agents/<agentId>/<chain> (0600), or reads it from AGENT_WALLET_<AGENTID>_<CHAIN>_FILE if
+that is set. It is never logged and never returned. One agent's key is never used for another agent.
+
+Onchain limit. On Solana, a Squads spending limit on the same multisig, whose only member and only
+destination is the agent's wallet: the spending-limit PDA is derived from that member, so limits never
+collide. On EVM, an Allowance Module delegate with its own allowance on the same Safe. The owner signs
+it on the signing page with action=add-limit naming the agent's wallet. /sign injects every hot wallet
+of this deployment, shared and per agent, and refuses any other. The hosted page (CR-020) never
+serves add-limit.
+
+Routes (session, step-up "agent_wallet" over { agentId, chain }):
+POST /v1/owner/agents/:id/wallets { chain, assertion } -> AgentWallet
+  { chain, address, status: "pending_limit" | "active", addLimitPage, gas: { balance, minimum, symbol } }
+  Idempotent: a second call returns the same wallet. The wallet is "active" only once guard-core
+  reads its limit or allowance onchain, as for vault adoption (CR-019). Until then the agent keeps
+  using the shared wallet.
+GET  /v1/owner/agents/:id/wallets -> { wallets: AgentWallet[] }
+AgentSummary gains wallets?: { chain, address, status }[]. GET /v1/owner/keys adds
+agentWallets: { agentId, chain, address }[], public keys only.
+
+Routing. For an agent with an active wallet on a chain, every payment, top-up and swap of that agent
+on that chain uses only that wallet and its limit. getAllowanceState, doctor's gas and balance
+checks, positions and Close positions all run per wallet. Agents without one keep the shared wallet.
+Gas: the agent's wallet pays its own fees. The panel shows the address and the gas it needs, and
+doctor warns below the minimum.
+
+Kill. POST /v1/owner/kill still pauses every agent, and now returns one ownerTransactions entry per
+chain and wallet, shared and per agent: every limit is removed. POST /v1/owner/agents/:id/kill {}
+(session) pauses that agent and returns ownerTransactions for its own wallets only. Revoking an agent
+with its own wallet returns the same transactions and says the limit is still live until they are
+signed. The bot's and the admin's kill pause everything, as before, and carry no links.
+
+Migration. Existing agents, fly-agent included, stay on the shared wallet until the owner opts in. To
+move an agent: create its wallet, sign the limit, send it a little gas. It switches once its wallet is
+active. Then lower the shared limit by what that agent used. Funds and positions already in the
+shared wallet stay there; Close positions still reaches them.
+
+Limit of the design. Every hot wallet key lives in the same guard-core. A compromised server holds them
+all, and the bound is then the sum of the onchain caps, shared and per agent. Moving keys out of the
+server (KMS or a signer service) is a later CR.
+
 ## Webhook guard-core -> telegram-bot
 The Telegram bot is optional (CR-017). BOT_URL, BOT_TOKEN and BOT_WEBHOOK_SECRET are all set or all
 unset; a partial set is a configuration error. With none set, guard-core sends no webhook, registers
@@ -599,7 +647,8 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
   - an x402 approval is bound to its exact request;
   - the public listener checks the Host header;
   - getVault reports the vault's threshold, and doctor warns at threshold 1.
-  Per-agent hot wallets (HIGH-2) wait for the owner's choice of design.
+  The same day, after the owner chose option A, opt-in agent wallets: a hot wallet and onchain limit
+  per agent and chain, routed per agent, killed per agent.
 - v0.16 (2026-11-24): CR-021, approved by the owner. Guarded trading, phase 1 on Solana through
   Jupiter: the swap intent kind, Policy.trading, the trading reject codes and approval flags,
   ChainAdapter.quoteSwap and getPositions, the agent quote, swap and portfolio routes, the owner's

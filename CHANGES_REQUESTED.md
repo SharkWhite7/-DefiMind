@@ -1232,8 +1232,9 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
 - **From:** integrator, from the manager's summary of an independent review
 - **Date:** 2026-11-24
 - **Status:** approved by the owner on 2026-11-24. He was shown the reviewer's red flags and said
-  "let's fix the red flags" (relayed by the manager). Applied to SPEC v0.17 on 2026-11-24. HIGH-2 is
-  approved as a goal only: its design waits for the owner's choice among the options below.
+  "let's fix the red flags" (relayed by the manager). Applied to SPEC v0.17 on 2026-11-24. HIGH-2:
+  the owner chose option A the same day ("A: wallet and limit per agent (Recommended)", on the
+  manager's question card); specified in SPEC v0.17, "Agent wallets".
 - **Why:** an independent reviewer ran DefiMind locally and published an analysis (8/10, "really
   excellent engineering", explicitly not an audit). It listed six red flags. Two notes that need no
   code: the commit history (fast, mostly AI-written) is a transparency matter, and the admin token
@@ -1333,7 +1334,11 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   - PANEL-21: HIGH-3 copy in setup and settings; the `admin_loosen_refused` alert in the bot; the
     swap intents the bot refuses today (found by INT-47) (panel).
   - INT-48: e2e for each fix, SPEC and docs, the owner key guide, and the shared types (integrator).
-  - HIGH-2: rows after the owner's choice.
+  - HIGH-2, option A:
+    - ON-30: agent wallets on the signing page, plus per-wallet kill and allowance.
+    - GC-65: keys, routes, routing per agent, per-agent kill, doctor.
+    - PANEL-22: the "own wallet" step and per-agent kill.
+    - INT-49: e2e, the shared types, and the migration guide.
 - **Risks for the owner to accept:**
   - Scripts that loosened mainnet policies with the admin token stop working. The panel does it,
     with the passkey.
