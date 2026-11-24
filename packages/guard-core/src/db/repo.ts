@@ -51,6 +51,7 @@ export function getPolicy(db: Db, agentId: string): StoredPolicy | undefined {
     priceIncreaseMaxPct: row.priceIncreaseMaxPct,
     maxPaymentsPerMinute: row.maxPaymentsPerMinute,
     requireMandate: row.requireMandate,
+    ...(row.trading === null ? {} : { trading: row.trading }),
   }
 }
 
@@ -79,12 +80,13 @@ export function pauseAll(db: Db, now: string): number {
 type IntentRow = typeof intents.$inferSelect
 
 function toIntent(row: IntentRow): PayIntent {
-  const { domain, txId, mandateId, ...rest } = row
+  const { domain, txId, mandateId, swap, ...rest } = row
   return {
     ...rest,
     ...(domain === null ? {} : { domain }),
     ...(txId === null ? {} : { txId }),
     ...(mandateId === null ? {} : { mandateId }),
+    ...(swap === null ? {} : { swap }),
   }
 }
 
@@ -125,6 +127,7 @@ export function saveIntent(db: Db, intent: PayIntent): void {
     domain: intent.domain ?? null,
     txId: intent.txId ?? null,
     mandateId: intent.mandateId ?? null,
+    swap: intent.swap ?? null,
   }
   db.insert(intents).values(row).onConflictDoUpdate({ target: intents.id, set: row }).run()
 }

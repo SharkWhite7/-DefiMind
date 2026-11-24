@@ -28,7 +28,9 @@ export function summarise(agentIds: string[], intents: PayIntent[]): AgentReport
       if (intent.agentId !== agentId) {
         continue
       }
-      if (intent.status === 'executed') {
+      // A swap is not a payment, and a sale's amount is in its token, not dollars: the portfolio
+      // reports trading (CR-021).
+      if (intent.status === 'executed' && intent.kind !== 'swap') {
         const amount = parseAmount(intent.amount)
         spent += amount
         payments++
