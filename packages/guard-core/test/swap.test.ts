@@ -2,7 +2,7 @@ import type { TradingPolicy } from '@defimind/shared'
 import { describe, expect, it } from 'vitest'
 import { getPosition } from '../src/db/trades.js'
 import { addWallet } from '../src/db/wallets.js'
-import { CHAIN, harness, MINT as USDC, NOW } from './harness.js'
+import { CHAIN, harness, MINT as USDC, NOW, wouldHave } from './harness.js'
 import { signedIn } from './owner.js'
 import { BONK, trading, Venue } from './venue.js'
 
@@ -200,6 +200,12 @@ describe('swaps (CR-021)', () => {
     expect(h.auditEvents(res.json().intentId)).toContain('simulated')
     expect(chain.sent).toEqual([])
     expect(chain.topUps).toEqual([])
+  })
+
+  it('records in shadow the flags and the approval live would have asked for (CR-024)', async () => {
+    const { h } = await setup({ mode: 'shadow', balance: 0n })
+    const id = (await h.agent('POST', '/v1/agent/swap', buy())).json().intentId
+    expect(wouldHave(h, id)).toMatchObject({ wouldAsk: true, flags: ['NEW_TOKEN'] })
   })
 
   it('refuses a swap when the policy allows payments only inside a mandate', async () => {
