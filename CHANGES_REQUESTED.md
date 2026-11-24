@@ -1307,6 +1307,17 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   - The signing page today requires the sole owner of a Safe and the config authority of a multisig.
     Multi-signer vaults need the page to propose rather than execute, which is a follow-up in the
     same rows.
+  - **Known limit on Solana (found by onchain in ON-29).** Every DefiMind Solana vault is a
+    _controlled_ Squads multisig, because the instant kill uses its config authority. A config
+    authority can add itself a spending limit and empty the vault without any vote. Such a vault is
+    held by that one key whatever its member threshold says, so `getVault().control` reports
+    `{ threshold: 1, signers: 1 }`, and a 2-of-3 member threshold would not protect it.
+    - The concrete mitigation is to make the config authority a hardware wallet (a Ledger through
+      Phantom). Doctor and the panel say so on Solana. They never suggest raising the threshold,
+      which cannot help there.
+    - An autonomous vault with a proposal-based kill is CR-023 (proposed).
+    - On EVM, a Safe's threshold works as expected, and the advice there is a separate owner key or
+      a 2-of-3 with a hardware key.
 
 - **HIGH-2. One spending (hot) wallet per chain, shared by every agent.** Each agent has its own
   offchain policy, but onchain the daily cap is shared. A policy-engine bug for one agent could spend
@@ -1350,3 +1361,30 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     passkey.
   - A single-listener deployment that served the admin API publicly will not start until it chooses
     ADMIN_ROUTES=false, a split listener or ALLOW_PUBLIC_ADMIN=true.
+
+### CR-023 — An autonomous Squads vault with a proposal-based kill (option, not yet proposed)
+
+- **From:** integrator, after onchain's finding in ON-29
+- **Date:** 2026-11-24
+- **Status:** draft for the manager to put to the owner later. Not proposed yet.
+- **Problem:** every DefiMind Solana vault is a controlled Squads multisig. Its config authority
+  removes the agent's spending limit in one signature, which is what makes the kill instant. But that
+  same key can add itself a limit and empty the vault, so the vault is exactly as safe as one key.
+  Today the mitigation is a hardware wallet for that key (CR-022).
+- **The option:** an autonomous multisig, with no config authority: for example 2-of-3, with members
+  on a phone wallet, a hardware wallet and a recovery key. Every config change, including removing
+  the spending limit, is a proposal that reaches the threshold of votes before it executes.
+  - The kill becomes "propose and approve": the signing page creates the proposal and the owner's
+    first vote together, and a second member approves and executes it. Until then, guard-core's own
+    pause is the instant stop. It is already part of every kill, and it stops all signing at once;
+    the onchain limit stays live only for a key thief, not for the agents.
+  - The add-limit and deposit flows become proposals too.
+- **Trade-off:**
+  - **For:** no single key can empty the vault. A stolen phone or seed alone loses nothing.
+  - **Against:** the onchain kill needs two people or two devices and takes minutes instead of
+    seconds. Setup is longer. The owner must keep a quorum of keys reachable. Losing two of three
+    keys locks the vault.
+- **Scope if chosen:** onchain (proposal flows on the signing page and the hosted page, `control`
+  read from voters), guard-core (vault adoption for an autonomous multisig, a kill that reports
+  "proposed, waiting for a second approval"), panel (copy and the kill status), integrator (SPEC,
+  e2e, owner guide).

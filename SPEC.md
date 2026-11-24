@@ -225,8 +225,11 @@ interface ChainAdapter {
   getVault(): Promise<{ address: string; token: string; balance: Amount }>  // CR-019: the owner's
                                                    // vault (Squads vault index 0, or the Safe),
                                                    // where deposits go, and its balance
-    // CR-022: plus control?: { threshold: number; signers: number }, read onchain: the multisig's
-    // threshold and members, or the Safe's threshold and owners. Doctor warns at threshold 1.
+    // CR-022: plus control?: { threshold: number; signers: number }, read onchain: the Safe's
+    // threshold and owners, or the multisig's voters. A controlled Squads multisig (every
+    // DefiMind vault: the kill uses its config authority) is { 1, 1 }: that authority alone can
+    // empty it. Doctor warns at threshold 1. On Solana, it names the config authority as the key
+    // to protect (a hardware wallet); on EVM, it advises another owner or a 2-of-3.
   buildKillTx(): Promise<{ description: string; payload: unknown }>  // owner signs this
   simulate(intent: PayIntent): Promise<SimulationOutcome>
   send(intent: PayIntent): Promise<string>         // returns txId

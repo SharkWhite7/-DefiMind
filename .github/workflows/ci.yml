@@ -201,6 +201,13 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@v1
 
+      # The forks are pinned to a block, so their state keeps: later runs barely touch the RPCs,
+      # one of which answers a burst from a CI runner with a Cloudflare challenge.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.foundry/cache/rpc
+          key: forge-rpc-${{ hashFiles('packages/onchain/forge/**/*.sol') }}
+
       - name: forge test
         working-directory: packages/onchain
         env:
