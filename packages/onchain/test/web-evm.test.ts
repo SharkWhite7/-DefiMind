@@ -21,6 +21,7 @@ import {
   createData,
   depositData,
   enableData,
+  execByOwner,
   FALLBACK_HANDLER,
   killData,
   MULTI_SEND_CALL_ONLY,
@@ -31,6 +32,17 @@ import {
 
 const owner = getAddress('0x0000000000000000000000000000000000000E0E')
 const hot = getAddress('0x0000000000000000000000000000000000000B0B')
+const ledger = getAddress('0x0000000000000000000000000000000000001ED6')
+const addLedger = encodeFunctionData({
+  abi: safeAbi,
+  functionName: 'addOwnerWithThreshold',
+  args: [ledger, 1n],
+})
+const removeOwner = encodeFunctionData({
+  abi: safeAbi,
+  functionName: 'removeOwner',
+  args: [ledger, owner, 1n],
+})
 const module = getAddress(sharedAddress(CHAINS.robinhoodTestnet, 'allowanceModule')!)
 const usd = getAddress(sharedAddress(CHAINS.robinhoodTestnet, 'usd')!)
 // The mainnet pilot's cap: 5 USDG a day.
@@ -145,6 +157,9 @@ describe("the signing page's Safe calls", () => {
         kill: killData(owner, on.module, hot),
         reenable: enableData(owner, safe, on, true),
         deposit: depositData(safe, cap),
+        ledger,
+        handOverAdd: execByOwner(owner, safe, addLedger),
+        handOverRemove: execByOwner(ledger, safe, removeOwner),
       }
       await expect(`${JSON.stringify(fixture, null, 2)}\n`).toMatchFileSnapshot(
         `../forge/fixtures/signing-page-${cluster}.json`,

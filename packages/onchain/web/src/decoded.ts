@@ -97,6 +97,30 @@ function squads(ix: TransactionInstruction): Line {
   if (is(data, g.multisigRemoveSpendingLimitInstructionDiscriminator)) {
     return read(`Remove spending limit ${ix.keys[2]!.pubkey.toBase58()}.`)
   }
+  const multisigKey = ix.keys[0]!.pubkey.toBase58()
+  if (is(data, g.multisigAddMemberInstructionDiscriminator)) {
+    const { args } = g.multisigAddMemberStruct.deserialize(data)[0]
+    if (args.memo !== null) return UNKNOWN(ix.programId)
+    const { key, permissions } = args.newMember
+    const every = permissions.mask === multisig.types.Permissions.all().mask
+    return read(
+      `Add ${key.toBase58()} as a member of multisig ${multisigKey}, with ` +
+        `${every ? 'every permission: it can move the vault' : `permissions ${permissions.mask}`}.`,
+    )
+  }
+  if (is(data, g.multisigRemoveMemberInstructionDiscriminator)) {
+    const { args } = g.multisigRemoveMemberStruct.deserialize(data)[0]
+    if (args.memo !== null) return UNKNOWN(ix.programId)
+    return read(`Remove ${args.oldMember.toBase58()} from the members of multisig ${multisigKey}.`)
+  }
+  if (is(data, g.multisigSetConfigAuthorityInstructionDiscriminator)) {
+    const { args } = g.multisigSetConfigAuthorityStruct.deserialize(data)[0]
+    if (args.memo !== null) return UNKNOWN(ix.programId)
+    return read(
+      `Make ${args.configAuthority.toBase58()} the config authority of multisig ${multisigKey}: ` +
+        'it alone then sets limits and members.',
+    )
+  }
   if (is(data, g.multisigCreateV2InstructionDiscriminator)) {
     const { args } = g.multisigCreateV2Struct.deserialize(data)[0]
     return read(

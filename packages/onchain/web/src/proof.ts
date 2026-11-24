@@ -223,7 +223,10 @@ const seconds = (s: bigint) => new Date(Number(s) * 1000)
 const list = (keys: PublicKey[]) => keys.map((key) => key.toBase58()).join(', ') || '(any)'
 
 /** Every Squads spending limit whose multisig field is this one. */
-async function spendingLimits(connection: Connection, multisigPda: PublicKey): Promise<Found[]> {
+export async function spendingLimits(
+  connection: Connection,
+  multisigPda: PublicKey,
+): Promise<Found[]> {
   const accounts = await connection.getProgramAccounts(multisig.PROGRAM_ID, {
     filters: [
       {

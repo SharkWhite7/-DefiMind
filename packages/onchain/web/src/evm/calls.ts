@@ -23,6 +23,8 @@ export const safeAbi = parseAbi([
   'function getThreshold() view returns (uint256)',
   'function isModuleEnabled(address module) view returns (bool)',
   'function setup(address[] owners, uint256 threshold, address to, bytes data, address fallbackHandler, address paymentToken, uint256 payment, address paymentReceiver)',
+  'function addOwnerWithThreshold(address owner, uint256 _threshold)',
+  'function removeOwner(address prevOwner, address owner, uint256 _threshold)',
   'function execTransaction(address to, uint256 value, bytes data, uint8 operation, uint256 safeTxGas, uint256 baseGas, uint256 gasPrice, address gasToken, address refundReceiver, bytes signatures) payable returns (bool)',
 ])
 

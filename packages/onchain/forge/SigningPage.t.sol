@@ -118,6 +118,24 @@ abstract contract SigningPageFlows {
         requireAllowance(vm.parseJsonUint(fixture, ".cap"));
     }
 
+    /// The hand-over to a Ledger (ON-34): the Ledger joins as a second owner, then removes the old
+    /// one, after which the old owner's own bytes no longer run anything. The delegate is untouched.
+    function test_handOverToALedger() public {
+        create();
+        send(owner, address(safe), "enable");
+        address ledger = vm.parseJsonAddress(fixture, ".ledger");
+        require(!sends(ledger, address(safe), "handOverRemove"), "a stranger removed the owner");
+        send(owner, address(safe), "handOverAdd");
+        address[] memory owners = safe.getOwners();
+        require(owners.length == 2 && owners[0] == ledger && owners[1] == owner, "not the Ledger beside the owner");
+        require(safe.getThreshold() == 1, "step 1 changed the threshold");
+        send(ledger, address(safe), "handOverRemove");
+        owners = safe.getOwners();
+        require(owners.length == 1 && owners[0] == ledger, "the Ledger is not the only owner");
+        require(!sends(owner, address(safe), "kill"), "the old owner still runs the Safe");
+        require(listed() == hot, "the hand-over touched the delegate");
+    }
+
     /// The pre-validated signature is good only from the owner: the same bytes from anyone else revert.
     function test_safeCallsFromAnotherSenderRevert() public {
         create();

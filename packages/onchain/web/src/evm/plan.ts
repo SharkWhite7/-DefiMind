@@ -12,6 +12,8 @@ export type EvmPlan =
       to: Address
       data: Hex
       after: string
+      /** What the owner can do instead when Phantom cannot send this. */
+      fallback?: string
       landed: () => Promise<string[] | undefined>
     }
 

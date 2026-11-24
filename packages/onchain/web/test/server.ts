@@ -109,6 +109,8 @@ export async function servePage(
       ),
     ),
     '/wallet': async (body) => JSON.stringify(await sign(body)),
+    // The account Phantom has selected now: a test switches it, as the owner does in Phantom.
+    '/account': async () => wallet().publicKey.toBase58(),
   })
   return { ...served, dist, signed, refused }
 }
@@ -196,9 +198,11 @@ export function mockPhantom(publicKey: string, rejects = false): string {
       isPhantom: true,
       // Phantom's real provider compiles zod schemas with new Function in the page's own world, so
       // the stand-in does too: a CSP without 'unsafe-eval' breaks connect, as it did live.
-      connect: async () => ({
-        publicKey: { toString: new Function('return ' + ${JSON.stringify(JSON.stringify(publicKey))}) },
-      }),
+      connect: async () => {
+        const res = await fetch('/account', { method: 'POST', body: '' })
+        const key = res.ok ? await res.text() : ${JSON.stringify(publicKey)}
+        return { publicKey: { toString: new Function('return ' + JSON.stringify(key)) } }
+      },
       signAndSendTransaction: async (tx) => {
         if (${String(rejects)}) throw new Error('User rejected the request.')
         let raw = ''
