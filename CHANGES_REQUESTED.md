@@ -1247,8 +1247,8 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   passkey (CR-012, CR-015), and the admin token is a machine credential that can leak.
   - **Fix:** the admin token only tightens, as the bot's does (CR-016). A `PUT /v1/admin/policy`
     that loosens, as `loosened()` counts it, and every `POST /v1/admin/resume` are refused with
-    403 `{ error: "loosen_in_panel" }`. `POST /v1/admin/mandates` opens the mandate pending the
-    owner's approval in the panel. There is no exception for a new agent's first policy: it would
+    403 `{ error: "loosen_in_panel" }`. `POST /v1/admin/mandates` opens the mandate as the agent's
+    own request would: at or above approvalThreshold it waits for the owner in the panel. There is no exception for a new agent's first policy: it would
     reopen the hole, since the token can create an agent. Tests and local tools write policies into
     the database directly, and the setup wizard leaves the rules to the panel.
   - An earlier draft let the admin loosen testnet-only policies before the first passkey. It was
@@ -1257,7 +1257,8 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     alert and Web Push `attack`): someone who has the admin token is trying to widen a policy.
   - Unchanged: admin reads, tightening, pause, kill, revoke, and creating an agent (deny-all, shadow).
   - **Tests:** a raised perTxMax, an added recipient or domain, mode `live` and resume are each 403
-    and audited, with no policy changed. An admin mandate waits for the owner. Tightening still
+    and audited, with no policy changed. An admin mandate at or above the threshold waits for the
+    owner. Tightening still
     passes. The reviewer's own attack is a test.
   - **First passkey.** While no passkey exists, the admin token could enrol one and take over a fresh
     deployment. With SETUP_CODE set, only the setup code enrols the first passkey; the admin routes

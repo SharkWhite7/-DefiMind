@@ -320,7 +320,8 @@ GET/PUT /v1/admin/policy/:agentId  Policy
   Admin only tightens (CR-022). A PUT that loosens, as loosened() counts it, and every
   POST /v1/admin/resume are refused with 403 { error: "loosen_in_panel" }, as for the bot (CR-016):
   loosening is the panel's, with the passkey. POST /v1/admin/mandates opens the mandate
-  pending_approval, for the owner to approve in the panel. Each refusal is audited (event
+  as the agent's own request would (CR-010): at or above approvalThreshold it waits for the owner in
+  the panel, so the admin token gets no more than the agent's token already has. Each refusal is audited (event
   "admin_loosen_refused", via "admin") and alerts the owner: { kind: "admin_loosen_refused" } to the
   bot and Web Push "attack". Reads, tightening, pause, kill, revoke and creating an agent (deny-all,
   shadow) are unchanged. Tests and local tools write a policy into the database directly.
@@ -332,7 +333,7 @@ GET  /v1/admin/doctor -> { checks: { id, status: "ok" | "warn" | "fail", message
   Plain-English checks, never a secret: database writable, each chain's allowance readable, each
   hot wallet's gas (getHotWalletGas) and token balance, the bot reachable, the last backup's age.
 POST /v1/admin/mandates { agentId, budget, domains, recipients?, ttlSeconds, reason } -> Mandate
-  (pending_approval since CR-022: the owner approves it in the panel)
+  (since CR-022, opened as an agent's own: pending_approval at or above approvalThreshold)
 POST /v1/admin/mandates/:id/revoke -> Mandate
 GET  /v1/admin/receipts?from&to -> { receipts: Receipt[] }
 GET  /v1/admin/report?from&to -> { agents: { agentId, spent, payments, refused: Record<RejectCode, number>,
@@ -343,7 +344,8 @@ POST /v1/admin/passkeys/code -> { code, expiresAt }   one-time, 10 minutes, hash
   which runs WebAuthn registration for this origin via POST /v1/owner/passkeys/options { code } and
   POST /v1/owner/passkeys { code, response }. The bot's /passkey enrol sends the link.
   First passkey (CR-022). With SETUP_CODE set, only POST /v1/owner/setup { setupCode } issues the
-  code for the first passkey: the admin routes refuse it with 403 { error: "use_setup_code" }, audited
+  code for the first passkey: the admin passkey routes (code, options and the first enrolment) refuse
+  it with 403 { error: "use_setup_code" }, audited
   and alerted as admin_loosen_refused, so an admin token cannot take over a fresh deployment. Without
   SETUP_CODE, guard-core warns at every start while no passkey exists.
   Code enrolment adds the FIRST passkey only. Once one exists, POST /v1/owner/passkeys also needs an
