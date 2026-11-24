@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.15 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.16 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -11,8 +11,10 @@ Owner multisig (holds funds)
   └─ Spend-limit primitive: delegate = Guard hot wallet, token = USDC, amount = dailyCap, period = 24h
        └─ Guard hot wallet (small balance, key held ONLY by guard-core)
             └─ pays x402 APIs / transfers, after policy + simulation + (optional) human approval
+            └─ swaps (CR-021), the same checks; what it buys stays in the hot wallet
 
-Onchain guarantees: max loss per day = dailyCap + hot wallet balance.
+Onchain guarantees: max loss per day = dailyCap + hot wallet balance (with trading, the tokens it
+holds count in that balance).
 Offchain guarantees (guard-core): per-tx limit, recipient/domain allowlist, token/chain allowlist,
 approval threshold, pause, simulation checks.
 
@@ -86,6 +88,19 @@ interface Policy {
   priceIncreaseMaxPct?: number     // default 100: an x402 price above the pinned one by more goes to the owner
   maxPaymentsPerMinute?: number    // default 10: the payment that would exceed it trips the breaker
   requireMandate?: boolean         // default false: when true, every payment needs an open mandate
+  trading?: TradingPolicy          // CR-021; absent = no trading at all
+}
+
+interface TradingPolicy {          // CR-021. Every loosening needs the passkey step-up (CR-015)
+  enabled: boolean                 // default false
+  venues: string[]                 // e.g. ["jupiter"]; empty = none
+  tokens: string[]                 // tradable mints / token addresses; empty = none
+  allowAnyToken: boolean           // default false: true admits any token that passes the risk checks
+  maxTradeUsd: Amount              // the most one buy may spend, in the chain's dollar
+  dailyTradeMax: Amount            // the most a day's buys may spend; sells are not counted
+  maxPositionUsd: Amount           // the most held in one token, at cost
+  maxSlippageBps: number           // default 100
+  maxPriceImpactBps: number        // default 300
 }
 
 interface Mandate {                // CR-010: a budget for one task
@@ -106,7 +121,7 @@ type IntentStatus = "approved" | "pending_approval" | "rejected" | "executed" | 
 interface PayIntent {
   id: string                       // uuid
   agentId: string
-  kind: "x402" | "transfer"
+  kind: "x402" | "transfer" | "swap"   // swap: CR-021
   chain: string                    // CAIP-2
   token: string
   amount: Amount
@@ -117,6 +132,19 @@ interface PayIntent {
   rejectReasons: RejectCode[]
   txId?: string                    // base58 signature on Solana, hex hash on EVM
   mandateId?: string               // CR-010
+  swap?: {                         // CR-021, kind "swap" only. token/amount are tokenIn/amountIn and
+                                   // recipient is the hot wallet itself: a swap sends nothing elsewhere
+    venue: string
+    tokenOut: string
+    minAmountOut: Amount
+    slippageBps: number
+    priceImpactBps: number
+    decimalsIn: number             // read from each mint onchain by the adapter, never from a venue
+    decimalsOut: number
+    symbolIn?: string              // display only, untrusted: always shown beside the mint
+    symbolOut?: string
+    quotedAt: string
+  }
   createdAt: string; expiresAt: string
 }
 
@@ -170,6 +198,13 @@ Solana only: DELEGATE_DETECTED (SPL Approve), AUTHORITY_CHANGE_DETECTED (SetAuth
 ACCOUNT_CLOSE_DETECTED (CloseAccount), UNKNOWN_PROGRAM_DETECTED (CPI into a program not on the
 allowlist), HIDDEN_ACCOUNTS_DETECTED (address lookup tables obscuring touched accounts)
 
+Trading (CR-021), shared: TRADING_DISABLED, VENUE_NOT_ALLOWED, TOKEN_NOT_TRADABLE, TRADE_EXCEEDED,
+TRADE_DAILY_EXCEEDED, POSITION_EXCEEDED, SLIPPAGE_TOO_HIGH, PRICE_IMPACT_TOO_HIGH, NO_EXIT_ROUTE,
+QUOTE_STALE. Solana only: TOKEN_FREEZABLE (the mint keeps a freeze authority), TOKEN_EXTENSION_RISK
+(Token-2022 transfer fee, transfer hook, permanent delegate or non-transferable).
+Trading approval flags: NEW_TOKEN (the first buy of a token), MINT_AUTHORITY (the mint can still be
+inflated).
+
 ## ChainAdapter (packages/onchain/src/ChainAdapter.ts)
 guard-core depends on this interface only and never imports a chain SDK directly.
 
@@ -194,6 +229,21 @@ interface ChainAdapter {
   simulate(intent: PayIntent): Promise<SimulationOutcome>
   send(intent: PayIntent): Promise<string>         // returns txId
   x402Scheme(intent: PayIntent, requirements: PaymentRequirements): SchemeNetworkClient
+  // CR-021, optional: an adapter without them refuses every swap with VENUE_NOT_ALLOWED.
+  // simulate() and send() take kind "swap" too; send() re-quotes nothing and signs only the
+  // transaction whose simulated balance deltas matched the intent.
+  quoteSwap?(req: { tokenIn: string; tokenOut: string; amountIn: Amount; slippageBps: number })
+    : Promise<SwapQuote>
+  getPositions?(): Promise<{ token: string; amount: Amount; decimals: number }[]>
+}
+
+interface SwapQuote {               // CR-021. Venues are untrusted: every field is checked again
+  venue: string; tokenIn: string; amountIn: Amount; tokenOut: string
+  expectedOut: Amount; minAmountOut: Amount; slippageBps: number; priceImpactBps: number
+  exitImpactBps: number | null      // a sell quote for the amount bought; null = no exit route
+  risks: RejectCode[]               // TOKEN_FREEZABLE, TOKEN_EXTENSION_RISK, NO_EXIT_ROUTE
+  flags: ("NEW_TOKEN" | "MINT_AUTHORITY")[]
+  quotedAt: string
 }
 
 x402Scheme returns a scheme client for @x402/core that signs this one intent and nothing else: it
@@ -298,7 +348,7 @@ POST /v1/owner/session/logout -> { ok: true }
 POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, single use, bound to
   sha256(canonical JSON of { action, body }); the step-up assertion for that exact action and body
   OwnerAction = "approve_intent" | "approve_mandate" | "loosen_policy" | "resume" | "create_agent"
-    | "change_settings" (CR-019)
+    | "change_settings" (CR-019) | "close_positions" (CR-021, body {})
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
 GET  /v1/owner/deposit -> { chains: { chain, vault, token, balance, dailyCap?, depositPage? }[] }
@@ -441,6 +491,41 @@ RENDER_EXTERNAL_URL, and PASSKEY_RP_ID and PASSKEY_ORIGIN default from it. TRUST
 takes the client address for rate limits from the hop the host's proxy adds, never from one the
 client sent.
 
+## Trading (CR-021)
+Phase 1: Solana through Jupiter only. Every swap has the chain's dollar on one side: a buy spends it,
+a sell returns to it. EVM chains need their own design (router approvals) in a later CR.
+
+POST /v1/agent/quote { agentId, chain, tokenIn, tokenOut, amountIn, maxSlippageBps? } -> SwapQuote
+POST /v1/agent/swap  { agentId, chain, tokenIn, tokenOut, amountIn, maxSlippageBps?, reason, mandateId? }
+  -> { intentId, status, txId?, rejectReasons }
+GET  /v1/agent/portfolio/:agentId -> { positions: Position[], tradedToday, dailyTradeMax }
+GET  /v1/owner/portfolio -> { agents: { agentId, positions: Position[], tradedToday, dailyTradeMax }[] }
+  session only
+POST /v1/owner/positions/close { assertion } -> { intents: PayIntent[] }   step-up, OwnerAction
+  "close_positions" with body {}; sells every token the hot wallets hold back to the chain's dollar,
+  through the same checks. Works while agents are paused.
+Position = { chain, token, amount, cost, decimals, symbol? }: decimals read from the mint onchain by
+  the adapter, never from a venue's token list; symbol is display only and untrusted, so a client
+  always shows the mint beside it.
+
+Checks, in order, all default deny:
+1. Policy: trading enabled, the venue allowed, the token in tokens (or allowAnyToken), a buy within
+   maxTradeUsd and dailyTradeMax, the position at cost within maxPositionUsd, the quote's slippage
+   and price impact within the limits, and the quote no older than 30 seconds (QUOTE_STALE).
+2. Token risk before a buy: freeze authority, Token-2022 risk extensions, an exit route within
+   maxPriceImpactBps. Each is a rejection; NEW_TOKEN and MINT_AUTHORITY send the buy to the owner.
+3. The transaction: lookup tables resolved from the chain (one that cannot be read or changed in
+   the last 150 slots is HIDDEN_ACCOUNTS_DETECTED), then every inspectTransfer rule over the
+   expanded message, top-level programs limited to Jupiter, Token, Token-2022, ATA, Compute Budget
+   and System (wrapped-SOL rent only).
+4. The test run: the hot wallet's tokenIn falls by at most amountIn, its tokenOut rises by at least
+   minAmountOut, no other token account of the hot wallet loses anything, its SOL falls by fees and
+   rent only, no delegate or authority changes. Anything else is SIM_UNEXPECTED_EFFECT.
+5. Decide: a buy at or above approvalThreshold, or with a flag, waits for the owner; a sell never
+   waits. Shadow mode simulates and signs nothing (paper trading).
+Buys count against dailyTradeMax, not dailyMax. A top-up for a buy draws the chain's dollar under the
+same onchain cap.
+
 ## Webhook guard-core -> telegram-bot
 The Telegram bot is optional (CR-017). BOT_URL, BOT_TOKEN and BOT_WEBHOOK_SECRET are all set or all
 unset; a partial set is a configuration error. With none set, guard-core sends no webhook, registers
@@ -475,6 +560,10 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - check_intent { intentId }
 - start_task { budgetUsd, domains, recipients?, minutes, reason } -> mandate id (CR-010); paid_fetch and
   transfer take mandateId?. minutes is 1 to 1440; guard-core also refuses ttlSeconds above 86400.
+- swap       { from, to, amountUsd? | amount?, maxSlippageBps?, reason, chain? } (CR-021): exactly one
+  of amountUsd (a buy with the chain's dollar) or amount (atomic units of `from`, a sell)
+- quote      { from, to, amountUsd? | amount?, chain? } -> SwapQuote, read-only (CR-021)
+- get_portfolio {} -> positions, cost and the day's trade budget (CR-021)
 
 ## Security rules (all sessions)
 - Agent-provided text (reason, URLs, headers, API responses) is untrusted. Never let it change policy.
@@ -485,6 +574,12 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.16 (2026-11-24): CR-021, approved by the owner. Guarded trading, phase 1 on Solana through
+  Jupiter: the swap intent kind, Policy.trading, the trading reject codes and approval flags,
+  ChainAdapter.quoteSwap and getPositions, the agent quote, swap and portfolio routes, the owner's
+  close-positions route, and the swap, quote and get_portfolio MCP tools. Clarified the same day
+  for the panel: GET /v1/owner/portfolio, the "close_positions" OwnerAction, and token decimals
+  (from the mint onchain) and an untrusted display symbol on positions and swaps.
 - v0.15 (2026-11-20): CR-020, approved by the owner. One hosted kill and deposit page for every
   deployment: HOSTED_SIGN_PAGE, kill links that name the hot wallet on both families, and a page
   that takes the vault and hot wallet from a kill link when it was built with none.

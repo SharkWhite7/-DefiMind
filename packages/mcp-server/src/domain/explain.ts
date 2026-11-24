@@ -27,6 +27,18 @@ const REASONS: Record<RejectCode, string> = {
   ACCOUNT_CLOSE_DETECTED: 'the transaction would close an account',
   UNKNOWN_PROGRAM_DETECTED: 'the transaction calls a program that is not on the allowlist',
   HIDDEN_ACCOUNTS_DETECTED: 'the transaction hides the accounts it touches behind lookup tables',
+  TRADING_DISABLED: 'the owner has not turned trading on for this agent',
+  VENUE_NOT_ALLOWED: 'the policy does not allow trading through this venue on this chain',
+  TOKEN_NOT_TRADABLE: 'the policy does not allow trading this token',
+  TRADE_EXCEEDED: 'the buy is above the per-trade limit',
+  TRADE_DAILY_EXCEEDED: "the buy would go over the day's trading limit",
+  POSITION_EXCEEDED: 'the buy would hold more of this token than the owner allows',
+  SLIPPAGE_TOO_HIGH: 'the slippage asked for is above the limit',
+  PRICE_IMPACT_TOO_HIGH: 'the trade would move the price more than the owner allows',
+  NO_EXIT_ROUTE: 'no route exists to sell this token back, so it may not be sellable',
+  QUOTE_STALE: 'the quote is too old to trade on',
+  TOKEN_FREEZABLE: "the token's issuer can still freeze holders' tokens",
+  TOKEN_EXTENSION_RISK: 'the token carries a transfer fee, transfer hook or permanent delegate',
 }
 
 /** Codes where the right next step is not the generic "do not retry". */

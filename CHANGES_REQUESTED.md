@@ -1114,3 +1114,115 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     checks against that, as for the owner's own page today.
   - The page is only as safe as `main` and the Vercel project. Only `main` deploys, and each release
     publishes the build's SHA-256.
+
+### CR-021 — Guarded trading: agents that swap tokens inside the same onchain bound
+
+- **From:** integrator
+- **Date:** 2026-11-24
+- **Status:** approved by the owner on 2026-11-24 ("cr021 aprovado", after the five risks below were
+  shown to him; he had asked for it with "Agentes que fazem trade, não só pagam… vamos fazer isso").
+  Applied to SPEC v0.16 on 2026-11-24. Clarified the same day for PANEL-19, within the approved
+  scope: an owner portfolio route, the `close_positions` step-up action, and token decimals read from
+  the mint onchain with an untrusted display symbol.
+- **What breaks today:** nothing. An agent can only pay an x402 API or transfer the chain's dollar.
+  It cannot buy or sell a token, which is what most onchain agents are built to do.
+- **The idea:** a third intent kind, `swap`, checked like a payment: policy, then a test run of the
+  exact transaction, then auto-approve, the owner's passkey, or a named rejection. The onchain bound
+  does not change. Swaps spend from the same spending (hot) wallet, refilled in the chain's dollar
+  under the same daily cap. Whatever the agent buys stays in that wallet, so the most a day can cost
+  is still the daily cap plus what the wallet holds, now counting the tokens it holds.
+
+- **What, phase 1 (Solana, through Jupiter):**
+  1. **shared.**
+     - `PayIntent.kind` gains `"swap"`, with `tokenIn`, `amountIn`, `tokenOut`, `minAmountOut`,
+       `venue` (`"jupiter"`), `slippageBps` and `priceImpactBps`. `recipient` is the hot wallet
+       itself: a swap never sends anything anywhere else.
+     - `Policy.trading?`, absent by default, which means no trading at all:
+       - `enabled: boolean` (default `false`);
+       - `venues: string[]` (default `[]`);
+       - `tokens: string[]`, the tradable mints (empty means none);
+       - `allowAnyToken: boolean` (default `false`): any token that passes the risk checks below;
+       - `maxTradeUsd: Amount`, the most one buy may spend;
+       - `dailyTradeMax: Amount`, the most a day's buys may spend (sells are not counted);
+       - `maxPositionUsd: Amount`, the most held in one token, at cost;
+       - `maxSlippageBps: number` (default 100) and `maxPriceImpactBps: number` (default 300).
+     - Turning trading on, adding a token, raising a limit or setting `allowAnyToken` loosens the
+       policy, so it needs the passkey step-up, as every loosening does today (CR-015).
+     - New reject codes: `TRADING_DISABLED`, `VENUE_NOT_ALLOWED`, `TOKEN_NOT_TRADABLE`,
+       `TRADE_EXCEEDED`, `TRADE_DAILY_EXCEEDED`, `POSITION_EXCEEDED`, `SLIPPAGE_TOO_HIGH`,
+       `PRICE_IMPACT_TOO_HIGH`, `NO_EXIT_ROUTE`, `QUOTE_STALE`. Solana only: `TOKEN_FREEZABLE` (the
+       mint keeps a freeze authority, so the tokens could be locked), `TOKEN_EXTENSION_RISK`
+       (Token-2022 transfer fee, transfer hook, permanent delegate or non-transferable).
+     - New approval flags (sent to the owner even below the threshold): `NEW_TOKEN` (the first buy of
+       a token) and `MINT_AUTHORITY` (the mint can still be inflated).
+  2. **onchain, Solana adapter.**
+     - `quoteSwap` and `buildSwap` behind the `ChainAdapter`, with Jupiter as the only venue. Jupiter
+       is untrusted: its quote and its transaction are checked, never believed.
+     - Swap transactions use address lookup tables. The adapter resolves each table from the chain,
+       refuses a table it cannot read or one that changed in the last slots, and inspects the fully
+       expanded message. Every rule of `inspectTransfer` still applies: no Approve, SetAuthority or
+       CloseAccount on the hot wallet's accounts, compute budget within limits, a known top-level
+       program (Jupiter, Token, ATA, Compute Budget, System for the wrapped-SOL rent only).
+     - The test run is the real check. Simulate the exact transaction and read the balance deltas:
+       the hot wallet's `tokenIn` falls by at most `amountIn`, its `tokenOut` rises by at least
+       `minAmountOut`, no other token account of the hot wallet loses anything, its SOL falls by
+       fees and rent only, and no delegate or authority changes. Anything else is
+       `SIM_UNEXPECTED_EFFECT`.
+     - Token risk, read from the mint before a buy: freeze authority, Token-2022 extensions and the
+       mint authority (above).
+     - An exit check before every buy: a sell quote for the amount being bought must exist within
+       `maxPriceImpactBps`, or the buy is `NO_EXIT_ROUTE`. It catches tokens that can be bought but
+       not sold.
+     - `getPositions()`: the hot wallet's token balances.
+  3. **guard-core.**
+     - The swap pipeline: policy (limits, tokens, positions at cost, slippage and impact from the
+       quote, quote age), then the adapter's checks, then approve, ask the owner, or reject, with
+       everything in the audit log and a signed receipt as for a payment.
+     - A top-up draws the chain's dollar for a buy as it does for a payment, under the same cap.
+     - Positions at cost, per agent and per token, from executed swaps.
+     - An owner route, behind the passkey: **Close positions**, which sells every token the hot
+       wallet holds back to the chain's dollar, through the same checks. Without it the owner could
+       not get tokens out: the hot wallet's key never leaves guard-core.
+     - Shadow mode works unchanged, so an owner gets **paper trading with live quotes** for free.
+  4. **mcp-server.** `swap { from, to, amountUsd? | amount?, maxSlippageBps?, reason, chain? }`,
+     `quote { from, to, amountUsd }` (read-only) and `get_portfolio {}`.
+  5. **panel.**
+     - The approval screen for a swap: what is bought and sold, the minimum received, slippage,
+       price impact and every risk flag, all shown whole.
+     - A Portfolio screen: holdings, cost and the day's trade budget.
+     - Trading settings behind the step-up, and **Close positions** on the Stop screen.
+  6. **integrator.** SPEC v0.16, the whitepaper and the site only once it runs, and e2e attack tests:
+     - a quote whose transaction pays someone else, or approves a delegate;
+     - a hidden lookup table entry;
+     - a freezable mint, a transfer-hook mint and a token with no exit route;
+     - slippage and price-impact over the limit, and a stale quote;
+     - a buy over `maxTradeUsd`, `dailyTradeMax` and `maxPositionUsd`;
+     - Close positions after Stop.
+
+- **Phase 2 (a separate CR):** EVM chains: Base through a router such as Uniswap's, and Robinhood
+  Chain once a venue with depth exists there. Approvals to a router are exactly what
+  `APPROVAL_DETECTED` refuses today, so EVM needs its own design (Permit2 bound to one swap, or an
+  exact-amount approval reset in the same transaction).
+
+- **Rollout:** Jupiter has no devnet. Tests run on a mainnet fork (LiteSVM with cloned accounts),
+  then on mainnet in shadow mode only, then live with `maxTradeUsd` of a few dollars. Caps rise only
+  after clean weeks, as for payments.
+
+- **Why:** most onchain agents exist to trade. Today they get a raw private key. This lets them trade
+  with a fixed worst day, rug and honeypot checks before every buy, and the owner's passkey on
+  anything large or new.
+
+- **Blast radius:** every package (above). The x402 and transfer paths are unchanged, and a policy
+  without `trading` behaves exactly as today.
+
+- **Risks for the owner to accept:**
+  - **Market risk is real.** DefiMind bounds the worst day; it does not make trades profitable. An
+    agent can lose everything it is allowed to trade, up to the bound.
+  - **Jupiter is a third party.** Its quotes and transactions are verified by simulation and balance
+    deltas, but an outage stops trading, and routing quality is Jupiter's.
+  - **Tokens held are at risk until sold.** A token can fall to zero inside the bound. Close
+    positions sells at market, at whatever the price is then.
+  - **Bigger surface.** Lookup tables and arbitrary AMM routes are far more complex than a single
+    transfer. The default stays deny, and every unknown is a rejection.
+  - **Not financial advice.** Trading features invite that reading. The product and the site must
+    describe controls, never returns.
