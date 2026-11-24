@@ -26,7 +26,7 @@ export interface Policy {
   tokens: Address[]
   perTxMax: Amount
   dailyMax: Amount
-  /** At or above this amount, the owner must approve on Telegram. */
+  /** At or above this amount, the owner must approve with a passkey in the panel. */
   approvalThreshold: Amount
   /** Empty denies all direct transfers. */
   allowedRecipients: Address[]
@@ -41,6 +41,28 @@ export interface Policy {
   maxPaymentsPerMinute?: number
   /** CR-010. When true, a payment without an open mandate is refused. Default false. */
   requireMandate?: boolean
+  /** CR-021. Absent means no trading at all. */
+  trading?: TradingPolicy
+}
+
+/** CR-021. Every loosening needs the passkey step-up. Limits are in the chain's dollar. */
+export interface TradingPolicy {
+  enabled: boolean
+  /** e.g. ["jupiter"]. Empty allows none. */
+  venues: string[]
+  /** Tradable mints or token addresses. Empty allows none, unless allowAnyToken. */
+  tokens: Address[]
+  /** Any token that passes the risk checks. Default false. */
+  allowAnyToken: boolean
+  maxTradeUsd: Amount
+  /** Buys only; sells are not counted. */
+  dailyTradeMax: Amount
+  /** The most held in one token, at cost. */
+  maxPositionUsd: Amount
+  /** Default 100. */
+  maxSlippageBps: number
+  /** Default 300. */
+  maxPriceImpactBps: number
 }
 
 /** CR-010: a budget for one task, inside the policy. */
@@ -141,7 +163,7 @@ export type IntentStatus =
   /** CR-010: would have been sent; shadow mode signs nothing. */
   | 'shadowed'
 
-export type PayIntentKind = 'x402' | 'transfer'
+export type PayIntentKind = 'x402' | 'transfer' | 'swap'
 
 export interface PayIntent {
   id: string
@@ -160,8 +182,50 @@ export interface PayIntent {
   txId?: TxId
   /** CR-010: the mandate this payment counts against. */
   mandateId?: string
+  /**
+   * CR-021, kind "swap" only. token and amount are what is spent; recipient is the hot wallet
+   * itself, because a swap sends nothing anywhere else.
+   */
+  swap?: SwapDetails
   createdAt: string
   expiresAt: string
+}
+
+export interface SwapDetails {
+  venue: string
+  tokenOut: Address
+  minAmountOut: Amount
+  slippageBps: number
+  priceImpactBps: number
+  quotedAt: string
+}
+
+/** CR-021. A venue's quote, untrusted: guard-core and the adapter check every field again. */
+export interface SwapQuote {
+  venue: string
+  tokenIn: Address
+  amountIn: Amount
+  tokenOut: Address
+  expectedOut: Amount
+  minAmountOut: Amount
+  slippageBps: number
+  priceImpactBps: number
+  /** A sell quote for the amount bought; null when there is no exit route. */
+  exitImpactBps: number | null
+  risks: RejectCode[]
+  flags: TradingFlag[]
+  quotedAt: string
+}
+
+/** CR-021: these send a buy to the owner even below the threshold. */
+export type TradingFlag = 'NEW_TOKEN' | 'MINT_AUTHORITY'
+
+export interface Position {
+  chain: ChainId
+  token: Address
+  amount: Amount
+  /** At cost, in the chain's dollar. */
+  cost: Amount
 }
 
 /** Applies on every chain. */
@@ -182,6 +246,20 @@ export type SharedRejectCode =
   | 'MANDATE_EXCEEDED'
   | 'MANDATE_EXPIRED'
   | 'BREAKER_TRIPPED'
+  | TradingRejectCode
+
+/** CR-021. Swaps on every chain that supports them. */
+export type TradingRejectCode =
+  | 'TRADING_DISABLED'
+  | 'VENUE_NOT_ALLOWED'
+  | 'TOKEN_NOT_TRADABLE'
+  | 'TRADE_EXCEEDED'
+  | 'TRADE_DAILY_EXCEEDED'
+  | 'POSITION_EXCEEDED'
+  | 'SLIPPAGE_TOO_HIGH'
+  | 'PRICE_IMPACT_TOO_HIGH'
+  | 'NO_EXIT_ROUTE'
+  | 'QUOTE_STALE'
 
 /** Standing authority an EVM payment must never grant. */
 export type EvmRejectCode = 'APPROVAL_DETECTED' | 'PERMIT_DETECTED' | 'DELEGATION_DETECTED'
@@ -193,6 +271,10 @@ export type SvmRejectCode =
   | 'ACCOUNT_CLOSE_DETECTED'
   | 'UNKNOWN_PROGRAM_DETECTED'
   | 'HIDDEN_ACCOUNTS_DETECTED'
+  /** CR-021: the mint keeps a freeze authority, so bought tokens could be locked. */
+  | 'TOKEN_FREEZABLE'
+  /** CR-021: Token-2022 transfer fee, transfer hook, permanent delegate or non-transferable. */
+  | 'TOKEN_EXTENSION_RISK'
 
 export type RejectCode = SharedRejectCode | EvmRejectCode | SvmRejectCode
 
