@@ -154,6 +154,8 @@ export type AlertEvent =
   | { kind: 'admin_loosen_refused'; detail: string; sentAt: string }
   /** CR-013: the execution receipt chain failed its integrity check. */
   | { kind: 'chain_broken'; detail: string; sentAt: string }
+  /** CR-024: the daily backup or its upload failed; plain English, never a URL or a key. */
+  | { kind: 'backup_failed'; detail: string; sentAt: string }
 
 export type IntentStatus =
   | 'approved'
@@ -418,6 +420,8 @@ export interface OwnerTransaction {
   link?: string
   /** CR-014: the signing page itself, for Phantom's desktop extension. */
   pageLink?: string
+  /** CR-022: set when the entry removes an agent's own wallet's limit; absent for the shared one. */
+  wallet?: { agentId: string; address: string }
 }
 
 /** Response of POST /v1/admin/kill. */

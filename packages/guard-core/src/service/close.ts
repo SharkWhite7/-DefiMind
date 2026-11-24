@@ -17,7 +17,10 @@ const REASON = 'owner: close positions'
  */
 export async function closePositions(deps: PaymentDeps): Promise<PayIntent[]> {
   const intents: PayIntent[] = []
-  for (const [chain, trader] of deps.chains) {
+  const shared = [...deps.chains.values()].map((adapter) => ({ adapter, agentId: undefined }))
+  const own = (await deps.wallets?.all()) ?? []
+  for (const { adapter: trader, agentId } of [...shared, ...own]) {
+    const chain = trader.chain
     const dollar = deps.usdc.get(chain)
     if (trader.getPositions === undefined || dollar === undefined) {
       continue
@@ -26,7 +29,7 @@ export async function closePositions(deps: PaymentDeps): Promise<PayIntent[]> {
       if (held.token === dollar || held.amount === '0') {
         continue
       }
-      const intent = await sell(deps, trader, { chain, dollar, ...held })
+      const intent = await sell(deps, trader, { chain, dollar, ...held }, agentId)
       if (intent !== undefined) {
         intents.push(intent)
       }
@@ -38,17 +41,19 @@ export async function closePositions(deps: PaymentDeps): Promise<PayIntent[]> {
 /**
  * One token, under the agent that holds most of it at cost, or the first agent when none bought it
  * (an airdrop): every intent belongs to an agent. Once sold, every agent's position in it is closed.
+ * An agent's own wallet (CR-022) holds that agent's tokens alone, so its sale is that agent's.
  */
 async function sell(
   deps: PaymentDeps,
   trader: ChainAdapter,
   held: { chain: ChainId; dollar: string; token: string; amount: string },
+  wallet?: string,
 ): Promise<PayIntent | undefined> {
   const { db, now } = deps
-  const holders = listPositions(db)
+  const holders = listPositions(db, wallet)
     .filter((p) => p.chain === held.chain && p.token === held.token)
     .sort((a, b) => (BigInt(b.amount) > BigInt(a.amount) ? 1 : -1))
-  const agentId = holders[0]?.agentId ?? listAgents(db)[0]?.agentId
+  const agentId = wallet ?? holders[0]?.agentId ?? listAgents(db)[0]?.agentId
   const policy = agentId === undefined ? undefined : repo.getPolicy(db, agentId)
   if (agentId === undefined || policy === undefined) {
     return undefined

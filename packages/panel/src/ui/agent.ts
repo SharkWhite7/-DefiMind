@@ -8,6 +8,7 @@ import { chainRules, loosens } from '../domain/policy.js'
 import type { Context, Screen } from './context.js'
 import { button, card, el, row, when } from './dom.js'
 import { tradingForm } from './trading.js'
+import { FLAGS } from '../domain/trading.js'
 import { ownerTrading, tokenSearch } from './token-search.js'
 import { stopAgentCard, walletsCard } from './wallets.js'
 
@@ -17,6 +18,21 @@ function field(id: string, label: string, value: string, multiline = false) {
     : el('input', { id, inputmode: 'decimal', autocomplete: 'off' })
   input.value = value
   return { input, nodes: [el('label', { for: id }, label), input] }
+}
+
+/** GC-68: what going live would change, before the owner does it. */
+function wouldAsk(budget: BudgetView) {
+  const asked = budget.shadow?.asked
+  if (asked === undefined || asked.count === 0) {
+    return false
+  }
+  const times = asked.count === 1 ? 'once' : `${asked.count} times`
+  const why = asked.flags.map((flag) => `${flag} (${FLAGS[flag] ?? 'flagged by guard-core'})`)
+  return el(
+    'p',
+    { class: 'flag' },
+    `Live would have asked you ${times}${why.length > 0 ? `: ${why.join('; ')}` : '.'}`,
+  )
 }
 
 function shadowLine(budget: BudgetView): string {
@@ -141,6 +157,7 @@ export async function agent(ctx: Context, id: string): Screen {
           : 'Payments inside the policy are signed and sent.',
       ),
       shadow && el('p', { class: 'shadow-total' }, shadowLine(budget)),
+      shadow && wouldAsk(budget),
       button(
         shadow ? 'Go live with passkey' : 'Switch to shadow',
         async () =>

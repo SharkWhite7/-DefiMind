@@ -21,6 +21,7 @@ import { alert, notify } from './events.js'
 import type { IntegrityMonitor } from './integrity.js'
 import type { Pusher } from './push.js'
 import type { Serial } from './serial.js'
+import { adapterFor, type Wallets } from './wallets.js'
 
 export interface PaymentDeps {
   db: Db
@@ -39,6 +40,8 @@ export interface PaymentDeps {
   push?: Pusher
   /** Set when approvals at or above an amount need the owner's passkey. */
   passkey?: PasskeySetup
+  /** The agents' own hot wallets (CR-022); without it every agent uses the shared one. */
+  wallets?: Wallets
 }
 
 export type Terms = Pick<
@@ -89,7 +92,7 @@ export async function clear(
   if (policy === undefined) {
     return { cleared: false, intent: reject(deps, intent, ['PAUSED']) }
   }
-  const adapter = deps.chains.get(intent.chain)
+  const adapter = adapterFor(deps, intent.agentId, intent.chain)
   // In shadow nothing is spent, so the daily max is held against what would have been.
   const shadow = policy.mode === 'shadow'
   const day = repo.utcDay(now())

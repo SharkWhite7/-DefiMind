@@ -15,6 +15,7 @@ import { finish, fund, newIntent, reject, shadowed, trip, type PaymentDeps } fro
 import { policyHash } from './receipts.js'
 import { simulate } from './simulate.js'
 import { settle } from './swap-settle.js'
+import { adapterFor } from './wallets.js'
 
 /** Read from the mints onchain by the adapter; a quote without them is not one we can record. */
 const mints = z.object({
@@ -99,7 +100,7 @@ const UNTESTED = {
 /** POST /v1/agent/quote: read-only, so it decides nothing and records nothing. */
 export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy) {
   const trading = policy.trading
-  const adapter: ChainAdapter | undefined = deps.chains.get(req.chain)
+  const adapter = adapterFor(deps, req.agentId, req.chain)
   if (trading === undefined || !trading.enabled) {
     throw new HttpError(403, 'trading_disabled')
   }
@@ -118,7 +119,7 @@ export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy
 export async function swap(deps: PaymentDeps, req: SwapRequest): Promise<PayIntent> {
   return deps.serial(req.agentId, async () => {
     const { db, now } = deps
-    const adapter: ChainAdapter | undefined = deps.chains.get(req.chain)
+    const adapter = adapterFor(deps, req.agentId, req.chain)
     const intent = newIntent(
       {
         agentId: req.agentId,

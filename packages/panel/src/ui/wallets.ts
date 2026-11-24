@@ -12,7 +12,7 @@ const STATUS = { pending_limit: 'Waiting for its limit', active: 'Active' } as c
 function walletItem(wallet: AgentWalletView) {
   const page = sameOrigin(wallet.addLimitPage, location.origin)
   const gas = wallet.gas
-  const short = gas !== undefined && lowGas(gas)
+  const short = gas !== undefined && gas.symbol !== '' && lowGas(gas)
   return el(
     'div',
     { class: 'wallet' },
@@ -29,7 +29,9 @@ function walletItem(wallet: AgentWalletView) {
         ),
       ),
       row('Address', el('span', { class: 'mono' }, wallet.address)),
+      // guard-core sends an empty symbol when it could not read the gas.
       gas !== undefined &&
+        gas.symbol !== '' &&
         row(
           'Gas',
           `${gasText(wallet.chain, gas.balance, gas.symbol)} (needs at least ${gasText(wallet.chain, gas.minimum, gas.symbol)})`,

@@ -217,7 +217,17 @@ export const budget = z.object({
   perTxMax: atomic,
   paused: z.boolean(),
   shadowSpentToday: atomic.optional(),
-  shadow: z.object({ since: isoTime, total: atomic, count: z.number().int() }).optional(),
+  shadow: z
+    .object({
+      since: isoTime,
+      total: atomic,
+      count: z.number().int(),
+      // GC-68: how often live would have asked the owner, and the flags behind it.
+      asked: z
+        .object({ count: z.number().int().nonnegative(), flags: z.array(text(64)).max(16) })
+        .optional(),
+    })
+    .optional(),
 })
 
 export const report = z.object({
@@ -238,10 +248,11 @@ export const doctor = z.object({
   checks: z
     .array(
       z.object({
-        id: text(64),
+        // CR-022 names an agent's own wallet in the id: chain, agent and check.
+        id: text(256),
         status: z.enum(['ok', 'warn', 'fail']),
-        message: text(500),
-        fix: text(500).optional(),
+        message: text(2000),
+        fix: text(2000).optional(),
       }),
     )
     .max(64),
@@ -269,6 +280,8 @@ export const kill = z.object({
         payload: z.unknown(),
         link: https.optional(),
         pageLink: https.optional(),
+        // CR-022: the agent whose own wallet this limit belongs to; absent for the shared one.
+        wallet: z.object({ agentId, address: text(128) }).optional(),
       }),
     )
     .max(16),

@@ -8,16 +8,15 @@ planned. Anything proven only on a stub chain is marked as such.
 
 Made by the owner on 2026-11-05, in the integrator session. None of these can be made by a session.
 
-| #   | Decision                                                                                 | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Status                     |
-| --- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| D1  | **Mainnet daily cap**, per chain                                                         | **20 a day on each launch chain** (20 USDC on Solana, `DAILY_CAP=20000000`; 20 USDG on Robinhood Chain, allowance `amount=20000000`), with each hot wallet holding at most 10. Max daily loss across both chains: about 60. Raised to 50 a day per chain only after 2 to 3 weeks without incidents. Changed by the owner on 2026-11-09, from 50 USDC on one chain, when he chose two launch chains.                                                                                                                                         | **decided**                |
-| D2  | **Per-agent policy for launch**: `perTxMax`, `dailyMax`, `approvalThreshold`, allowlists | Each new agent: **5 per payment, 20 a day, Telegram approval above 1**, deny-all to start, and only domains the owner adds. The daily max went from 25 to 20 on 2026-11-09, to match the onchain cap (D1).                                                                                                                                                                                                                                                                                                                                  | **decided**                |
-| D3  | **Deploy host** (HUMAN-7)                                                                | **Fly.io**, region `gru`, a persistent volume for the database. guard-core's agent routes are public behind TLS at `https://defimind-guard-core.fly.dev`, and its admin and bot routes stay on Fly's private network. The bot has no public URL (long polling).                                                                                                                                                                                                                                                                             | **decided**                |
-| D4  | **Owner key custody**                                                                    | **Phantom**, a software wallet: the owner's choice, against the recommendation of a hardware wallet. The owner key can move the whole vault, so it stays in Phantom and is **never exported to a file**. The owner signs its operations through Phantom, not through this repo's scripts. See the D4 blocker in §2.                                                                                                                                                                                                                         | **decided, risk accepted** |
-| D5  | **Hot wallet key storage**                                                               | **Fly.io secrets**, written to an in-memory file at startup, delivered as `SOLANA_HOT_WALLET_KEYPAIR`. KMS later, when the cap rises.                                                                                                                                                                                                                                                                                                                                                                                                       | **decided**                |
-| D6  | **Chain order**                                                                          | **Robinhood Chain and Solana at launch on 2026-11-09, then Base.** Planned for the next day, Solana went live the same evening once the owner's Vercel Pro plan lifted the deploy quota that had held its signing page. Before that the same day: both together, after the Robinhood Chain mainnet pilot (HUMAN-21) proved its path with real money. Before that: Solana first, then Robinhood Chain (2026-11-07, CR-007), then Base. Robinhood Chain's dollar is USDG. Its Allowance Module lets the delegate send to any address (below). | **decided**                |
-| D7  | **Launch model**                                                                         | **Open source, self-hosted.** Anyone runs their own DefiMind, with their own vault, Phantom wallet, bot and signing page ([`docs/self-host.md`](docs/self-host.md)). The owner's deployment serves only the owner. A hosted service with one vault per customer is a later product: it needs a CR (SPEC is single-owner) and a legal review. Decided by the owner on 2026-11-09.                                                                                                                                                            | **decided**                |
-| D8  | **License**                                                                              | **Apache-2.0**, in `LICENSE` and every `package.json`. Decided by the owner on 2026-11-09.                                                                                                                                                                                                                                                                                                                                                                                                                                                  | **decided**                |
+| #   | Decision                                                                                 | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Status      |
+| --- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| D1  | **Mainnet daily cap**, per chain                                                         | **20 a day on each launch chain** (20 USDC on Solana, `DAILY_CAP=20000000`; 20 USDG on Robinhood Chain, allowance `amount=20000000`), with each hot wallet holding at most 10. Max daily loss across both chains: about 60. Raised to 50 a day per chain only after 2 to 3 weeks without incidents. Changed by the owner on 2026-11-09, from 50 USDC on one chain, when he chose two launch chains.                                                                                                                                         | **decided** |
+| D2  | **Per-agent policy for launch**: `perTxMax`, `dailyMax`, `approvalThreshold`, allowlists | Each new agent: **5 per payment, 20 a day, Telegram approval above 1**, deny-all to start, and only domains the owner adds. The daily max went from 25 to 20 on 2026-11-09, to match the onchain cap (D1).                                                                                                                                                                                                                                                                                                                                  | **decided** |
+| D3  | **Deploy host** (HUMAN-7)                                                                | **Fly.io**, region `gru`, a persistent volume for the database. guard-core's agent routes are public behind TLS at `https://defimind-guard-core.fly.dev`, and its admin and bot routes stay on Fly's private network. The bot has no public URL (long polling).                                                                                                                                                                                                                                                                             | **decided** |
+| D5  | **Hot wallet key storage**                                                               | **Fly.io secrets**, written to an in-memory file at startup, delivered as `SOLANA_HOT_WALLET_KEYPAIR`. KMS later, when the cap rises.                                                                                                                                                                                                                                                                                                                                                                                                       | **decided** |
+| D6  | **Chain order**                                                                          | **Robinhood Chain and Solana at launch on 2026-11-09, then Base.** Planned for the next day, Solana went live the same evening once the owner's Vercel Pro plan lifted the deploy quota that had held its signing page. Before that the same day: both together, after the Robinhood Chain mainnet pilot (HUMAN-21) proved its path with real money. Before that: Solana first, then Robinhood Chain (2026-11-07, CR-007), then Base. Robinhood Chain's dollar is USDG. Its Allowance Module lets the delegate send to any address (below). | **decided** |
+| D7  | **Launch model**                                                                         | **Open source, self-hosted.** Anyone runs their own DefiMind, with their own vault, Phantom wallet, bot and signing page ([`docs/self-host.md`](docs/self-host.md)). The owner's deployment serves only the owner. A hosted service with one vault per customer is a later product: it needs a CR (SPEC is single-owner) and a legal review. Decided by the owner on 2026-11-09.                                                                                                                                                            | **decided** |
+| D8  | **License**                                                                              | **Apache-2.0**, in `LICENSE` and every `package.json`. Decided by the owner on 2026-11-09.                                                                                                                                                                                                                                                                                                                                                                                                                                                  | **decided** |
 
 **Base differs from Solana in where the daily allowance can go.** On Solana, the spending limit's
 only destination is the hot wallet: a stolen hot-wallet key can only draw the day's cap into the hot
@@ -34,7 +33,6 @@ owner chose to skip the testnet and run Robinhood Chain on mainnet (4663) with r
 the limits he chose when the risk was put to him:
 
 - a daily cap of **5 USDG**, with the Safe holding about 10 USDG and about $5 of ETH for gas;
-- a **new Phantom wallet with its own recovery phrase** as the only owner of the Safe;
 - a new hot wallet key, generated for mainnet.
 
 **Risk accepted by the owner:** the EVM signing pages (create, enable, kill) and the USDG x402 path
@@ -90,11 +88,6 @@ image in `fly status`.** Since then, `.github/workflows/deploy.yml` deploys guar
 after CI passes on `main`, once the owner has added their deploy tokens (HUMAN-22). If a chain's Phantom kill button is missing, use the manual kill link:
 `https://<signing page>/?action=kill&cluster=robinhood&safe=<Safe>&issued=$(date +%s)`, on the deployment's `SIGN_PAGE_URL`,
 opened within 15 minutes, from `/kill` → Confirm first.
-
-**One owner wallet for both chains (owner decision, 2026-11-09).** The same new Phantom wallet, with
-one recovery phrase, owns the Robinhood Chain Safe and will own the Solana multisig. That phrase
-therefore reaches both vaults. This is accepted on the D4 conditions: the wallet is used for nothing
-else, and each vault holds only what its agents need for the coming days.
 
 **Key rule, not a decision:** mainnet uses **new keys only**, owner and hot wallet both, generated for
 mainnet and never used on devnet. A devnet seed phrase has been exposed, so no devnet key, and nothing
@@ -164,25 +157,7 @@ Each line can be checked by someone other than its author.
 
 ### Open
 
-- [x] **Launch conditions for a Phantom owner (D4)**, all three mandatory. The owner confirmed all
-      three for the "mAINNET" Phantom account on 2026-11-09:
-  - a **fresh recovery phrase** dedicated to the owner account, created for it. Not a new account
-    added to an existing Phantom, which would share that wallet's phrase;
-  - that account is **used for nothing else**: no dapps, no other tokens, no signing anything but
-    DefiMind's owner operations;
-  - the **vault is kept low**: it holds only what the agents need for the coming days, since a
-    stolen owner key reaches all of it, not just the daily cap.
-- [x] **Launch blocker, tied to D4: the owner's operations from Phantom, without exporting the key.**
-      The repo's scripts sign with a key file or a Ledger, and neither fits D4. On devnet, with a
-      **new** Phantom account used for nothing else, prove the owner can create the multisig and
-      the spending limit, and, above all, remove the spending limit (the kill) by signing in Phantom,
-      for example through the Squads app. Pass criteria: the kill lands on devnet signed from
-      Phantom, `pnpm status` then prints `spending limit:   none at <address>`, and no Phantom key
-      ever sits in a file. Until this passes, the kill switch's last step has no tested path.
-      **Passed:** on Solana devnet through the signing page (HUMAN-15, ADR 003), where the kill left
-      `spending limit: none`, and on Robinhood Chain mainnet in the pilot (HUMAN-21), where the
-      Phantom kill removed the delegate.
-- [ ] **The Phantom signing page is a trust root (D4, [ADR 003](docs/adr/003-phantom-owner.md)).**
+- [ ] **The Phantom signing page is a trust root ([ADR 003](docs/adr/003-phantom-owner.md)).**
       Whoever can change the deployed page can ask the owner to sign a harmful config change behind
       a harmless summary. Before launch: it is its own project on its own subdomain, separate from
       the landing site; it is deployed only from protected `main`, with preview deployments off, since a
@@ -198,7 +173,7 @@ Each line can be checked by someone other than its author.
   3. whether Phantom signs and sends a transaction the page has already partly signed (`createKey`);
   4. what Phantom shows for `multisigRemoveSpendingLimit`: the origin, the simulation, any decoding;
   5. whether the universal link opens the page inside Phantom on iOS and Android, from Telegram.
-- [ ] **Only if D4 moves to a Ledger later: the Ledger path on real hardware, on devnet.** Follow
+- [ ] **The Ledger path on real hardware, on devnet.** Follow
       "The owner on a Ledger" in `packages/onchain/README.md` with a real device. Pass criteria:
   - for `create-multisig`, `add-spending-limit` and `kill`, the **Message Hash shown on the device
     equals the one the script printed**, character for character. The tests only show that the
@@ -208,7 +183,7 @@ Each line can be checked by someone other than its author.
   - each of the three lands on devnet, signed by the Ledger;
   - after the kill, `pnpm status` prints `spending limit:   none at <address>`;
   - blind signing is off again at the end.
-- [ ] **Launch blocker for Base, tied to D4: the Safe owner on a real Ledger, on Base Sepolia.**
+- [ ] **Launch blocker for Base: the Safe owner on a real Ledger, on Base Sepolia.**
       Follow "The Safe owner on a Ledger" in `packages/onchain/README.md`. Pass criteria:
   - for `create-safe`, `enable-allowance` and `kill:base`, the **Domain hash and Message hash on
     the device equal the printed ones**, character for character (`0x` and uppercase, as the app
@@ -217,11 +192,11 @@ Each line can be checked by someone other than its author.
   - each of the three lands on Base Sepolia, signed by the Ledger, gas paid by the executor;
   - after the kill, `pnpm status:base` shows no allowance for the hot wallet;
   - Blind signing is off again at the end.
-- [ ] **Mainnet keys** generated fresh (key rule above). The owner key is a new Phantom account,
-      used for nothing else (D4). The hot wallet key goes into Fly.io secrets (D5).
+- [ ] **Mainnet keys** generated fresh (key rule above). The hot wallet key goes into Fly.io
+      secrets (D5).
 - [ ] **Mainnet setup**, with the new keys:
-  - the multisig and the spending limit are created **signed from the Phantom owner account**, by the
-    path the D4 blocker proves on devnet. The creating key becomes the config authority, the only key
+  - the multisig and the spending limit are created **signed from Phantom through the signing
+    page** ([ADR 003](docs/adr/003-phantom-owner.md)). The creating key becomes the config authority, the only key
     that can remove the limit, and no script here moves it afterwards. The repo's
     `create-multisig` and `add-spending-limit` would need the key as a file, so they are not used on
     mainnet;
@@ -366,7 +341,7 @@ BOT-13 makes old links expire.
    step 1 only stops the guard. The bot's message gives the `removeSpendingLimit` instruction, which
    must be signed by the config authority, the owner key.
 
-   With the owner key in Phantom (D4): press the Phantom button the panel shows for the chain (or
+   With the owner key in Phantom: press the Phantom button the panel shows for the chain (or
    **Open kill in Phantom** under the bot's message), check that the page names your multisig and hot
    wallet, and approve in Phantom. The page waits until the limit is gone. "Already killed" means there was nothing left
    to remove. Then the panel's overview (or `/status`) shows the chain without a limit. Until CR-008 lands, it reads
@@ -383,7 +358,7 @@ BOT-13 makes old links expire.
    Open it in a browser with Phantom, or on a phone inside Phantom through
    `https://phantom.app/ul/browse/<the link, URL-encoded>`. Use `cluster=devnet` on devnet.
 
-   With the owner key on a Ledger, if D4 changes:
+   With the owner key on a Ledger:
    1. Plug the Ledger in, unlock it, and open the Solana app.
    2. Turn **Blind signing** on (Solana app, Settings). The app cannot display Squads instructions.
    3. Run:

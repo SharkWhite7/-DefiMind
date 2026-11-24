@@ -10,6 +10,7 @@ const TITLES = {
   passkey_enrolled: 'A passkey was added',
   kill: 'Everything stopped',
   chain_broken: 'The execution record is broken',
+  backup_failed: 'The database backup failed',
 } as const
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/

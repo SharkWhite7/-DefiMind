@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { PublicKeys } from '../src/adapters/public-keys.js'
-import { CHAIN, harness } from './harness.js'
+import { addWallet, type WalletRow } from '../src/db/wallets.js'
+import { CHAIN, harness, MERCHANT } from './harness.js'
 
 const HOT = '9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin'
 const ROBINHOOD_HOT = '0x1111111111111111111111111111111111111111'
@@ -26,19 +27,23 @@ function build() {
   return dir
 }
 
-async function page(dir = build()) {
+async function page(dir = build(), wallets: Omit<WalletRow, 'status' | 'agentId'>[] = []) {
   const h = await harness({
     keys,
     env: { SIGN_DIR: dir, SOLANA_RPC_URL: 'https://rpc.example/?api-key=secret' },
   })
+  for (const wallet of wallets) {
+    addWallet(h.db, { agentId: 'agent-1', ...wallet }, new Date())
+  }
   return h.app
 }
 
 const config = (html: string) =>
   JSON.parse(/id="config">(.*)<\/script>/.exec(html)?.[1] ?? '{}') as {
     hot: Record<string, string>
+    agents: Record<string, string[]>
     rpc: Record<string, string>
-    evm: Record<string, { hot?: string }>
+    evm: Record<string, { hot?: string; agents?: string[] }>
     maxDailyCap: string
   }
 
@@ -54,6 +59,18 @@ describe('the signing page at /sign (CR-019)', () => {
     expect(filled.evm['robinhood-testnet']?.hot).toBe(ROBINHOOD_HOT)
     expect(filled.maxDailyCap).toBe('50000000')
     expect(res.body).not.toContain('1'.repeat(44))
+  })
+
+  it("adds each agent's own wallet next to the shared one, read when the page is served", async () => {
+    const evm = '0x2222222222222222222222222222222222222222'
+    const app = await page(build(), [
+      { chain: CHAIN, address: MERCHANT },
+      { chain: 'eip155:46630', address: evm },
+    ])
+    const filled = config((await app.inject({ url: '/sign/?action=add-limit' })).body)
+    expect(filled.hot).toEqual({ devnet: HOT })
+    expect(filled.agents).toEqual({ devnet: [MERCHANT] })
+    expect(filled.evm['robinhood-testnet']).toMatchObject({ hot: ROBINHOOD_HOT, agents: [evm] })
   })
 
   it('serves create and add-limit only; deposit and kill stay on the hosted page', async () => {

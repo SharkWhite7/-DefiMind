@@ -11,7 +11,7 @@ const RISK =
   'One wallet controls every vault you make here. Whoever has its recovery phrase can empty each vault, past every daily limit.'
 
 const SOLANA =
-  'On Solana, your wallet can always act on the vault alone: that is what lets you stop it at once, and it means adding signers does not protect it. Make that wallet a hardware wallet, a Ledger connected through Phantom.'
+  'On Solana, your wallet can always act on the vault alone: that is what lets you stop it at once, and it means adding signers does not protect it. For larger balances, a hardware wallet is recommended: a Ledger connected through Phantom.'
 
 const SAFE =
   'On Robinhood Chain or Base, a vault (Safe) that needs 2 of 3 signatures, one of them on a hardware key, does protect it. It is slower to stop in an emergency, because a second signer must sign too, and you then approve changes in Safe: the signing page here works with a one-signer vault.'

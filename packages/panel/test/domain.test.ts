@@ -226,6 +226,7 @@ describe('notification', () => {
     })
     expect(notification({ kind: 'approval', intentId: '../../x' }).path).toBe('/panel/')
     expect(notification({ kind: 'toString' }).title).toBe('DefiMind')
+    expect(notification({ kind: 'backup_failed' }).title).toBe('The database backup failed')
   })
 })
 

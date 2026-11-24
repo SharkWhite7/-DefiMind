@@ -18,7 +18,7 @@ export function botControlRoutes(deps: X402Deps, setup: { botUrl: string; databa
     )
     app.post('/kill', async (request) => control.kill(request.log))
     app.post('/agents/:id/revoke', async (request) =>
-      control.revokeAgent(agentRouteParam.parse(request.params).id),
+      control.revokeAgent(agentRouteParam.parse(request.params).id, request.log),
     )
 
     app.post('/policy/:agentId/tighten', async (request) => {
