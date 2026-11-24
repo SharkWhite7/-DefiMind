@@ -1305,7 +1305,8 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     - The owner guide explains the trade-off. A 2-of-3 is safer but makes the kill slower, because
       the second signer must also sign.
   - The owner's own change goes on HUMAN_TODO (manager).
-  - **Addendum, proposed (ON-34), waiting for the owner's approval.** A signing-page action,
+  - **Addendum (ON-34): deferred by the owner on 2026-11-24 (he keeps Phantom); plan on BOARD
+    ON-34. No SPEC lines.** The plan, for when it is picked up: a signing-page action,
     `action=hand-over`, gives the vault to a new key, a Ledger, in two signed phases:
     - Phase A, signed by the current key:
       - Squads: add the new key as a member with every permission, and set it as config authority;
