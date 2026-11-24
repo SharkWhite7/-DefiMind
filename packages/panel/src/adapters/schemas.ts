@@ -23,8 +23,12 @@ export const allowance = z
 /** CR-025: what Jupiter says about a token, labelled as the venue's. Untrusted display text. */
 const venue = z.object({
   holders: z.number().int().nonnegative().optional(),
-  liquidityUsd: atomic.optional(),
-  organicScore: z.number().min(0).max(100).optional(),
+  // A decimal string, as the venue reports it: display only, never used in a decision.
+  liquidityUsd: z
+    .string()
+    .regex(/^\d{1,20}(\.\d{1,2})?$/)
+    .optional(),
+  organicScore: z.number().nonnegative().optional(),
   createdAt: isoTime.optional(),
 })
 
@@ -64,6 +68,10 @@ export const swapQuote = z.object({
   slippageBps: bps,
   priceImpactBps: bps,
   exitImpactBps: bps.nullable(),
+  decimalsIn: z.number().int().min(0).max(255).optional(),
+  decimalsOut: z.number().int().min(0).max(255).optional(),
+  symbolIn: text(32).optional(),
+  symbolOut: text(32).optional(),
   risks: z.array(text(64)).max(16),
   flags: z.array(text(64)).max(8),
   quotedAt: isoTime,
