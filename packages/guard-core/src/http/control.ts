@@ -8,6 +8,7 @@ import * as repo from '../db/repo.js'
 import { summarise } from '../domain/report.js'
 import { budget } from '../service/budget.js'
 import { doctor, type DoctorDeps } from '../service/doctor.js'
+import { killTransactions, type KillTransaction } from '../service/kill.js'
 import type { PaymentDeps } from '../service/payments.js'
 import { HttpError } from './errors.js'
 import { REPORT_DEFAULT_SPAN_MS, REPORT_MAX_SPAN_MS, reportQuery } from './schemas.js'
@@ -91,7 +92,11 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
       return { agentId, token }
     },
 
-    revokeAgent(id: string) {
+    /**
+     * The token dies at once, but an own wallet's onchain limit does not (CR-022): its kill
+     * transactions come back, to be signed.
+     */
+    async revokeAgent(id: string, log: Log) {
       const result = revokeAgent(db, id, now())
       if (result === 'not_found') {
         throw new HttpError(404, 'not_found')
@@ -99,7 +104,15 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
       if (result === 'revoked') {
         repo.audit(db, { event: 'agent_revoked', agentId: id, detail: { via } }, now())
       }
-      return { agentId: id, revoked: true }
+      const ownerTransactions = await killTransactions(deps, log, id)
+      return ownerTransactions.length === 0
+        ? { agentId: id, revoked: true }
+        : {
+            agentId: id,
+            revoked: true,
+            ownerTransactions,
+            note: "Its own wallet's limit is still live until you sign these transactions.",
+          }
     },
 
     budget: (agentId: string) => budget(deps, existing(agentId)),
@@ -134,28 +147,28 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
     // guard-core has stopped signing.
     async kill(log: Log) {
       const pausedAgents = repo.pauseAll(db, now().toISOString())
-      const ownerTransactions = await Promise.all(
-        [...deps.chains.values()].map(async (adapter) => {
-          try {
-            return { chain: adapter.chain, ...(await adapter.buildKillTx()) }
-          } catch (error) {
-            log.error({ err: error, chain: adapter.chain }, 'kill tx build failed')
-            // The owner still has to act on this chain, so it stays in the list, saying so.
-            return {
-              chain: adapter.chain,
-              description: `Could not build the kill transaction for ${adapter.chain}. Remove the hot wallet's spend limit on this chain by hand.`,
-              payload: null,
-            }
-          }
-        }),
+      const ownerTransactions = await killTransactions(deps, log)
+      repo.audit(
+        db,
+        { event: 'killed', detail: { pausedAgents, chains: built(ownerTransactions), via } },
+        now(),
       )
-      const chains = ownerTransactions.map((tx) => ({
-        chain: tx.chain,
-        built: tx.payload !== null,
-      }))
-      repo.audit(db, { event: 'killed', detail: { pausedAgents, chains, via } }, now())
       deps.push?.kill()
       return { pausedAgents, ownerTransactions }
+    },
+
+    /** CR-022: one agent stops; only its own wallets' limits come off. */
+    async killAgent(agentId: string, log: Log) {
+      if (!repo.setPaused(db, agentId, true, now().toISOString())) {
+        throw new HttpError(404, 'not_found')
+      }
+      const ownerTransactions = await killTransactions(deps, log, agentId)
+      repo.audit(
+        db,
+        { event: 'agent_killed', agentId, detail: { chains: built(ownerTransactions), via } },
+        now(),
+      )
+      return { pausedAgents: 1, ownerTransactions }
     },
 
     passkeys: () => ({
@@ -171,3 +184,6 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
     }),
   }
 }
+
+const built = (txs: KillTransaction[]) =>
+  txs.map((tx) => ({ chain: tx.chain, built: tx.payload !== null, agentId: tx.wallet?.agentId }))

@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { hashToken } from '../domain/auth.js'
 import type { Db } from './client.js'
 import { agents, policies } from './schema.js'
+import { listWallets } from './wallets.js'
 
 /**
  * Creates an agent with a deny-all policy and returns its bearer token. The token exists only in
@@ -57,6 +58,7 @@ export function revokeAgent(db: Db, agentId: string, now = new Date()): Revocati
 
 /** Every agent still holding a working token, with what the owner most needs to see. */
 export function listAgents(db: Db): AgentSummary[] {
+  const wallets = listWallets(db)
   return db
     .select({ agentId: agents.id, paused: policies.paused, mode: policies.mode })
     .from(agents)
@@ -64,4 +66,10 @@ export function listAgents(db: Db): AgentSummary[] {
     .where(isNull(agents.revokedAt))
     .orderBy(agents.id)
     .all()
+    .map((agent) => {
+      const own = wallets
+        .filter((w) => w.agentId === agent.agentId)
+        .map(({ chain, address, status }) => ({ chain, address, status }))
+      return own.length === 0 ? agent : { ...agent, wallets: own }
+    })
 }
