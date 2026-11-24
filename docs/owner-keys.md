@@ -26,12 +26,21 @@ So, on Solana:
 - **Adding members or raising the threshold does not protect the vault.** The config authority acts
   alone whatever the threshold says. The panel and the doctor report such a vault as one key
   (`threshold 1 of 1`).
-- **What protects it: make the config authority a hardware wallet.** A Ledger connected through
-  Phantom keeps the key off your phone and computer. Every vault change and every kill then needs the
-  device in your hand.
+- **What protects it, if you choose to: hand the vault to a hardware wallet, entirely.** A Ledger connected through
+  Phantom keeps the key off your phone and computer. It must take over every role your old key has:
+  config authority _and_ member. A vault made in the panel has your old key as its only member,
+  threshold 1, so a Ledger that only became the authority would leave the old key able to propose
+  and approve alone. Every vault change and every kill then needs the device in your hand.
+- **The hand-over** takes two signatures:
+  1. your current wallet adds the Ledger as a member and makes it the config authority;
+  2. the Ledger removes the old key.
+
+  Until step 2 is signed, the old key still controls the vault. The signing page does not offer
+  this hand-over yet; it is planned.
+
 - A vault that no single key can empty, an _autonomous_ multisig with a kill by proposal and vote, is
-  an option under discussion (CR-023). Its price is a slower kill: two people or two devices, and
-  minutes instead of seconds. guard-core's own pause stays instant either way.
+  a possible later option (CR-023, deferred). Its price is a slower kill: two people or two devices,
+  and minutes instead of seconds. guard-core's own pause stays instant either way.
 
 ## Robinhood Chain and Base: the Safe's threshold works
 
@@ -42,7 +51,10 @@ A Safe's threshold binds every owner, so more signers really do protect it:
 - It is slower to stop in an emergency, because a second signer must sign the kill too. You then
   approve vault changes in the Safe app: the signing page works with a one-signer Safe.
 - If you keep one signer, make it a separate wallet from your Solana one, and ideally a hardware
-  wallet.
+  wallet that **replaces** the old owner rather than joining it. The hand-over is two steps here too,
+  both in the Safe app:
+  1. add the Ledger as an owner;
+  2. the Ledger removes the old owner.
 
 ## What DefiMind checks for you
 
@@ -51,6 +63,29 @@ A Safe's threshold binds every owner, so more signers really do protect it:
 - The panel shows the same advice where you create a vault, and in Settings.
 - An agent can have its own spending wallet and daily limit ("Own wallet" on the agent). Then a bug
   or a hijack in that agent stays within its own cap. It does not change who controls the vault.
+
+## Give an agent its own wallet
+
+By default every agent spends from one shared spending wallet per chain. An agent with its own
+wallet spends only from it, under its own daily limit, so one agent's bug or hijack cannot spend
+another agent's share. Existing agents keep the shared wallet until you change them; nothing moves
+on its own.
+
+1. In the panel, open the agent, then **Own wallet**, and press **Give it its own wallet on
+   Solana** (or the chain you want). Your passkey confirms it.
+2. Press **Sign the limit** and sign the agent's daily limit in your wallet. Until DefiMind reads
+   that limit on the chain, the card says _Waiting for its limit_ and the agent keeps paying from
+   the shared wallet.
+3. Send the new address a little of the chain's gas token (SOL or ETH); the card shows the minimum.
+   The agent's wallet pays its own fees.
+
+Once the card says _Active_, every payment, top-up and trade of that agent on that chain uses that
+wallet alone. **Stop this agent** on the same page pauses this agent only, and gives you one
+signature per own wallet to take its limit off. **Stop everything** on the Overview still stops
+every agent.
+
+Every agent key still sits on your one DefiMind server: if the server itself is broken into, the
+most at risk is the sum of every daily limit.
 
 ## What it cannot do
 
