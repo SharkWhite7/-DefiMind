@@ -10,11 +10,14 @@ import { isKnownFlag, REJECT_CODES } from '../domain/codes.js'
 const atomic = z.string().regex(/^(0|[1-9]\d*)$/)
 const isoTime = z.iso.datetime({ offset: true })
 const opaque = z.string().min(1).max(128)
+const bps = z.number().int().min(0).max(10_000)
+/** A mint's decimals, read onchain: an SPL mint stores them in one byte. */
+const decimals = z.number().int().min(0).max(255)
 
 export const payIntent = z.object({
   id: z.uuid(),
   agentId: z.string().min(1).max(64),
-  kind: z.enum(['x402', 'transfer']),
+  kind: z.enum(['x402', 'transfer', 'swap']),
   chain: z.string().min(3).max(64),
   token: opaque,
   amount: atomic,
@@ -24,6 +27,20 @@ export const payIntent = z.object({
   status: z.enum(['approved', 'pending_approval', 'rejected', 'executed', 'failed', 'expired']),
   rejectReasons: z.array(z.enum(REJECT_CODES)).max(32),
   txId: z.string().min(1).max(256).optional(),
+  swap: z
+    .object({
+      venue: z.string().min(1).max(64),
+      tokenOut: opaque,
+      minAmountOut: atomic,
+      slippageBps: bps,
+      priceImpactBps: bps,
+      decimalsIn: decimals,
+      decimalsOut: decimals,
+      symbolIn: z.string().min(1).max(32).optional(),
+      symbolOut: z.string().min(1).max(32).optional(),
+      quotedAt: isoTime,
+    })
+    .optional(),
   createdAt: isoTime,
   expiresAt: isoTime,
 })
@@ -112,4 +129,12 @@ export const alertEvent = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('passkey_enrolled'), detail: z.string().max(500), sentAt: isoTime }),
   z.object({ kind: z.literal('chain_broken'), detail: z.string().max(500), sentAt: isoTime }),
+  z.object({
+    kind: z.literal('admin_loosen_refused'),
+    detail: z.string().max(500),
+    sentAt: isoTime,
+  }),
 ])
+
+/** SPEC v0.17's alerts; shared's AlertEvent gains admin_loosen_refused with CR-022 (INT-48). */
+export type Alert = z.infer<typeof alertEvent>

@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.16 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.17 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -225,6 +225,11 @@ interface ChainAdapter {
   getVault(): Promise<{ address: string; token: string; balance: Amount }>  // CR-019: the owner's
                                                    // vault (Squads vault index 0, or the Safe),
                                                    // where deposits go, and its balance
+    // CR-022: plus control?: { threshold: number; signers: number }, read onchain: the Safe's
+    // threshold and owners, or the multisig's voters. A controlled Squads multisig (every
+    // DefiMind vault: the kill uses its config authority) is { 1, 1 }: that authority alone can
+    // empty it. Doctor warns at threshold 1. On Solana, it names the config authority as the key
+    // to protect (a hardware wallet); on EVM, it advises another owner or a 2-of-3.
   buildKillTx(): Promise<{ description: string; payload: unknown }>  // owner signs this
   simulate(intent: PayIntent): Promise<SimulationOutcome>
   send(intent: PayIntent): Promise<string>         // returns txId
@@ -266,7 +271,9 @@ POST /v1/agent/x402/fetch   { agentId, url, method, headers?, body?, maxAmount? 
   and the response passes through with rejectReasons: []. When the host is refused before any request
   is made, intentId is absent and the result is { status: "rejected", rejectReasons: ["DOMAIN_NOT_ALLOWED"] }.
   After the owner approves, the agent repeats the same request. The approval is redeemed once, for
-  exactly the approved chain, token, amount, recipient and domain. An approval not redeemed before
+  exactly the approved chain, token, amount, recipient and domain, and (CR-022) only by the same
+  request: guard-core keeps the SHA-256 of the method, the full URL with its query, and the body.
+  Another request is a new intent. An approval not redeemed before
   expiresAt expires with APPROVAL_TIMEOUT.
 POST /v1/agent/transfer     { agentId, chain, token, amount, recipient, reason, mandateId? } -> { intentId, status, txId?, rejectReasons }
   x402 fetch takes mandateId? too. With one, the payment must also fit that mandate (CR-010).
@@ -298,7 +305,7 @@ GET  /v1/bot/agents, /v1/bot/policy/:agentId, /v1/bot/budget/:agentId, /v1/bot/c
 GET  /v1/bot/report?from&to, /v1/bot/doctor   the same bodies as the admin reads
 The bot has no route that creates agents, adds to an allowlist, raises a limit, goes live, resumes or
 issues an enrolment code: those are the panel's, with a passkey, or the machine's, with the admin
-token. A bot started with GUARD_ADMIN_TOKEN set logs a warning and does not use it.
+token within the CR-022 rule below. A bot started with GUARD_ADMIN_TOKEN set logs a warning and does not use it.
 POST /v1/admin/pause        { agentId } ; POST /v1/admin/resume { agentId }
 POST /v1/admin/kill         {} -> pauses all agents AND prepares, for every chain, the owner tx that
                                   sets the allowance to 0 and removes the delegate
@@ -308,6 +315,13 @@ POST /v1/admin/kill         {} -> pauses all agents AND prepares, for every chai
   A chain whose kill tx could not be built stays in the list with payload: null and a description
   telling the owner to remove the spend limit by hand: that chain's allowance is still live.
 GET/PUT /v1/admin/policy/:agentId  Policy
+  Admin only tightens (CR-022). A PUT that loosens, as loosened() counts it, and every
+  POST /v1/admin/resume are refused with 403 { error: "loosen_in_panel" }, as for the bot (CR-016):
+  loosening is the panel's, with the passkey. POST /v1/admin/mandates opens the mandate
+  pending_approval, for the owner to approve in the panel. Each refusal is audited (event
+  "admin_loosen_refused", via "admin") and alerts the owner: { kind: "admin_loosen_refused" } to the
+  bot and Web Push "attack". Reads, tightening, pause, kill, revoke and creating an agent (deny-all,
+  shadow) are unchanged. Tests and local tools write a policy into the database directly.
 POST /v1/admin/agents { agentId } -> { agentId, token }   (CR-011) the token once; only its hash is
   kept. The new agent gets a deny-all policy with mode "shadow". 409 { error: "exists" }.
 GET  /v1/admin/agents -> { agents: { agentId, paused, mode }[] }
@@ -315,7 +329,8 @@ POST /v1/admin/agents/:id/revoke -> { agentId, revoked: true }   cuts it off at 
 GET  /v1/admin/doctor -> { checks: { id, status: "ok" | "warn" | "fail", message, fix? }[] }
   Plain-English checks, never a secret: database writable, each chain's allowance readable, each
   hot wallet's gas (getHotWalletGas) and token balance, the bot reachable, the last backup's age.
-POST /v1/admin/mandates { agentId, budget, domains, recipients?, ttlSeconds, reason } -> Mandate (active)
+POST /v1/admin/mandates { agentId, budget, domains, recipients?, ttlSeconds, reason } -> Mandate
+  (pending_approval since CR-022: the owner approves it in the panel)
 POST /v1/admin/mandates/:id/revoke -> Mandate
 GET  /v1/admin/receipts?from&to -> { receipts: Receipt[] }
 GET  /v1/admin/report?from&to -> { agents: { agentId, spent, payments, refused: Record<RejectCode, number>,
@@ -325,6 +340,10 @@ POST /v1/admin/passkeys/code -> { code, expiresAt }   one-time, 10 minutes, hash
   GET /owner/enrol#code=… on the public listener (in the fragment, so no request line or log holds it),
   which runs WebAuthn registration for this origin via POST /v1/owner/passkeys/options { code } and
   POST /v1/owner/passkeys { code, response }. The bot's /passkey enrol sends the link.
+  First passkey (CR-022). With SETUP_CODE set, only POST /v1/owner/setup { setupCode } issues the
+  code for the first passkey: the admin routes refuse it with 403 { error: "use_setup_code" }, audited
+  and alerted as admin_loosen_refused, so an admin token cannot take over a fresh deployment. Without
+  SETUP_CODE, guard-core warns at every start while no passkey exists.
   Code enrolment adds the FIRST passkey only. Once one exists, POST /v1/owner/passkeys also needs an
   assertion from an enrolled passkey (step-up), so a stolen Telegram account cannot add its own key.
   Every enrolment sends the bot an alert { kind: "passkey_enrolled" }. GET /v1/admin/passkeys lists them
@@ -351,6 +370,7 @@ POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, sing
   sha256(canonical JSON of { action, body }); the step-up assertion for that exact action and body
   OwnerAction = "approve_intent" | "approve_mandate" | "loosen_policy" | "resume" | "create_agent"
     | "change_settings" (CR-019) | "close_positions" (CR-021, body {})
+    | "agent_wallet" (CR-022, body { agentId, chain })
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
 GET  /v1/owner/deposit -> { chains: { chain, vault, token, balance, dailyCap?, depositPage? }[] }
@@ -488,7 +508,12 @@ with the same strict CSP as the panel, and each release publishes the SHA-256 of
 build so a modified /sign can be detected.
 
 Hosting behind one public listener. ADMIN_ROUTES=false leaves /v1/admin/* unregistered, as the
-one-click deployment does. PUBLIC_URL is the https address the owner opens; on Render it defaults to
+one-click deployment does. With one listener (PUBLIC_PORT unset), guard-core refuses to start with
+ADMIN_ROUTES=true unless HOST is a loopback address or ALLOW_PUBLIC_ADMIN=true. The override logs a
+warning at every start and doctor reports "warn" (CR-022).
+Host check (CR-022). With PUBLIC_URL or PASSKEY_ORIGIN set, the public listener answers
+421 { error: "misdirected" } when the Host header names another host. A single listener on loopback
+accepts only localhost, 127.0.0.1, [::1] and its HOST. GET /health is exempt. PUBLIC_URL is the https address the owner opens; on Render it defaults to
 RENDER_EXTERNAL_URL, and PASSKEY_RP_ID and PASSKEY_ORIGIN default from it. TRUST_FORWARDED_FOR=true
 takes the client address for rate limits from the hop the host's proxy adds, never from one the
 client sent.
@@ -528,6 +553,53 @@ Checks, in order, all default deny:
 Buys count against dailyTradeMax, not dailyMax. A top-up for a buy draws the chain's dollar under the
 same onchain cap.
 
+## Agent wallets (CR-022, HIGH-2)
+Opt-in, per agent and chain. By default every agent spends from the chain's shared spending (hot)
+wallet, as before. An agent given its own wallet spends only from it, under its own onchain limit,
+so a bug or a hijacked agent can never cost more than that agent's own cap.
+
+Keys. guard-core generates the agent's hot wallet on request and stores it at
+/data/keys/agents/<agentId>/<chain> (0600), or reads it from AGENT_WALLET_<AGENTID>_<CHAIN>_FILE if
+that is set. It is never logged and never returned. One agent's key is never used for another agent.
+
+Onchain limit. On Solana, a Squads spending limit on the same multisig, whose only member and only
+destination is the agent's wallet: the spending-limit PDA is derived from that member, so limits never
+collide. On EVM, an Allowance Module delegate with its own allowance on the same Safe. The owner signs
+it on the signing page with action=add-limit naming the agent's wallet. /sign injects every hot wallet
+of this deployment, shared and per agent, and refuses any other. The hosted page (CR-020) never
+serves add-limit.
+
+Routes (session, step-up "agent_wallet" over { agentId, chain }):
+POST /v1/owner/agents/:id/wallets { chain, assertion } -> AgentWallet
+  { chain, address, status: "pending_limit" | "active", addLimitPage, gas: { balance, minimum, symbol } }
+  Idempotent: a second call returns the same wallet. The wallet is "active" only once guard-core
+  reads its limit or allowance onchain, as for vault adoption (CR-019). Until then the agent keeps
+  using the shared wallet.
+GET  /v1/owner/agents/:id/wallets -> { wallets: AgentWallet[] }
+AgentSummary gains wallets?: { chain, address, status }[]. GET /v1/owner/keys adds
+agentWallets: { agentId, chain, address }[], public keys only.
+
+Routing. For an agent with an active wallet on a chain, every payment, top-up and swap of that agent
+on that chain uses only that wallet and its limit. getAllowanceState, doctor's gas and balance
+checks, positions and Close positions all run per wallet. Agents without one keep the shared wallet.
+Gas: the agent's wallet pays its own fees. The panel shows the address and the gas it needs, and
+doctor warns below the minimum.
+
+Kill. POST /v1/owner/kill still pauses every agent, and now returns one ownerTransactions entry per
+chain and wallet, shared and per agent: every limit is removed. POST /v1/owner/agents/:id/kill {}
+(session) pauses that agent and returns ownerTransactions for its own wallets only. Revoking an agent
+with its own wallet returns the same transactions and says the limit is still live until they are
+signed. The bot's and the admin's kill pause everything, as before, and carry no links.
+
+Migration. Existing agents, fly-agent included, stay on the shared wallet until the owner opts in. To
+move an agent: create its wallet, sign the limit, send it a little gas. It switches once its wallet is
+active. Then lower the shared limit by what that agent used. Funds and positions already in the
+shared wallet stay there; Close positions still reaches them.
+
+Limit of the design. Every hot wallet key lives in the same guard-core. A compromised server holds them
+all, and the bound is then the sum of the onchain caps, shared and per agent. Moving keys out of the
+server (KMS or a signer service) is a later CR.
+
 ## Webhook guard-core -> telegram-bot
 The Telegram bot is optional (CR-017). BOT_URL, BOT_TOKEN and BOT_WEBHOOK_SECRET are all set or all
 unset; a partial set is a configuration error. With none set, guard-core sends no webhook, registers
@@ -548,6 +620,7 @@ POST {BOT_URL}/hooks/alert             (same X-Guard-Signature scheme; CR-010)
 { kind: "breaker_tripped", agentId: string, detail: string, sentAt: string }
   | { kind: "passkey_enrolled", detail: string, sentAt: string }
   | { kind: "chain_broken", detail: string, sentAt: string }   (CR-013)
+  | { kind: "admin_loosen_refused", detail: string, sentAt: string }   (CR-022)
 The approval-request body gains flags: ("RECIPIENT_CHANGED" | "PRICE_JUMP")[] (empty when none),
 pinned?: { recipient, amount } (the last executed payment to that domain, present with a flag),
 passkey: boolean (approve only through /owner/approve), and mandate?: Mandate when the request is to
@@ -576,6 +649,15 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.17 (2026-11-24): CR-022, approved by the owner. Fixes from an independent review:
+  - the admin token only tightens: loosening, resuming and opening a mandate are the panel's;
+  - with SETUP_CODE set, only the setup code enrols the first passkey;
+  - one public listener refuses to serve the admin API unless told to;
+  - an x402 approval is bound to its exact request;
+  - the public listener checks the Host header;
+  - getVault reports the vault's threshold, and doctor warns at threshold 1.
+  The same day, after the owner chose option A, opt-in agent wallets: a hot wallet and onchain limit
+  per agent and chain, routed per agent, killed per agent.
 - v0.16 (2026-11-24): CR-021, approved by the owner. Guarded trading, phase 1 on Solana through
   Jupiter: the swap intent kind, Policy.trading, the trading reject codes and approval flags,
   ChainAdapter.quoteSwap and getPositions, the agent quote, swap and portfolio routes, the owner's

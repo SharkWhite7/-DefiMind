@@ -33,7 +33,25 @@ describe('money', () => {
     expect(parseDollars('12.5')).toBe('12500000')
     expect(parseDollars(' $0.000001 ')).toBe('1')
     expect(parseDollars('7')).toBe('7000000')
-    for (const bad of ['', '-1', '1.1234567', '1,000', '1e6', '$', '.5']) {
+    // An iPhone keypad in pt-BR types a comma.
+    expect(parseDollars('2,00')).toBe('2000000')
+    expect(parseDollars('2.00')).toBe('2000000')
+    expect(parseDollars('2')).toBe('2000000')
+    expect(parseDollars('0,5')).toBe('500000')
+    expect(parseDollars('$1,250000')).toBe('1250000')
+    for (const bad of [
+      '',
+      '-1',
+      '1.1234567',
+      '1,000',
+      '1.234,56',
+      '1,234.56',
+      '2,',
+      ',5',
+      '1e6',
+      '$',
+      '.5',
+    ]) {
       expect(parseDollars(bad)).toBeUndefined()
     }
   })

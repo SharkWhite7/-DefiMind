@@ -113,6 +113,19 @@ describe.each([390, 1280])('trading at %i px', (width) => {
     await page.getByRole('button', { name: 'Save trading' }).click()
     await expect.poll(() => status(page).textContent()).toMatch(/write a percent/)
     expect(guard.state.puts).toHaveLength(2)
+    // A refusal keeps what the owner typed.
+    expect(await page.getByLabel('Price impact up to, in percent').inputValue()).toBe('lots')
+    expect(await page.getByLabel('Each buy, in dollars').inputValue()).toBe('25.00')
+
+    // An iPhone in pt-BR types a comma.
+    await page.getByLabel('Price impact up to, in percent').fill('2,5')
+    await page.getByLabel('Each buy, in dollars').fill('2,00')
+    await page.getByRole('button', { name: 'Save trading' }).click()
+    await expect.poll(() => status(page).textContent()).toBe('Trading saved.')
+    expect(guard.state.puts[2]?.policy['trading']).toMatchObject({
+      maxTradeUsd: '2000000',
+      maxPriceImpactBps: 250,
+    })
     await close()
   })
 

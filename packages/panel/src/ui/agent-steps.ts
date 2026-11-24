@@ -53,6 +53,11 @@ export async function agent(ctx: Context): Promise<Child[]> {
     input,
     create,
     slot,
+    el(
+      'p',
+      { class: 'muted' },
+      "Later, on the agent's page, you can give it its own wallet and daily limit, so a problem with one agent stays within its own cap. All agent keys still sit on this one server.",
+    ),
     agents.length > 0 && next(ctx, 'rules'),
   ]
 }

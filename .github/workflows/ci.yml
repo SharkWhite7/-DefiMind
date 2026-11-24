@@ -37,7 +37,15 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Jupiter and Whirlpool are read from mainnet for the swap fork test, never kept in the repo.
+      - uses: actions/cache@v4
+        with:
+          path: packages/onchain/.cache/programs
+          key: mainnet-programs-${{ hashFiles('packages/onchain/test/fixtures/jupiter-swap.json') }}
+
       - name: Test
+        env:
+          FORK_REQUIRED: '1'
         run: pnpm test
 
   # A probe of a public endpoint, not of our code: kept apart so an RPC outage does not fail the
@@ -192,6 +200,16 @@ jobs:
           submodules: recursive
 
       - uses: foundry-rs/foundry-toolchain@v1
+
+      # One fork per chain and run, at a block read once here. Robinhood Chain's RPCs keep recent state
+      # only, so a block fixed in the code falls out of reach; a fresh fork per test draws the mainnet
+      # RPC's Cloudflare challenge.
+      - name: Fork blocks
+        run: |
+          mainnet=$(cast block-number --rpc-url https://rpc.mainnet.chain.robinhood.com)
+          testnet=$(cast block-number --rpc-url https://rpc.testnet.chain.robinhood.com)
+          echo "ROBINHOOD_MAINNET_FORK_BLOCK=$mainnet" >> "$GITHUB_ENV"
+          echo "ROBINHOOD_TESTNET_FORK_BLOCK=$testnet" >> "$GITHUB_ENV"
 
       - name: forge test
         working-directory: packages/onchain

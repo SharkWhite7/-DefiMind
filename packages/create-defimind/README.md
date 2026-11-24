@@ -69,8 +69,9 @@ optional (CR-017): only if you choose it, a bot token from @BotFather and your T
 --ha=false` for guard-core, then the bot if you chose it. Each app is deployed once, here: guard-core refuses to
    start with a hot key but no vault, so a deploy before step 6 would crash-loop. Then, through
    `fly proxy 18787:8787`, it calls `POST /v1/admin/agents` (or, on a guard-core without that
-   route, `create-agent.ts` over `fly ssh console`), `PUT /v1/admin/policy/<agent>` with the preset
-   in shadow mode, and the doctor. It ends with your owner panel's address and where the setup code
+   route, `create-agent.ts` over `fly ssh console`), which makes the agent deny-all in shadow mode,
+   and the doctor. It prints the preset for you to set in the panel with your passkey, since the
+   admin token only tightens (CR-022). It ends with your owner panel's address and where the setup code
    is (never the code itself), and the one line for your agent:
    `pnpm --filter @defimind/mcp-server run setup claude-code`.
 

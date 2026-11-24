@@ -46,6 +46,7 @@ export function ownerPanelRoutes(
     botUrl?: string
     databaseUrl: string
     hosted?: boolean
+    publicAdmin?: boolean
     /** The VAPID public key; push is off without it. */
     pushKey?: string
     signing?: { page: string; targets: KillTarget[] }

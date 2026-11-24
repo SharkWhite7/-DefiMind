@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { admit } from '../src/db/breaker.js'
 import { migrateDb, openDb, schema, type Db } from '../src/db/client.js'
-import { ADMIN_TOKEN, CHAIN, harness, MERCHANT, MINT, NOW, type Harness } from './harness.js'
+import { CHAIN, harness, MERCHANT, MINT, NOW, type Harness } from './harness.js'
+import { signedIn } from './owner.js'
 
 const pay = (h: Harness, amount = '100000', recipient = MERCHANT) =>
   h.agent('POST', '/v1/agent/transfer', {
@@ -72,11 +73,10 @@ describe('the circuit breaker', () => {
   it('starts a resumed agent on a fresh minute', async () => {
     const h = await harness({ policy: { maxPaymentsPerMinute: 1 } })
     await statuses(h, 2)
-    await h.app.inject({
-      method: 'POST',
-      url: '/v1/admin/resume',
-      headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
-      payload: { agentId: 'agent-1' },
+    const owner = await signedIn(h)
+    await owner.call('POST', '/v1/owner/resume', {
+      agentId: 'agent-1',
+      assertion: await owner.stepUp('resume', { agentId: 'agent-1' }),
     })
     expect((await pay(h)).json().status).toBe('executed')
   })
