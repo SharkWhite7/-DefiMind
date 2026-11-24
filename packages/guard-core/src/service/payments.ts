@@ -176,7 +176,7 @@ export async function clear(
 }
 
 /** Shadow mode: everything up to the signature ran and passed. Nothing is sent or told to the bot. */
-function shadowed(deps: PaymentDeps, intent: PayIntent, flags: ApprovalFlag[]): PayIntent {
+export function shadowed(deps: PaymentDeps, intent: PayIntent, flags: ApprovalFlag[]): PayIntent {
   const done: PayIntent = { ...intent, status: 'shadowed', rejectReasons: [] }
   repo.saveIntent(deps.db, done)
   repo.audit(
@@ -200,7 +200,7 @@ function shadowed(deps: PaymentDeps, intent: PayIntent, flags: ApprovalFlag[]): 
  * More payments in a minute than the policy allows is how a looping or hijacked agent looks. The
  * agent stops until the owner resumes it, and the owner hears about it at once.
  */
-function trip(deps: PaymentDeps, intent: PayIntent, limit: number): PayIntent {
+export function trip(deps: PaymentDeps, intent: PayIntent, limit: number): PayIntent {
   repo.setPaused(deps.db, intent.agentId, true, deps.now().toISOString())
   repo.audit(
     deps.db,

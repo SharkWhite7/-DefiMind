@@ -29,3 +29,30 @@ describe('checkSimulation', () => {
     expect(run({ token: 'USDC', delta })).toEqual(['SIM_FAILED'])
   })
 })
+
+describe('checkSimulation for a swap (CR-021)', () => {
+  const swap = {
+    token: 'USDC',
+    amount: '1000000',
+    swap: { tokenOut: 'BONK', minAmountOut: '500' },
+  } as PayIntent
+  const run = (...balanceChanges: { token: string; delta: string }[]) =>
+    checkSimulation({ summary: '', balanceChanges }, swap)
+
+  it('accepts at least the minimum in for at most the amount out', () => {
+    expect(run({ token: 'USDC', delta: '-1000000' }, { token: 'BONK', delta: '500' })).toEqual([])
+  })
+
+  it('refuses less than the minimum in, or nothing in at all', () => {
+    expect(run({ token: 'USDC', delta: '-1000000' }, { token: 'BONK', delta: '499' })).toEqual([
+      'SIM_UNEXPECTED_EFFECT',
+    ])
+    expect(run({ token: 'USDC', delta: '-1000000' })).toEqual(['SIM_UNEXPECTED_EFFECT'])
+  })
+
+  it('refuses more out than the amount, whatever comes in', () => {
+    expect(run({ token: 'USDC', delta: '-1000001' }, { token: 'BONK', delta: '900' })).toEqual([
+      'SIM_UNEXPECTED_EFFECT',
+    ])
+  })
+})

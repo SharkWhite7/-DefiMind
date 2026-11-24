@@ -44,3 +44,10 @@ export function card(...children: Child[]) {
 export function when(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
+
+/** CSSOM, not a style attribute: the CSP's style-src blocks the latter, not the former. */
+export function meter(percent: number) {
+  const fill = el('i')
+  fill.style.width = `${percent}%`
+  return el('div', { class: 'meter', 'aria-hidden': 'true' }, fill)
+}

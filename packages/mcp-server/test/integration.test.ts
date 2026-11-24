@@ -177,7 +177,7 @@ describe('streamable HTTP transport', () => {
       }),
     )
     const { tools } = await mcp.listTools()
-    expect(tools).toHaveLength(5)
+    expect(tools).toHaveLength(8)
     expect((await call(mcp, 'get_budget')).text).toMatch(/Payments are active/)
     await mcp.close()
   })

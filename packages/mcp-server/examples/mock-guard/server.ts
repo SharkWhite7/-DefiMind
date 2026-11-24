@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net'
 import { CHAINS, type ExecutionReceipt } from '@defimind/shared'
 import { executionLog } from './executions.js'
+import { tradingRoutes } from './trading.js'
 
 /**
  * A stand-in for guard-core's agent API, faithful to the SPEC's request and response shapes and
@@ -17,6 +18,7 @@ import { executionLog } from './executions.js'
  *   Repeating the same fetch then redeems that approval once, as guard-core does.
  * - a task budget opens at once, whatever its size, and the budget lists it. Payments do not
  *   draw it down: the mock checks no task budget.
+ * - trading follows examples/mock-guard/trading.ts: a fixed price, and only `tradable` tokens.
  * - a reported tool call gets a signed, chained receipt, unless `executionsDown` says the mock is
  *   failing, which is how the gateway's outbox is tried by hand.
  */
@@ -28,6 +30,8 @@ export interface MockGuardOptions {
   allowedRecipients?: string[]
   approveAfterMs?: number
   now?: () => Date
+  /** Tokens the mock's trading policy allows (CR-021). */
+  tradable?: string[]
   /** While it returns true, POST /v1/agent/executions answers 503. */
   executionsDown?: () => boolean
 }
@@ -74,6 +78,7 @@ export async function startMockGuard(options: MockGuardOptions): Promise<MockGua
     executionsDown = () => false,
   } = options
   const executions = executionLog(agentId, now)
+  const trading = tradingRoutes({ usd: USDC_DEVNET, tradable: options.tradable ?? [], now })
   const intents = new Map<string, MockIntent>()
   const requests: MockGuard['requests'] = []
   let spent = 0n
@@ -204,6 +209,10 @@ export async function startMockGuard(options: MockGuardOptions): Promise<MockGua
     }
     if (req.method === 'POST' && path === '/v1/agent/x402/fetch') {
       return send(res, 200, await x402(body ?? {}))
+    }
+    const traded = trading(req.method ?? '', path, body, CHAINS.solanaDevnet)
+    if (traded !== undefined) {
+      return send(res, traded[0], traded[1])
     }
     if (req.method === 'POST' && path === '/v1/agent/executions') {
       if (executionsDown()) {

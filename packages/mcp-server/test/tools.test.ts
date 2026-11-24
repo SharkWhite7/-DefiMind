@@ -17,14 +17,17 @@ describe('tool listing', () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       'check_intent',
       'get_budget',
+      'get_portfolio',
       'paid_fetch',
+      'quote',
       'start_task',
+      'swap',
       'transfer',
     ])
-    for (const name of ['paid_fetch', 'transfer']) {
+    for (const name of ['paid_fetch', 'transfer', 'swap']) {
       const description = tools.find((tool) => tool.name === name)?.description ?? ''
       expect(description).toMatch(/rejected/)
-      expect(description).toMatch(/approve/)
+      expect(description).toMatch(/approv/)
       expect(description).toMatch(/pending_approval: tell the user/)
       expect(description).toMatch(/check_intent/)
     }

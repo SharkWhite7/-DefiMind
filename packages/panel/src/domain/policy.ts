@@ -1,4 +1,5 @@
 import { getAddress } from '@defimind/shared'
+import { type Trading, tradingLoosens } from './trading.js'
 
 const LIMITS = ['perTxMax', 'dailyMax', 'approvalThreshold'] as const
 const LISTS = ['chains', 'tokens', 'allowedRecipients', 'allowedDomains'] as const
@@ -11,6 +12,7 @@ export type Rules = Record<(typeof LIMITS)[number], string> &
     paused?: boolean | undefined
     priceIncreaseMaxPct?: number | undefined
     maxPaymentsPerMinute?: number | undefined
+    trading?: Trading | undefined
   }
 
 /** SPEC's defaults for a policy that leaves these out, as guard-core applies them. */
@@ -19,8 +21,9 @@ const DEFAULTS = { priceIncreaseMaxPct: 100, maxPaymentsPerMinute: 10 } as const
 /**
  * Whether a policy change loosens anything, as guard-core counts it: SPEC's list (a raised limit,
  * anything added to an allowlist, going live, no longer requiring a mandate), plus unpausing, which
- * would otherwise be a resume without its passkey, and a raised breaker or price margin. guard-core
- * asks for a passkey then; the panel asks first, so the owner is not refused after pressing Save.
+ * would otherwise be a resume without its passkey, a raised breaker or price margin, and CR-021's
+ * trading rules. guard-core asks for a passkey then; the panel asks first, so the owner is not
+ * refused after pressing Save.
  */
 export function loosens(before: Rules, after: Rules): boolean {
   const raised = LIMITS.some((limit) => BigInt(after[limit]) > BigInt(before[limit]))
@@ -31,7 +34,8 @@ export function loosens(before: Rules, after: Rules): boolean {
   const wider = (Object.keys(DEFAULTS) as (keyof typeof DEFAULTS)[]).some(
     (key) => (after[key] ?? DEFAULTS[key]) > (before[key] ?? DEFAULTS[key]),
   )
-  return raised || added || live || unmandated || unpaused || wider
+  const trades = tradingLoosens(before.trading, after.trading)
+  return raised || added || live || unmandated || unpaused || wider || trades
 }
 
 /** Lowercase DNS labels only: an allowlist entry that is not a hostname would never match a request. */

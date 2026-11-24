@@ -2,8 +2,14 @@ import type { Browser, Page } from 'playwright'
 import { guardCore } from './guard.js'
 
 /** A page with a platform passkey that always verifies the owner, and every CSP violation kept. */
-export async function openDevice(browser: Browser, dist: string, width: number, fresh = false) {
-  const guard = await guardCore(dist, { fresh })
+export async function openDevice(
+  browser: Browser,
+  dist: string,
+  width: number,
+  fresh = false,
+  trading = false,
+) {
+  const guard = await guardCore(dist, { fresh, trading })
   const context = await browser.newContext({ viewport: { width, height: 844 } })
   const page = await context.newPage()
   const cdp = await context.newCDPSession(page)
