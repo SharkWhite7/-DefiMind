@@ -64,6 +64,7 @@ live and press kill. Then connect the agent from the same checkout:
 - How it works and what it protects against: the technical whitepaper,
   [`docs/whitepaper.md`](./docs/whitepaper.md).
 - When something goes wrong: [`docs/troubleshooting.md`](./docs/troubleshooting.md).
+- Who controls your vaults, and how to protect that key: [`docs/owner-keys.md`](./docs/owner-keys.md).
 - Connect an agent: "For agent builders" in
   [`packages/mcp-server/README.md`](./packages/mcp-server/README.md).
 - Report a vulnerability privately: [`SECURITY.md`](./SECURITY.md). Anything else: open an issue.

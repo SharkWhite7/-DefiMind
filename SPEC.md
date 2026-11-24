@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.17 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.19 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -230,6 +230,10 @@ interface ChainAdapter {
     // DefiMind vault: the kill uses its config authority) is { 1, 1 }: that authority alone can
     // empty it. Doctor warns at threshold 1. On Solana, it names the config authority as the key
     // to protect (a hardware wallet); on EVM, it advises another owner or a 2-of-3.
+  getLandedChanges?(txId: TxId): Promise<BalanceChange[]>  // CR-024: the hot wallet's token deltas
+                                                   // in a confirmed transaction, for settlement
+  tokenRisk?(mint: Address): Promise<Omit<TokenRisk, "venue" | "flags">>  // CR-025: the mint read
+                                                   // onchain, plus the exit for 10 USD
   buildKillTx(): Promise<{ description: string; payload: unknown }>  // owner signs this
   simulate(intent: PayIntent): Promise<SimulationOutcome>
   send(intent: PayIntent): Promise<string>         // returns txId
@@ -318,7 +322,8 @@ GET/PUT /v1/admin/policy/:agentId  Policy
   Admin only tightens (CR-022). A PUT that loosens, as loosened() counts it, and every
   POST /v1/admin/resume are refused with 403 { error: "loosen_in_panel" }, as for the bot (CR-016):
   loosening is the panel's, with the passkey. POST /v1/admin/mandates opens the mandate
-  pending_approval, for the owner to approve in the panel. Each refusal is audited (event
+  as the agent's own request would (CR-010): at or above approvalThreshold it waits for the owner in
+  the panel, so the admin token gets no more than the agent's token already has. Each refusal is audited (event
   "admin_loosen_refused", via "admin") and alerts the owner: { kind: "admin_loosen_refused" } to the
   bot and Web Push "attack". Reads, tightening, pause, kill, revoke and creating an agent (deny-all,
   shadow) are unchanged. Tests and local tools write a policy into the database directly.
@@ -330,7 +335,7 @@ GET  /v1/admin/doctor -> { checks: { id, status: "ok" | "warn" | "fail", message
   Plain-English checks, never a secret: database writable, each chain's allowance readable, each
   hot wallet's gas (getHotWalletGas) and token balance, the bot reachable, the last backup's age.
 POST /v1/admin/mandates { agentId, budget, domains, recipients?, ttlSeconds, reason } -> Mandate
-  (pending_approval since CR-022: the owner approves it in the panel)
+  (since CR-022, opened as an agent's own: pending_approval at or above approvalThreshold)
 POST /v1/admin/mandates/:id/revoke -> Mandate
 GET  /v1/admin/receipts?from&to -> { receipts: Receipt[] }
 GET  /v1/admin/report?from&to -> { agents: { agentId, spent, payments, refused: Record<RejectCode, number>,
@@ -341,7 +346,8 @@ POST /v1/admin/passkeys/code -> { code, expiresAt }   one-time, 10 minutes, hash
   which runs WebAuthn registration for this origin via POST /v1/owner/passkeys/options { code } and
   POST /v1/owner/passkeys { code, response }. The bot's /passkey enrol sends the link.
   First passkey (CR-022). With SETUP_CODE set, only POST /v1/owner/setup { setupCode } issues the
-  code for the first passkey: the admin routes refuse it with 403 { error: "use_setup_code" }, audited
+  code for the first passkey: the admin passkey routes (code, options and the first enrolment) refuse
+  it with 403 { error: "use_setup_code" }, audited
   and alerted as admin_loosen_refused, so an admin token cannot take over a fresh deployment. Without
   SETUP_CODE, guard-core warns at every start while no passkey exists.
   Code enrolment adds the FIRST passkey only. Once one exists, POST /v1/owner/passkeys also needs an
@@ -371,6 +377,7 @@ POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, sing
   OwnerAction = "approve_intent" | "approve_mandate" | "loosen_policy" | "resume" | "create_agent"
     | "change_settings" (CR-019) | "close_positions" (CR-021, body {})
     | "agent_wallet" (CR-022, body { agentId, chain })
+    | "manual_trade" (CR-025, body { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut })
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
 GET  /v1/owner/deposit -> { chains: { chain, vault, token, balance, dailyCap?, depositPage? }[] }
@@ -507,6 +514,15 @@ and not from the link or the server: the destination or delegate, and the amount
 with the same strict CSP as the panel, and each release publishes the SHA-256 of the signing-page
 build so a modified /sign can be detected.
 
+Backups (CR-024). guard-core backs up its own database every day at BACKUP_HOUR_UTC (default 3),
+with SQLite's online backup (the same as db:backup), to backups/guard-<UTC date>.db beside the
+database on the data volume, mode 0600. It keeps the newest 14 and deletes older ones, and never
+serves a backup over HTTP. With BACKUP_BUCKET_URL set (an S3-compatible bucket, with
+BACKUP_ACCESS_KEY_ID and BACKUP_SECRET_ACCESS_KEY as secrets), each backup is also uploaded,
+encrypted with AES-256-GCM under BACKUP_ENCRYPTION_KEY, which a bucket requires. The doctor's
+backup check reads the newest backup: ok under 26 hours old, warn otherwise, and it names the last
+upload when a bucket is set. A failed backup or upload alerts the owner once a day.
+
 Hosting behind one public listener. ADMIN_ROUTES=false leaves /v1/admin/* unregistered, as the
 one-click deployment does. With one listener (PUBLIC_PORT unset), guard-core refuses to start with
 ADMIN_ROUTES=true unless HOST is a loopback address or ALLOW_PUBLIC_ADMIN=true. The override logs a
@@ -549,9 +565,65 @@ Checks, in order, all default deny:
    minAmountOut, no other token account of the hot wallet loses anything, its SOL falls by fees and
    rent only, no delegate or authority changes. Anything else is SIM_UNEXPECTED_EFFECT.
 5. Decide: a buy at or above approvalThreshold, or with a flag, waits for the owner; a sell never
-   waits. Shadow mode simulates and signs nothing (paper trading).
+   waits. Shadow mode simulates and signs nothing (paper trading). A shadowed swap records the
+   flags and the needs-approval verdict live would have had (CR-024), and the owner's views show
+   "Live would have asked you: …".
 Buys count against dailyTradeMax, not dailyMax. A top-up for a buy draws the chain's dollar under the
-same onchain cap.
+same onchain cap, and never before the buy is decided (CR-024): a buy that waits for the owner is
+asked with steps 1 to 3 done, and its top-up and test run (step 4) follow the approval, just before
+signing. A failed test run then rejects the approved buy. When the hot wallet already holds enough,
+the test run also runs before asking, and the request shows its balance changes.
+Settlement (CR-024): positions, cost and proceeds come from what the confirmed transaction moved,
+read with ChainAdapter.getLandedChanges(txId) -> BalanceChange[] (the hot wallet's token deltas,
+from the transaction's own pre- and post-balances). The test run's deltas are only the check. A
+position whose onchain balance is 0 after a sell is closed, dust included.
+
+## Owner trading tools (CR-025)
+The owner finds a token, reads its risk, allows it, and trades it from the panel. Solana mainnet
+through Jupiter only, as for agents (CR-021). Every route here needs the owner's session.
+
+GET  /v1/owner/tokens/search?q=&chain= -> { tokens: TokenInfo[] }
+  guard-core proxies Jupiter's token search, since the panel's CSP allows no other origin. q is 1 to
+  64 characters. The search is rate-limited per session to 30 a minute and cached for 60 seconds.
+  The venue's answer is untrusted: it is validated with zod, its strings are bounded, and its
+  fields are dropped except those below. Verified tokens come first; the panel shows unverified
+  ones only after an explicit "Show unverified tokens", with a warning.
+  TokenInfo = { chain, mint, symbol, name, decimals, verified, venue: { holders?, liquidityUsd?,
+  organicScore?, createdAt? } }. The symbol and name are display only and always shown beside the
+  full mint. The decimals are the venue's and are re-read from the mint before any use. No remote
+  image is ever loaded: the CSP allows img-src 'self' data: only, so at most a mint-derived
+  identicon.
+GET  /v1/owner/tokens/:mint/risk?chain= -> TokenRisk
+  TokenRisk = { chain, mint, decimals, freezeAuthority: boolean, mintAuthority: boolean,
+  extensions: string[], risks: RejectCode[], flags: TradingFlag[],
+  exit: { amountUsd: Amount, priceImpactBps: number } | null, venue: TokenInfo["venue"] & { verified } }
+  Every field outside venue is read onchain by ChainAdapter.tokenRisk?(mint) or computed by guard-core:
+  - decimals, the authorities and the Token-2022 extensions come from the mint;
+  - risks are the CR-021 rejections a buy would meet (TOKEN_FREEZABLE, TOKEN_EXTENSION_RISK,
+    NO_EXIT_ROUTE);
+  - flags are the CR-021 approval flags (NEW_TOKEN, MINT_AUTHORITY);
+  - exit is the price impact of selling 10 USD worth back to the dollar, or null without a route.
+  venue holds what Jupiter says, labelled as such. The card states facts only and never calls a token
+  safe.
+Allowing a token adds it to policy.trading.tokens: PUT /v1/owner/policy/:agentId with the step-up,
+as any loosening. The panel shows the risk card before the passkey prompt.
+POST /v1/owner/quote { agentId, chain, tokenIn, tokenOut, amountIn, maxSlippageBps? } -> SwapQuote
+  The same quote an agent gets for that agent's policy, read-only: it decides nothing and records
+  nothing.
+POST /v1/owner/trade { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut, maxSlippageBps?,
+  assertion } -> { intentId, status, rejectReasons, txId? }
+  A manual trade for that agent. It always needs the step-up, OwnerAction "manual_trade" over
+  { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut }, even below approvalThreshold. It runs
+  the same pipeline as an agent's swap:
+  - the policy, every limit and every risk check;
+  - a fresh quote, which must still promise minAmountOut (the amount the owner saw) or the trade is
+    SLIPPAGE_TOO_HIGH;
+  - the inspection, the top-up and the test run;
+  - with the assertion as the owner's approval, so no second request is made.
+  It is audited via "owner" with reason "owner: manual trade", counts in that agent's day (buys
+  against dailyTradeMax), and uses that agent's wallet (its own once it has one). A paused agent
+  is refused (PAUSED); Close positions stays the way out. In shadow mode it is shadowed like any
+  swap. The panel's copy describes controls, never returns.
 
 ## Agent wallets (CR-022, HIGH-2)
 Opt-in, per agent and chain. By default every agent spends from the chain's shared spending (hot)
@@ -649,6 +721,16 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.19 (2026-11-24): CR-025, approved by the owner. Owner trading tools:
+  - token search, proxied by guard-core;
+  - a risk card read onchain;
+  - a manual trade from the panel, through the agent pipeline with a passkey per trade.
+- v0.18 (2026-11-24): CR-024, approved by the owner. From the first live trade and the owner's
+  doctor:
+  - a buy that waits for the owner draws nothing until approved;
+  - positions settle from the landed transaction (ChainAdapter.getLandedChanges);
+  - shadowed swaps record what live would have asked;
+  - guard-core backs up its database daily, with an optional encrypted off-site copy.
 - v0.17 (2026-11-24): CR-022, approved by the owner. Fixes from an independent review:
   - the admin token only tightens: loosening, resuming and opening a mandate are the panel's;
   - with SETUP_CODE set, only the setup code enrols the first passkey;

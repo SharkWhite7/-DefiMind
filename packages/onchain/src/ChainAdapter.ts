@@ -2,6 +2,7 @@ import type {
   Address,
   AllowanceState,
   Amount,
+  BalanceChange,
   ChainId,
   HotWalletGas,
   PayIntent,
@@ -75,6 +76,11 @@ export interface ChainAdapter {
   }): Promise<SwapQuote>
   /** CR-021: every token the hot wallet holds but the chain's dollar, decimals read from the mint. */
   getPositions?(): Promise<{ token: Address; amount: Amount; decimals: number }[]>
+  /**
+   * What a confirmed transaction really moved for the hot wallet, per token: signed atomic deltas,
+   * none zero. A swap lands at its own price, never exactly the test run's.
+   */
+  getLandedChanges?(txId: TxId): Promise<BalanceChange[]>
 
   buildKillTx(): Promise<KillTx>
 

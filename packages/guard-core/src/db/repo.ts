@@ -6,11 +6,11 @@ import type {
   PolicyDecision,
   RejectCode,
 } from '@defimind/shared'
-import { and, eq, gt, gte, isNotNull, isNull, like, lte, sql } from 'drizzle-orm'
+import { and, eq, gt, gte, inArray, isNotNull, isNull, like, lte, sql } from 'drizzle-orm'
 import { matchesHash } from '../domain/auth.js'
 import type { StoredPolicy } from '../domain/policy.js'
 import type { Db } from './client.js'
-import { agents, auditLog, dailySpend, intents, policies } from './schema.js'
+import { agents, auditLog, dailySpend, intents, policies, x402Requests } from './schema.js'
 
 export function findAgentByToken(db: Db, token: string): { id: string } | undefined {
   // Tokens are hashed with a salt-free digest, so the lookup is a scan over a small table rather
@@ -136,7 +136,12 @@ export function saveIntent(db: Db, intent: PayIntent): void {
  * An x402 payment the owner approved, waiting for the agent to come back for it. It matches only on
  * the terms the owner saw, and only once: executing it moves it out of `approved`.
  */
-export function findApprovedX402(db: Db, terms: PayIntent, now: Date): PayIntent | undefined {
+export function findApprovedX402(
+  db: Db,
+  terms: PayIntent,
+  requestHash: string,
+  now: Date,
+): PayIntent | undefined {
   const row = db
     .select()
     .from(intents)
@@ -155,10 +160,23 @@ export function findApprovedX402(db: Db, terms: PayIntent, now: Date): PayIntent
           ? isNull(intents.mandateId)
           : eq(intents.mandateId, terms.mandateId),
         gt(intents.expiresAt, now.toISOString()),
+        // CR-022: and only by the very request the owner approved.
+        inArray(
+          intents.id,
+          db
+            .select({ id: x402Requests.intentId })
+            .from(x402Requests)
+            .where(eq(x402Requests.requestHash, requestHash)),
+        ),
       ),
     )
     .get()
   return row && toIntent(row)
+}
+
+/** Binds an x402 intent to the request it was for (CR-022). */
+export function bindRequest(db: Db, intentId: string, requestHash: string): void {
+  db.insert(x402Requests).values({ intentId, requestHash }).onConflictDoNothing().run()
 }
 
 export interface AuditEntry {

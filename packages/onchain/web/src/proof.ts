@@ -31,11 +31,16 @@ export const unreadable = (error: unknown): Proof =>
     `The RPC said: ${error instanceof Error ? error.message.split('\n')[0] : String(error)}`,
   ])
 
-export interface Window {
-  /** What can still be drawn before the next reset. */
+/** One hot wallet's daily right: what it can still draw before its reset, then its cap again. */
+export interface Draw {
+  wallet: string
   left: bigint
   cap: bigint
   resetsAt: Date
+}
+
+export interface Window {
+  draws: Draw[]
   balance: bigint
   format: (amount: bigint) => string
   facts: string[]
@@ -43,19 +48,26 @@ export interface Window {
 }
 
 /**
- * The most the agent can draw in the next 24 hours: what is left before the reset, and the whole
- * cap again after it, which always falls within a day. The vault's balance bounds both.
+ * The most the agents can draw in the next 24 hours: for each hot wallet, what is left before its
+ * reset and the whole cap again after it, which always falls within a day. With agent wallets
+ * (CR-022) each draws on its own, so the rights add up. The vault's balance bounds them all.
  */
-export function window({ left, cap, resetsAt, balance, format, facts, verifiedBy }: Window): Proof {
-  const day = left + cap
+export function window({ draws, balance, format, facts, verifiedBy }: Window): Proof {
+  const day = draws.reduce((sum, d) => sum + d.left + d.cap, 0n)
   const most = day < balance ? day : balance
+  const one = draws.length === 1
   return {
     verified: true,
-    title: `The most this agent can draw in the next 24 hours: ${format(most)}`,
+    title:
+      `The most ${one ? 'this agent' : "this deployment's agents"} can draw in the next 24 ` +
+      `hours: ${format(most)}`,
     lines: [
       verifiedBy,
-      `Left until ${resetsAt.toISOString()}: ${format(left)}. Then the daily cap again: ` +
-        `${format(cap)}.`,
+      ...draws.map(
+        (d) =>
+          `${one ? 'Left' : `${d.wallet}: left`} until ${d.resetsAt.toISOString()}: ` +
+          `${format(d.left)}. Then the daily cap again: ${format(d.cap)}.`,
+      ),
       ...facts,
       ...(balance < day ? ['The vault holds less than that, so the vault is the limit.'] : []),
     ],
@@ -65,24 +77,27 @@ export function window({ left, cap, resetsAt, balance, format, facts, verifiedBy
 export interface SolanaProofRequest {
   cluster: string
   multisig: PublicKey
-  /** Fixed when the page was built, as is the mint: never taken from the link. */
-  hotWallet: PublicKey
+  /**
+   * The deployment's hot wallets, shared and per agent (CR-022), fixed when the page was built, as
+   * is the mint: never taken from the link, which could pass off an attacker's limit as an agent's.
+   */
+  hotWallets: PublicKey[]
   usdc: PublicKey
 }
 
 const usdcText = (amount: bigint) => `${formatUnits(amount, USDC_DECIMALS)} USDC`
 
 /**
- * How much the hot wallet can draw from a Squads vault, read from the chain. Every spending limit
- * on the multisig counts, not only the one the adapter derives: a second limit naming the hot
- * wallet would let it draw more, and one naming anyone else is a key that can draw too.
+ * How much the hot wallets can draw from a Squads vault, read from the chain. Every spending limit
+ * on the multisig counts, not only the ones the adapters derive: a limit naming anyone else is a key
+ * that can draw too.
  */
 export async function proveSolana(
   connection: Connection,
   request: SolanaProofRequest,
   now = Date.now(),
 ): Promise<Proof> {
-  const { cluster, hotWallet, usdc } = request
+  const { cluster, hotWallets, usdc } = request
   const ms = decode(await connection.getAccountInfo(request.multisig), multisig.accounts.Multisig)
   if (!ms) {
     return notVerified([
@@ -101,13 +116,13 @@ export async function proveSolana(
     `Vault ${vault.toBase58()} holds ${usdcText(balance)}.`,
   ]
   const problems = [
-    ...ownerProblems(ms, hotWallet),
+    ...ownerProblems(ms, hotWallets),
     ...limits.flatMap((l) => limitProblems(l, request)),
   ]
   if (problems.length > 0) {
     return notVerified([
-      `This multisig is not only its owner's, with the hot wallet ${hotWallet.toBase58()} drawing ` +
-        'USDC into itself under one daily limit, so this page cannot say how much can be drawn.',
+      `This multisig is not only its owner's, with ${walletsText(hotWallets)} drawing USDC into ` +
+        'itself under its own daily limit, so this page cannot say how much can be drawn.',
       ...problems,
       ...facts,
     ])
@@ -117,31 +132,42 @@ export async function proveSolana(
       verified: true,
       title: 'The most this agent can draw in the next 24 hours: 0 USDC',
       lines: [
-        'No spending limit: the hot wallet cannot draw from the vault. This is how a multisig looks ' +
-          'after a kill, or before a limit is added.',
+        `No spending limit: ${hotWallets.length === 1 ? 'the hot wallet cannot' : 'no hot wallet can'} ` +
+          'draw from the vault. This is how a multisig looks after a kill, or before a limit is added.',
         ...facts,
       ],
     }
   }
-  const { address, limit } = limits[0]!
-  return window({
+  const draws = limits.map(({ limit }) => ({
+    wallet: limit.members[0]!.toBase58(),
     ...today(limit, BigInt(Math.floor(now / 1000))),
     cap: BigInt(limit.amount.toString()),
+  }))
+  const [first] = limits
+  return window({
+    draws,
     balance,
     format: usdcText,
     facts,
     verifiedBy:
-      `Verified from the chain: one daily spending limit, ${address.toBase58()}, lets only the hot ` +
-      `wallet ${hotWallet.toBase58()} draw, and only into itself.`,
+      limits.length === 1
+        ? `Verified from the chain: one daily spending limit, ${first!.address.toBase58()}, lets ` +
+          `only the hot wallet ${draws[0]!.wallet} draw, and only into itself.`
+        : `Verified from the chain: ${limits.length} daily spending limits, one per hot wallet of ` +
+          'this deployment, each letting only its own wallet draw, and only into itself.',
   })
 }
 
-/** Only the owner may run the multisig, and the hot wallet must not be that owner. */
-function ownerProblems(ms: multisig.accounts.Multisig, hotWallet: PublicKey): string[] {
+const walletsText = (keys: PublicKey[]) =>
+  keys.length === 1 ? `the hot wallet ${keys[0]!.toBase58()}` : `its hot wallets ${list(keys)} each`
+
+/** Only the owner may run the multisig, and no hot wallet may be that owner. */
+function ownerProblems(ms: multisig.accounts.Multisig, hotWallets: PublicKey[]): string[] {
   const owner = ms.configAuthority
   const problems = []
-  if (owner.equals(hotWallet)) {
-    problems.push('The hot wallet is the config authority: it can change the limits itself.')
+  if (hotWallets.some((key) => key.equals(owner))) {
+    const which = hotWallets.length === 1 ? 'The hot wallet' : 'A hot wallet'
+    problems.push(`${which} is the config authority: it can change the limits itself.`)
   }
   if (ms.members.length !== 1 || !ms.members[0]!.key.equals(owner)) {
     problems.push(
@@ -157,12 +183,21 @@ interface Found {
   limit: multisig.accounts.SpendingLimit
 }
 
+/** A limit must be one hot wallet's own: at the address derived from it, for it alone. */
 function limitProblems({ address, limit }: Found, request: SolanaProofRequest): string[] {
-  const { hotWallet, usdc } = request
-  const only = (keys: PublicKey[]) => keys.length === 1 && keys[0]!.equals(hotWallet)
+  const { hotWallets, usdc } = request
+  const hotWallet = hotWallets.find((key) =>
+    address.equals(spendingLimitPda(request.multisig, key)),
+  )
+  const own = hotWallet ? [hotWallet] : hotWallets
+  const only = (keys: PublicKey[]) => keys.length === 1 && own.some((key) => keys[0]!.equals(key))
   const found = []
-  if (!address.equals(spendingLimitPda(request.multisig, hotWallet))) {
-    found.push('it is not the hot wallet limit the agent uses')
+  if (!hotWallet) {
+    found.push(
+      hotWallets.length === 1
+        ? 'it is not the hot wallet limit the agent uses'
+        : 'it is not the limit of any hot wallet of this deployment',
+    )
   }
   if (!only(limit.members)) found.push(`its members are ${list(limit.members)}`)
   if (!only(limit.destinations)) found.push(`its destinations are ${list(limit.destinations)}`)

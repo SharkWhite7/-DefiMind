@@ -1247,8 +1247,8 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   passkey (CR-012, CR-015), and the admin token is a machine credential that can leak.
   - **Fix:** the admin token only tightens, as the bot's does (CR-016). A `PUT /v1/admin/policy`
     that loosens, as `loosened()` counts it, and every `POST /v1/admin/resume` are refused with
-    403 `{ error: "loosen_in_panel" }`. `POST /v1/admin/mandates` opens the mandate pending the
-    owner's approval in the panel. There is no exception for a new agent's first policy: it would
+    403 `{ error: "loosen_in_panel" }`. `POST /v1/admin/mandates` opens the mandate as the agent's
+    own request would: at or above approvalThreshold it waits for the owner in the panel. There is no exception for a new agent's first policy: it would
     reopen the hole, since the token can create an agent. Tests and local tools write policies into
     the database directly, and the setup wizard leaves the rules to the panel.
   - An earlier draft let the admin loosen testnet-only policies before the first passkey. It was
@@ -1257,7 +1257,8 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     alert and Web Push `attack`): someone who has the admin token is trying to widen a policy.
   - Unchanged: admin reads, tightening, pause, kill, revoke, and creating an agent (deny-all, shadow).
   - **Tests:** a raised perTxMax, an added recipient or domain, mode `live` and resume are each 403
-    and audited, with no policy changed. An admin mandate waits for the owner. Tightening still
+    and audited, with no policy changed. An admin mandate at or above the threshold waits for the
+    owner. Tightening still
     passes. The reviewer's own attack is a test.
   - **First passkey.** While no passkey exists, the admin token could enrol one and take over a fresh
     deployment. With SETUP_CODE set, only the setup code enrols the first passkey; the admin routes
@@ -1388,3 +1389,92 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   read from voters), guard-core (vault adoption for an autonomous multisig, a kill that reports
   "proposed, waiting for a second approval"), panel (copy and the kill status), integrator (SPEC,
   e2e, owner guide).
+
+### CR-024 — Fixes from the first live trade, and automatic backups
+
+- **From:** integrator, from the owner's first live trade (2026-11-24) and his doctor
+- **Date:** 2026-11-24
+- **Status:** approved by the owner on 2026-11-24 ("fix everything and deliver it all fixed",
+  relayed by the manager with this list). Applied to SPEC v0.18 on 2026-11-24.
+- **What the live trade showed:** the round trip was clean onchain: a 1 USDC top-up, a buy of
+  4.483276 JUP, and Close selling all of it for 1.003943 USDC, each through a single Jupiter route
+  signed by the hot wallet alone. Two things were not right:
+  - **A buy waiting for the owner had already drawn its dollars.** A second 1 USD buy that waited for
+    approval topped the hot wallet up first, so "spent today" read $2 for $1 traded.
+    - Fix: no top-up before the buy is decided. A waiting buy is asked with the policy, quote and
+      token checks done. Its top-up and test run follow the approval, just before signing, and a
+      failed test run rejects it.
+    - When the hot wallet already holds enough, the test run also runs before asking.
+    - Rows: guard-core (GC-66), panel (the pending view says "test run after your approval").
+  - **Positions came from the test run, not from what landed.** The Portfolio showed 4.484169 JUP
+    where 4.483276 landed; the market moved between the test run and the send.
+    - Fix: `ChainAdapter.getLandedChanges(txId)` reads the confirmed transaction's own pre- and
+      post-balances for the hot wallet. Positions, cost and proceeds settle from it.
+    - A position whose onchain balance is 0 after a sell is closed, dust included.
+    - Rows: onchain (ON-32), guard-core (GC-66).
+- **Shadow showed no approval.** A paper buy returned before asking, so the owner never saw that
+  NEW_TOKEN would have stopped it live.
+  - Fix: a shadowed swap records evaluateTrade's flags and its needs-approval verdict, and the panel
+    shows "Live would have asked you: …".
+  - Rows: guard-core (GC-68), panel.
+- **No backups unless someone runs one.** The owner's doctor says "No database backup was found".
+  `db:backup` exists, but only by hand.
+  - Fix: guard-core backs up daily at BACKUP_HOUR_UTC (default 3) to the data volume, with
+    `backups/guard-<date>.db` at mode 0600. It keeps 14, and never serves a backup over HTTP.
+  - With a bucket set, each backup is also uploaded, encrypted with AES-256-GCM under
+    BACKUP_ENCRYPTION_KEY. The bucket is BACKUP_BUCKET_URL, with its keys as secrets.
+  - Doctor reads the newest backup: ok under 26 hours, warn otherwise. A failure alerts the owner
+    once a day.
+  - The volume's own daily snapshots (Fly) stay as they are.
+  - Rows: guard-core (GC-67), integrator (restore drill in e2e, docs).
+- **Tests:**
+  - A waiting buy draws nothing until approved, and an approved one tops up, test-runs and signs.
+  - A landed amount that differs from the test run settles at the landed amount.
+  - A shadowed swap carries its would-have flags.
+  - A backup is written on schedule, pruned at 15, restored by the drill, and refused over HTTP.
+
+### CR-025 — Owner trading tools: search a token, read its risk, trade it by hand
+
+- **From:** integrator, from the owner's request and the manager's design notes
+- **Date:** 2026-11-24
+- **Status:** approved by the owner on 2026-11-24. He asked "shall we add trade options so degens
+  can choose the token?" and picked three of four options on the manager's card: token search, a
+  token risk card, and a manual trade button. He did not pick a list of popular tokens. Applied to
+  SPEC v0.19 on 2026-11-24, after CR-024's work.
+- **What:**
+  - **Search.** `GET /v1/owner/tokens/search`, a proxy for Jupiter's token search: the panel's CSP
+    reaches only its own origin.
+    - Untrusted: validated, bounded, rate-limited (30 a minute per session) and cached (60 s).
+    - Verified tokens first; unverified ones only after an explicit choice, with a warning.
+    - Symbols always beside the full mint. No remote images.
+  - **Risk card.** `GET /v1/owner/tokens/:mint/risk`, read onchain through
+    `ChainAdapter.tokenRisk`:
+    - decimals, freeze and mint authority, Token-2022 extensions;
+    - the rejections and flags a buy would meet;
+    - the price impact of selling 10 USD back.
+    - Jupiter's own facts are shown apart and labelled as Jupiter's. Facts only, never "safe".
+  - **Allowing a token** stays a loosening: the policy PUT with the passkey, with the risk card shown
+    first.
+  - **Manual trade.** `POST /v1/owner/quote`, read-only, then `POST /v1/owner/trade` with a passkey
+    step-up for every trade, bound to the exact pair, amount and minimum the owner saw.
+    - Same pipeline as an agent's swap: policy, limits, risk checks, a fresh quote that must keep the
+      minimum, inspection, test run.
+    - Audited as the owner's, counted in that agent's day, from that agent's wallet.
+    - Refused while the agent is paused; Close positions stays the exit.
+- **Why it is safe:** nothing here skips a check. The owner gets the same pipeline the agents get,
+  plus a passkey on every trade. Search results and venue facts never decide anything; the onchain
+  reads do.
+- **Rows:**
+  - GC-69: the search proxy, the risk route, the owner quote and trade routes, and the
+    `manual_trade` step-up (guard-core).
+  - ON-33: `ChainAdapter.tokenRisk`, from the existing mint and exit reads (onchain).
+  - PANEL-23: search with the unverified toggle, the risk card before allowing a token, and the
+    trade screen with quote, confirm and passkey. The copy describes controls, never returns
+    (panel).
+  - INT-50: SPEC, the shared types, and e2e for a manual trade over the fork, a stale minimum, a
+    paused agent, an unallowed token, and a search answer that lies (integrator).
+- **Risks for the owner to accept:**
+  - The panel can now place trades. A stolen session alone still cannot: every trade needs the
+    passkey.
+  - Jupiter's search can be wrong or hostile. It only lists candidates; adding one still takes the
+    passkey and the onchain risk read.
