@@ -66,13 +66,19 @@ export function checkFacts(risk: Risk): string[] {
   ]
 }
 
+/** A venue's decimal dollar string, "41250000.5", as "$41,250,000.50". */
+export function dollars(decimal: string): string {
+  const [whole = '0', cents = ''] = decimal.split('.')
+  return `$${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${cents.padEnd(2, '0')}`
+}
+
 /** What Jupiter says, kept apart and labelled: the venue is not checked. */
 export function venueFacts({ venue }: Risk): string[] {
   return [
     venue.verified ? 'Verified by Jupiter.' : 'Not verified by Jupiter.',
     venue.holders !== undefined && `${venue.holders.toLocaleString('en-US')} holders.`,
-    venue.liquidityUsd !== undefined && `Liquidity ${formatUsd(venue.liquidityUsd)}.`,
-    venue.organicScore !== undefined && `Organic score ${venue.organicScore} of 100.`,
+    venue.liquidityUsd !== undefined && `Liquidity ${dollars(venue.liquidityUsd)}.`,
+    venue.organicScore !== undefined && `Organic score ${Math.round(venue.organicScore)} of 100.`,
     venue.createdAt !== undefined && `Listed since ${venue.createdAt.slice(0, 10)}.`,
   ].filter((fact): fact is string => fact !== false)
 }
