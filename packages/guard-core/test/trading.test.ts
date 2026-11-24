@@ -38,6 +38,8 @@ const quote = (over: Partial<SwapQuote> = {}): SwapQuote => ({
   risks: [],
   flags: [],
   quotedAt: new Date(NOW.getTime() - 2_000).toISOString(),
+  decimalsIn: 6,
+  decimalsOut: 5,
   ...over,
 })
 

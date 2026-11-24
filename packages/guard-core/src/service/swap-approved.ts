@@ -44,6 +44,8 @@ export async function sendApprovedSwap(deps: PaymentDeps, first: PayIntent): Pro
       risks: [],
       flags: [],
       quotedAt: now().toISOString(),
+      decimalsIn: details.decimalsIn,
+      decimalsOut: details.decimalsOut,
     }
     const verdict = evaluateTrade(
       { ...pair, request, quote },

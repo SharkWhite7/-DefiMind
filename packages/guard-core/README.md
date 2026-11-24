@@ -316,6 +316,46 @@ partial set stops the start, naming the missing variables. With none set:
 
 With all three set, everything is as before.
 
+### Guarded trading (CR-021)
+
+Phase 1 trades on Solana through Jupiter, with the chain's dollar on one side of every swap. A
+policy without `trading` trades nothing, and an adapter without `quoteSwap` refuses every swap with
+`VENUE_NOT_ALLOWED`.
+
+- **Routes.**
+  - `POST /v1/agent/quote` answers the venue's quote and decides nothing.
+  - `POST /v1/agent/swap` runs the pipeline below.
+  - `GET /v1/agent/portfolio/:agentId` and `GET /v1/owner/portfolio` answer positions at cost,
+    the day's buys and `dailyTradeMax`.
+  - A venue that is down answers 502 `venue_unavailable` and leaves no intent.
+- **The pipeline**, every step default deny:
+  - the trading policy: venue, token, `maxTradeUsd`, `dailyTradeMax`, `maxPositionUsd`, slippage,
+    price impact and a quote no older than 30 seconds. The quote is checked against the request
+    and against itself: a minimum that allows more slippage than the limit is `SLIPPAGE_TOO_HIGH`
+    whatever the venue reports;
+  - before a buy, the token risks the adapter found, and an exit route within the impact limit;
+  - a top-up for a buy, under the same onchain cap, since a venue's transaction cannot carry the
+    draw;
+  - the adapter's test run, which must bring in at least the minimum for at most the amount;
+  - approve, or the owner for a buy at or above `approvalThreshold`, the first buy of a token
+    (`NEW_TOKEN`, which guard-core alone knows) or a mintable one (`MINT_AUTHORITY`). A sell never
+    waits.
+- **Owner approval.** A swap the owner approved runs the policy again, and the adapter builds and
+  checks a fresh transaction against the minimum the owner saw. Nothing is re-quoted into a lower
+  minimum.
+- **Counting and positions.**
+  - Buys count against `dailyTradeMax` (`daily_trades`), never `dailyMax`, and the report leaves
+    swaps out of what payments spent.
+  - Positions are per agent and token, at cost: a buy adds the simulated `tokenOut` delta at what
+    it cost, and a sell takes the cost down in proportion.
+  - Decimals come from the mint, read by the adapter.
+- **Shadow mode** is paper trading: a live quote and the test run, with nothing drawn or signed.
+- **Close.** `POST /v1/owner/positions/close { assertion }` (step-up `close_positions`, body `{}`)
+  sells every token the hot wallets hold back to the chain's dollar, even while agents are paused.
+  It sells at market with no price-impact limit, but within the slippage limit.
+- **Loosening needs the step-up.** Turning trading on, a new venue or token, `allowAnyToken`, or a
+  raised limit is a loosening, so it needs the passkey step-up (CR-015). The bot can only tighten.
+
 ### Guided setup (CR-019)
 
 A one-click deployment starts with only `ADMIN_TOKEN` and `SETUP_CODE`, and a disk at `/data`.

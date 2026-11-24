@@ -252,7 +252,7 @@ export async function clearSwap(
   }
   if (how.verdict.decision === 'needs_approval' && owner === undefined) {
     const passkey = needsPasskey(deps.passkey, intent)
-    return askOwner(deps, intent, simulation, { flags: how.verdict.flags as never, passkey })
+    return askOwner(deps, intent, simulation, { flags: how.verdict.flags, passkey })
   }
   const limit = how.policy.maxPaymentsPerMinute ?? 10
   // The owner's Close is not an agent looping, so the breaker does not count it.

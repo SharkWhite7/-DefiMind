@@ -37,7 +37,7 @@ class Venue extends StubChain {
     }
     const buy = req.tokenIn === USDC
     const out = buy ? BigInt(req.amountIn) * 1000n : BigInt(req.amountIn) / 1000n
-    const quote: SwapQuote & { decimalsIn: number; decimalsOut: number } = {
+    const quote: SwapQuote = {
       venue: 'jupiter',
       ...req,
       expectedOut: `${out}`,
