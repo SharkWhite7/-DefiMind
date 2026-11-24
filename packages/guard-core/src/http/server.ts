@@ -34,6 +34,7 @@ import { startTimers } from './timers.js'
 import { ownerSessionRoutes } from './owner-session.js'
 import { ownerSetupRoutes } from './owner-setup.js'
 import { clientIp } from './client-ip.js'
+import { allowedHosts, hostCheck } from './host-check.js'
 import { DEFAULT_SIGN_DIR, signRoutes } from './sign.js'
 import type { PublicKeys } from '../adapters/public-keys.js'
 import type { ChainHost } from './owner-settings.js'
@@ -175,6 +176,9 @@ async function serve(
   { keys, host }: Pick<ServerDeps, 'keys' | 'host'>,
 ) {
   const ipOf = clientIp(surface, config)
+  if (surface !== 'private') {
+    app.addHook('onRequest', hostCheck(allowedHosts(surface, config)))
+  }
   await app.register(rateLimit, {
     max: config.RATE_LIMIT_PER_IP,
     timeWindow: '1 minute',
