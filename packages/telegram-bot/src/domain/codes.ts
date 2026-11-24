@@ -31,13 +31,20 @@ export const ATTACK_DESCRIPTIONS: Record<AttackCode, string> = {
 }
 
 /** Why guard-core sends a payment to the owner even below the threshold. */
-export const APPROVAL_FLAGS = ['RECIPIENT_CHANGED', 'PRICE_JUMP'] as const
+export const APPROVAL_FLAGS = [
+  'RECIPIENT_CHANGED',
+  'PRICE_JUMP',
+  'NEW_TOKEN',
+  'MINT_AUTHORITY',
+] as const
 export type ApprovalFlag = (typeof APPROVAL_FLAGS)[number]
 
 // guard-core raises RECIPIENT_CHANGED for a new payTo, chain or token alike.
 export const FLAG_DESCRIPTIONS: Record<ApprovalFlag, string> = {
   RECIPIENT_CHANGED: 'This API asks to pay a different recipient, chain or token than last time.',
   PRICE_JUMP: 'Price jump: this API asks for much more than its last payment.',
+  NEW_TOKEN: 'New token: the agent has never bought this token before.',
+  MINT_AUTHORITY: "The token's issuer can still mint more of it.",
 }
 
 export function isKnownFlag(flag: string): flag is ApprovalFlag {

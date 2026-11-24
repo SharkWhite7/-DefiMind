@@ -83,7 +83,7 @@ export interface Mandate {
 }
 
 /** CR-010: why a payment goes to the owner even below the threshold. */
-export type ApprovalFlag = 'RECIPIENT_CHANGED' | 'PRICE_JUMP'
+export type ApprovalFlag = 'RECIPIENT_CHANGED' | 'PRICE_JUMP' | TradingFlag
 
 /** CR-010: one per executed intent, signed by RECEIPT_SIGNING_KEY. */
 export interface Receipt {
@@ -216,6 +216,12 @@ export interface SwapQuote {
   minAmountOut: Amount
   slippageBps: number
   priceImpactBps: number
+  /** Read from each mint onchain by the adapter, never from the venue. */
+  decimalsIn: number
+  decimalsOut: number
+  /** Display only and untrusted: always shown beside the mint. */
+  symbolIn?: string
+  symbolOut?: string
   /** A sell quote for the amount bought; null when there is no exit route. */
   exitImpactBps: number | null
   risks: RejectCode[]

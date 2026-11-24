@@ -240,6 +240,8 @@ interface ChainAdapter {
 interface SwapQuote {               // CR-021. Venues are untrusted: every field is checked again
   venue: string; tokenIn: string; amountIn: Amount; tokenOut: string
   expectedOut: Amount; minAmountOut: Amount; slippageBps: number; priceImpactBps: number
+  decimalsIn: number; decimalsOut: number   // from each mint onchain, never from the venue
+  symbolIn?: string; symbolOut?: string     // display only, untrusted
   exitImpactBps: number | null      // a sell quote for the amount bought; null = no exit route
   risks: RejectCode[]               // TOKEN_FREEZABLE, TOKEN_EXTENSION_RISK, NO_EXIT_ROUTE
   flags: ("NEW_TOKEN" | "MINT_AUTHORITY")[]
