@@ -5,17 +5,18 @@ import { chainName, usdSymbolFor } from '../domain/chains.js'
 import { explainStatus } from '../domain/explain.js'
 import { formatAmount } from '../domain/usd.js'
 import { listOf } from '../domain/list.js'
+import { formatUnits, tokenLabel } from '../domain/trading.js'
 import type { ToolDeps } from './deps.js'
 import { guarded, text } from './result.js'
 
 const BUDGET_DESCRIPTION = `Show how much this agent has spent today, its daily and per-payment limits, and whether the owner has paused payments.
 Use it before a payment to see if it can fit and which chains you can pay on, and after an error whose outcome is unclear. The limits are set by the owner; a payment within them can still be rejected or need approval.`
 
-const INTENT_DESCRIPTION = `Check the current status of a payment by its intent id (from paid_fetch or transfer).
+const INTENT_DESCRIPTION = `Check the current status of a payment or swap by its intent id (from paid_fetch, transfer or swap).
 Use it to poll a payment that is pending_approval, every 15 to 30 seconds, until its status changes. Tell the user the outcome.
 For a paid_fetch payment, "approved" means the owner said yes: call paid_fetch again with exactly the same request to receive the response.`
 
-export function registerStatusTools(server: McpServer, { guard, log }: ToolDeps): void {
+export function registerStatusTools(server: McpServer, { guard, log, usd }: ToolDeps): void {
   server.registerTool(
     'get_budget',
     {
@@ -33,7 +34,7 @@ export function registerStatusTools(server: McpServer, { guard, log }: ToolDeps)
       title: 'Check payment',
       description: INTENT_DESCRIPTION,
       inputSchema: {
-        intentId: z.uuid().describe('The intent id returned by paid_fetch or transfer.'),
+        intentId: z.uuid().describe('The intent id returned by paid_fetch, transfer or swap.'),
       },
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -41,7 +42,7 @@ export function registerStatusTools(server: McpServer, { guard, log }: ToolDeps)
       guarded(log, async () => {
         const intent = await guard.intent(intentId)
         const receipt = intent.status === 'executed' && (await receiptExists(intentId))
-        return text(describeIntent(intent, receipt))
+        return text(describeIntent(intent, receipt, usd))
       }),
   )
 
@@ -102,14 +103,10 @@ function describeBudget(budget: Budget): string {
   return lines.join('\n')
 }
 
-function describeIntent(intent: Intent, receipt: boolean): string {
-  const target =
-    intent.kind === 'x402'
-      ? `x402 payment to ${intent.domain ?? intent.recipient}`
-      : `transfer to ${intent.recipient}`
+function describeIntent(intent: Intent, receipt: boolean, usd: ToolDeps['usd']): string {
   const lines = [
     `Intent ${intent.id}: ${intent.status}.`,
-    `${formatAmount(intent.amount)} ${usdSymbolFor(intent.chain)}, ${target}, on ${chainName(intent.chain)} (${intent.chain}).`,
+    `${intent.kind === 'swap' ? describeSwap(intent, usd) : describePayment(intent)}, on ${chainName(intent.chain)} (${intent.chain}).`,
     `Created ${intent.createdAt}, expires ${intent.expiresAt}.`,
   ]
   if (intent.txId !== undefined) {
@@ -122,4 +119,35 @@ function describeIntent(intent: Intent, receipt: boolean): string {
     )
   }
   return lines.join('\n')
+}
+
+function describePayment(intent: Intent): string {
+  const target =
+    intent.kind === 'x402'
+      ? `x402 payment to ${intent.domain ?? intent.recipient}`
+      : `transfer to ${intent.recipient}`
+  return `${formatAmount(intent.amount)} ${usdSymbolFor(intent.chain)}, ${target}`
+}
+
+/** A swap spends `amount` of `token` and must return at least minAmountOut of tokenOut. */
+function describeSwap(intent: Intent, usd: ToolDeps['usd']): string {
+  const dollar = usd(intent.chain)
+  const amountOf = (
+    token: string | undefined,
+    atomic: string,
+    decimals?: number,
+    symbol?: string,
+  ) => {
+    if (dollar !== undefined && token === dollar.address) {
+      return `${formatAmount(atomic)} ${dollar.symbol}`
+    }
+    const name = tokenLabel(token ?? 'the token sold', symbol)
+    return decimals === undefined
+      ? `${atomic} units of ${name}`
+      : `${formatUnits(atomic, decimals)} of ${name} (${atomic} smallest units)`
+  }
+  const out = intent.swap
+  return out === undefined
+    ? `Swap spending ${amountOf(intent.token, intent.amount)}`
+    : `Swap of ${amountOf(intent.token, intent.amount, out.decimalsIn, out.symbolIn)} for at least ${amountOf(out.tokenOut, out.minAmountOut, out.decimalsOut, out.symbolOut)} through ${out.venue}`
 }

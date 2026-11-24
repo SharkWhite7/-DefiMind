@@ -5,6 +5,7 @@ import { registerPaidFetch } from './tools/paid-fetch.js'
 import { registerStartTask } from './tools/start-task.js'
 import { registerStatusTools } from './tools/status.js'
 import { type GatewayDeps, registerGateway } from './tools/gateway.js'
+import { registerTrading } from './tools/trading.js'
 import { registerTransfer } from './tools/transfer.js'
 
 const INSTRUCTIONS = `DefiMind is the only way this agent can spend money. Every payment is checked against a policy set by the owner and may be rejected or held for the owner's approval.
@@ -28,6 +29,7 @@ export function createServer(options: ServerDeps): McpServer {
   registerTransfer(server, deps)
   registerStatusTools(server, deps)
   registerStartTask(server, deps)
+  registerTrading(server, deps)
   if (gateway) {
     registerGateway(server, gateway)
   }
