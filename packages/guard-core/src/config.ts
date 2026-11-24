@@ -150,6 +150,20 @@ const settings = z
      */
     TRUST_FORWARDED_FOR: z.enum(['true', 'false']).default('false'),
 
+    /**
+     * CR-024. The daily backup's hour, and an optional S3-compatible bucket for an encrypted copy:
+     * https://<endpoint>/<bucket>[/<prefix>], path-style. The keys are secrets; the bucket needs all.
+     */
+    BACKUP_HOUR_UTC: z.coerce.number().int().min(0).max(23).default(3),
+    BACKUP_BUCKET_URL: optional(z.url({ protocol: /^https$/ })),
+    BACKUP_REGION: z.string().min(1).default('auto'),
+    BACKUP_ACCESS_KEY_ID: optional(z.string().min(1)),
+    BACKUP_SECRET_ACCESS_KEY: optional(z.string().min(1)),
+    /** 32 bytes as 64 hex digits: openssl rand -hex 32. */
+    BACKUP_ENCRYPTION_KEY: optional(
+      z.string().regex(/^[0-9a-fA-F]{64}$/, 'expected 64 hex digits'),
+    ),
+
     /** Requests per minute. Per IP on every route, and per agent token on the agent routes. */
     RATE_LIMIT_PER_IP: z.coerce.number().int().positive().default(120),
     RATE_LIMIT_PER_AGENT: z.coerce.number().int().positive().default(60),
@@ -199,6 +213,21 @@ const settings = z
           path: [key],
           message: 'the bot needs all three of BOT_URL, BOT_TOKEN and BOT_WEBHOOK_SECRET',
         })
+      }
+    }
+  })
+  // A bucket never gets a plaintext copy: its upload needs the encryption key and both credentials.
+  .superRefine((c, ctx) => {
+    if (c.BACKUP_BUCKET_URL === undefined) {
+      return
+    }
+    for (const key of [
+      'BACKUP_ACCESS_KEY_ID',
+      'BACKUP_SECRET_ACCESS_KEY',
+      'BACKUP_ENCRYPTION_KEY',
+    ] as const) {
+      if (c[key] === undefined) {
+        ctx.addIssue({ code: 'custom', path: [key], message: 'BACKUP_BUCKET_URL needs it' })
       }
     }
   })

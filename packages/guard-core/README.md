@@ -618,6 +618,16 @@ to start otherwise. Devnet and local runs may keep the default `./data/guard.db`
 online backup API. It is safe while guard-core is running and never overwrites an existing file.
 With no destination, the copy goes to `backups/guard-<time>.db` next to the database.
 
+**Daily backup (CR-024).** guard-core backs itself up every day at `BACKUP_HOUR_UTC` (default 3),
+to `backups/guard-<UTC date>.db` beside the database (0600). It keeps the newest 14, and a restart
+on the same day keeps the day's first. A failure is logged as `database backup failed` and tried
+again the next day. With `BACKUP_BUCKET_URL` (an S3-compatible bucket, path-style:
+`https://<endpoint>/<bucket>[/<prefix>]`), each backup is also uploaded as `<name>.enc`, sealed with
+AES-256-GCM under `BACKUP_ENCRYPTION_KEY`: 12-byte IV, then the ciphertext, then the 16-byte tag.
+The bucket needs `BACKUP_ACCESS_KEY_ID`, `BACKUP_SECRET_ACCESS_KEY` and the encryption key, or the
+start is refused; `BACKUP_REGION` defaults to `auto`. Keys and URLs are never logged. The doctor
+warns when the newest backup is over 26 hours old, and with a bucket it names the last upload.
+
 Env vars are documented in [`.env.example`](./.env.example).
 
 ## Deploy on Fly.io

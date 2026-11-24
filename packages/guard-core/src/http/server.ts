@@ -201,6 +201,7 @@ async function serve(
     ...(config.BOT_URL === undefined ? {} : { botUrl: config.BOT_URL }),
     databaseUrl: config.DATABASE_URL,
     publicAdmin: publicAdmin(config),
+    bucket: config.BACKUP_BUCKET_URL !== undefined,
   }
   if (surface !== 'private') {
     // The owner's passkey page faces the internet: it is opened from Telegram on any device.

@@ -1,4 +1,5 @@
 import { createSvmAnchor } from '@defimind/onchain'
+import { bucketConfig } from './adapters/bucket.js'
 import { readKeypairFile, readReceiptKeyFile } from './adapters/keypair.js'
 import { withKeys } from './adapters/keystore.js'
 import { publicKeys } from './adapters/public-keys.js'
@@ -13,6 +14,7 @@ import type { ChainHost } from './http/owner-settings.js'
 import { readSettings } from './db/settings.js'
 import { applySettings, settingKeys } from './domain/settings.js'
 import { killTargets } from './kill-targets.js'
+import { scheduleBackups } from './service/backup.js'
 
 const env = loadConfig()
 
@@ -128,6 +130,18 @@ if (publicAdmin(config)) {
       'and holds the admin token can pause, kill and read every agent',
   )
 }
+
+scheduleBackups(
+  {
+    db,
+    databaseUrl: config.DATABASE_URL,
+    now: () => new Date(),
+    log: app.log,
+    fetch,
+    bucket: bucketConfig(config),
+  },
+  config.BACKUP_HOUR_UTC,
+)
 
 await app.listen({ port: config.PORT, host: config.HOST })
 if (publicApp !== undefined) {
