@@ -18,8 +18,6 @@ export type Plan =
       instructions: TransactionInstruction[]
       /** Keys the page itself made for this transaction, which sign before Phantom does. */
       coSigners: Keypair[]
-      /** Show the Message Hash a Ledger displays, for the owner to match on the device. */
-      hash?: boolean
       /** The heading once `landed` has found the change. */
       after: string
       landed: () => Promise<string[] | undefined>

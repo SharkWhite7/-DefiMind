@@ -20,7 +20,6 @@ import { buildPage } from '../build.js'
 import {
   createData,
   enableData,
-  execByOwner,
   killData,
   PROXY_FACTORY,
   SAFE_L2,
@@ -85,8 +84,6 @@ export async function stageEvm({ hosted = false } = {}) {
     allowances: {} as Record<Address, readonly bigint[]>,
     /** The RPC fails the module's delegate list, as a flaky or rate-limited RPC would. */
     delegatesFail: false,
-    /** The account Phantom has selected, when a test switches it (hand-over). */
-    selected: undefined as Address | undefined,
     /** What the Safe proxy runs: its storage slot 0. */
     singleton: SAFE_L2 as Address,
   }
@@ -170,8 +167,6 @@ export async function stageEvm({ hosted = false } = {}) {
         })
       }
       case 'execTransaction': {
-        const handOver = ownerChange(from, data)
-        if (handOver) return answer(true, handOver)
         const owner = state.owners[0]!
         const kill = killData(owner, MODULE, state.hot)
         const enable = enableData(
@@ -202,32 +197,6 @@ export async function stageEvm({ hosted = false } = {}) {
     }
   }
 
-  /** addOwnerWithThreshold or removeOwner at threshold 1, from a current owner: the hand-over. */
-  function ownerChange(from: Address | undefined, data: Hex): (() => void) | undefined {
-    const outer = decodeFunctionData({ abi, data })
-    if (!from || outer.functionName !== 'execTransaction') return undefined
-    // Only a call the Safe makes on itself: the kill and enable go to the module or MultiSend.
-    if (!isAddressEqual(outer.args[0] as Address, state.safe)) return undefined
-    const inner = decodeFunctionData({ abi, data: outer.args[2] as Hex })
-    if (!state.owners.some((o) => isAddressEqual(o, from))) return undefined
-    if (data !== execByOwner(from, state.safe, outer.args[2] as Hex)) return undefined
-    if (inner.functionName === 'addOwnerWithThreshold') {
-      const [added] = inner.args as [Address, bigint]
-      return () => {
-        state.owners = [added, ...state.owners]
-      }
-    }
-    if (inner.functionName === 'removeOwner') {
-      const [prev, removed] = inner.args as [Address, Address, bigint]
-      const at = state.owners.findIndex((o) => isAddressEqual(o, removed))
-      if (at < 1 || !isAddressEqual(state.owners[at - 1]!, prev)) throw reverts('GS205')
-      return () => {
-        state.owners = state.owners.filter((o) => !isAddressEqual(o, removed))
-      }
-    }
-    return undefined
-  }
-
   const rpc = jsonRpc({
     eth_chainId: () => '0xb626',
     eth_getStorageAt: ([address, slot]) =>
@@ -255,11 +224,7 @@ export async function stageEvm({ hosted = false } = {}) {
   }
 
   const dist = await mkdtemp(join(tmpdir(), 'defimind-sign-evm-'))
-  const server = await serve(dist, {
-    '/evm-rpc': rpc,
-    '/evm-wallet': send,
-    '/evm-account': async () => state.selected ?? state.owners[0]!,
-  })
+  const server = await serve(dist, { '/evm-rpc': rpc, '/evm-wallet': send })
   await buildPage(dist, {
     EVM_LOCALNET_RPC: `${server.origin}/evm-rpc`,
     ...(hosted ? {} : { EVM_HOT_WALLET_LOCALNET: state.hot }),
@@ -274,11 +239,7 @@ export async function stageEvm({ hosted = false } = {}) {
  */
 export function mockPhantomEvm(
   account: Address,
-  {
-    switches = true,
-    rejects = 0,
-    live = false,
-  }: { switches?: boolean; rejects?: number; live?: boolean } = {},
+  { switches = true, rejects = 0 }: { switches?: boolean; rejects?: number } = {},
 ): string {
   return `
     window.__requests = []
@@ -289,9 +250,7 @@ export function mockPhantomEvm(
       request: async ({ method, params }) => {
         window.__requests.push(method)
         switch (method) {
-          case 'eth_requestAccounts':
-            if (${String(live)}) return [await (await fetch('/evm-account', { method: 'POST', body: '' })).text()]
-            return [${JSON.stringify(account)}]
+          case 'eth_requestAccounts': return [${JSON.stringify(account)}]
           case 'eth_chainId': return chainId
           case 'wallet_switchEthereumChain':
             if (!${String(switches)}) throw new Error('Unrecognized chain ID')

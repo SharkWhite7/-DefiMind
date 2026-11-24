@@ -10,7 +10,7 @@ import {
 import { z } from 'zod'
 import { askCap, askDeposit, cap, deposit, EXPIRED, expired, issued, problems } from '../link.js'
 import { unreadable } from '../proof.js'
-import { button, decoded, link, proceed, show, waitFor } from '../view.js'
+import { button, decoded, link, show, waitFor } from '../view.js'
 import { openInPhantom } from '../wallet.js'
 import { prepareEvmCreate } from './create.js'
 import { cannotRead, NOT_ASKED } from '../decoded.js'
@@ -18,7 +18,6 @@ import { decodeEvm } from './decoded.js'
 import { prepareEvmDeposit } from './deposit.js'
 import { prepareEvmEnable } from './enable.js'
 import { whichHot } from '../hot.js'
-import { prepareEvmHandOver } from './handover.js'
 import { prepareEvmKill } from './kill.js'
 import type { EvmPlan } from './plan.js'
 import { proveEvm } from './proof.js'
@@ -46,8 +45,6 @@ const evmLink = z.discriminatedUnion('action', [
   z.object({ action: z.literal('kill'), safe: address, hot, issued }),
   z.object({ action: z.literal('create') }),
   z.object({ action: z.literal('proof'), safe: address }),
-  // The new owner is read from Phantom, never from the link (prepareEvmHandOver).
-  z.object({ action: z.literal('hand-over'), safe: address }),
   z.object({ action: z.literal('deposit'), safe: address, amount: deposit }),
   z.object({
     action: z.literal('enable'),
@@ -93,8 +90,7 @@ export async function evmMain(query: Record<string, string>, chain: EvmChain) {
     return
   }
   show('Checking the chain…', [])
-  const newKey = () => ledgerAccount(wallet, account!)
-  await run(client, wallet, account!, await prepare(client, chain, parsed.data, account!, newKey))
+  await run(client, wallet, account!, await prepare(client, chain, parsed.data, account!))
 }
 
 /** Read-only: anyone can open it, with no wallet, and nothing on the way asks for a signature. */
@@ -122,20 +118,9 @@ async function prepare(
   chain: EvmChain,
   request: Exclude<EvmLink, { action: 'proof' }>,
   owner: Address,
-  newKey: () => Promise<Address>,
 ): Promise<EvmPlan> {
   if (request.action === 'create') {
     return prepareEvmCreate(client, chain.name, owner)
-  }
-  if (request.action === 'hand-over') {
-    const hots = [...(chain.hot ? [chain.hot] : []), ...chain.agents]
-    const { module } = chain
-    return prepareEvmHandOver(
-      client,
-      { cluster: chain.name, safe: request.safe, module, hots },
-      owner,
-      newKey,
-    )
   }
   if (request.action === 'kill' && expired(request.issued)) {
     return refuse(EXPIRED)
@@ -166,33 +151,6 @@ async function prepare(
   }
   const amount = request.amount ?? (await askCap(symbol))
   return prepareEvmEnable(client, { ...known, symbol, amount }, owner)
-}
-
-const selected = async (wallet: Eip1193) =>
-  z
-    .array(address)
-    .min(1)
-    .parse(await wallet.request({ method: 'eth_requestAccounts' }))[0]!
-
-/**
- * The new owner for a hand-over, read from the account Phantom has selected: the owner switches to
- * their Ledger account, then back to the current owner, who signs step 1.
- */
-async function ledgerAccount(wallet: Eip1193, owner: Address): Promise<Address> {
-  await proceed('Choose the new owner', [
-    'In Phantom, switch to your Ledger account: the account that will own the Safe from now on.',
-    'Then press Continue. The page reads the new owner from Phantom, never from the link.',
-  ])
-  const next = await selected(wallet)
-  const back = [
-    `New owner: ${next}. Check it is the address your Ledger shows.`,
-    `Now switch Phantom back to the current owner ${owner} and press Continue.`,
-  ]
-  await proceed('Back to the current owner', back)
-  while (!isAddressEqual(await selected(wallet), owner)) {
-    await proceed('Still on another account', back)
-  }
-  return next
 }
 
 async function run(client: PublicClient, wallet: Eip1193, owner: Address, plan: EvmPlan) {
@@ -226,8 +184,7 @@ async function run(client: PublicClient, wallet: Eip1193, owner: Address, plan: 
       params: [{ from: owner, to: plan.to, data: plan.data, value: '0x0' }],
     })
   } catch (error) {
-    const fallback = plan.fallback ? [plan.fallback] : []
-    show(plan.title, [...plan.summary, `Not sent: ${String(error)}`, ...fallback], 'stop')
+    show(plan.title, [...plan.summary, `Not sent: ${String(error)}`], 'stop')
     decoded(what)
     button('Ask Phantom again', () => void run(client, wallet, owner, plan))
     return

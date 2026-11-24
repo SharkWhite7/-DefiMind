@@ -25,12 +25,6 @@ export function button(label: string, action: () => void) {
   app.append(element)
 }
 
-/** A step the owner takes in their wallet, then confirms here. */
-export function proceed(title: string, lines: string[], label = 'Continue'): Promise<void> {
-  show(title, lines)
-  return new Promise((resolve) => button(label, resolve))
-}
-
 export function link(label: string, href: string) {
   const element = document.createElement('a')
   element.href = href

@@ -326,56 +326,8 @@ For each action:
 authority, which is the only key that can remove the limit.
 
 A multisig created with a file key keeps that key as its config authority. On mainnet, create the
-multisig with the Ledger from the start. To move an existing one, use the signing page's hand-over
-below.
-
-#### Handing the vault over to a Ledger (ON-34)
-
-`/?action=hand-over&cluster=<cluster>&multisig=<pda>` on Solana, or `&safe=<address>` on an EVM
-chain, on the deployment's own `/sign`. It moves the vault from the owner's Phantom key to their
-Ledger in two steps, in an order where a wrong address cannot lock the vault:
-
-1. **Step 1, signed by the current owner.**
-   - Squads: `multisigAddMember` (the Ledger, every permission) and `multisigSetConfigAuthority`.
-   - Safe: `addOwnerWithThreshold(ledger, 1)`.
-   - The old key stays a member or owner, so it can still move the funds if the new key is not
-     what it seemed.
-2. **Step 2, signed by the Ledger**, which proves it can sign.
-   - Squads: `multisigRemoveMember(old)`.
-   - Safe: `removeOwner(ledger, old, 1)`.
-
-Moving the config authority alone is not enough: at threshold 1 a member can empty the vault by
-proposal, and a second Safe owner can do anything.
-
-**The new key is never taken from the link.** The page asks the owner to switch Phantom to the
-Ledger account and reads it there, then to switch back to sign step 1. It refuses:
-
-- the same key;
-- a program address or a contract;
-- any hot wallet of the deployment, shared or per agent;
-- any member or destination of a spending limit on the multisig, or a delegate of the Safe's
-  Allowance Module.
-
-The Ledger's Solana app cannot display Squads instructions, so step 2 and every later kill or
-limit need **Blind signing** on, for that action only. The page shows the Message Hash the device
-displays: approve only on an exact match.
-
-Phantom with a Ledger account on Robinhood Chain (4663) is untested. If Phantom cannot send there,
-the page says so and names the fallback: the EVM-9 scripts in
-[The Safe owner on a Ledger](#the-safe-owner-on-a-ledger), with `OWNER_SIGNER=ledger`.
-
-**Final check, once step 2 has landed.** Step 2 is itself the Ledger signing. Then open
-`/?action=proof` for the vault. It must read Verified, with the Ledger as the config authority and
-only member (Squads) or the only owner (Safe). Nothing else changes: the spending limits, the
-delegate and guard-core's config name only hot wallets, and the kill and limit pages read the
-owner from the chain each time.
-
-Tests:
-
-- `web/test/handover.e2e.ts` runs both Squads steps against the real program in LiteSVM.
-- `web/test/handover-evm.e2e.ts` runs both Safe steps on the stand-in chain.
-- `forge test_handOverToALedger` sends the page's exact bytes to SafeL2 1.4.1 on forks of both
-  Robinhood chains.
+multisig with the Ledger from the start. If the authority ever has to move, the Squads SDK has
+`multisigSetConfigAuthority`; no script here wraps it yet.
 
 The tests drive the real `hw-app-solana` client against a fake device (`test/ledger.ts`) that speaks
 the Solana app's APDUs, signs with real ed25519 keys and refuses unknown programs while blind
@@ -390,13 +342,12 @@ design is in [ADR 003](../../docs/adr/003-phantom-owner.md).
 - **The link carries the action and public addresses only.** Each action builds its instruction
   with the same builder as the script it replaces:
 
-  | Link                                                                                | Instruction                                                                     | Builder                          |
-  | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------- |
-  | `/?action=create&cluster=<cluster>`                                                 | `multisigCreateV2`                                                              | `createMultisigInstruction`      |
-  | `/?action=add-limit&cluster=<cluster>&multisig=<pda>[&amount=<base units>]`         | `multisigAddSpendingLimit`                                                      | `addSpendingLimitInstruction`    |
-  | `/?action=kill&cluster=<cluster>&multisig=<pda>&hot=<pubkey>&issued=<unix seconds>` | `multisigRemoveSpendingLimit`                                                   | `removeSpendingLimitInstruction` |
-  | `/?action=deposit&cluster=<cluster>&multisig=<pda>[&amount=<base units>]`           | SPL `transferChecked`                                                           | `transferInstructions`           |
-  | `/?action=hand-over&cluster=<cluster>&multisig=<pda>` (ON-34)                       | `multisigAddMember` + `multisigSetConfigAuthority`, then `multisigRemoveMember` | `prepareHandOver`                |
+  | Link                                                                                | Instruction                   | Builder                          |
+  | ----------------------------------------------------------------------------------- | ----------------------------- | -------------------------------- |
+  | `/?action=create&cluster=<cluster>`                                                 | `multisigCreateV2`            | `createMultisigInstruction`      |
+  | `/?action=add-limit&cluster=<cluster>&multisig=<pda>[&amount=<base units>]`         | `multisigAddSpendingLimit`    | `addSpendingLimitInstruction`    |
+  | `/?action=kill&cluster=<cluster>&multisig=<pda>&hot=<pubkey>&issued=<unix seconds>` | `multisigRemoveSpendingLimit` | `removeSpendingLimitInstruction` |
+  | `/?action=deposit&cluster=<cluster>&multisig=<pda>[&amount=<base units>]`           | SPL `transferChecked`         | `transferInstructions`           |
 
   The limit's address is derived from the hot wallet, so the page adds and removes the limit the
   adapter draws on and nothing else. The USDC mint comes from `shared/addresses.ts` at build time,
@@ -694,7 +645,6 @@ whatever its symbol.
   | `/?action=enable&cluster=<cluster>&safe=<Safe>[&amount=<base units>]`  | `execTransaction` → MultiSendCallOnly: `enableModule`, `addDelegate(hot)`, `setAllowance(hot, USDG, amount, 1440)` |
   | `/?action=deposit&cluster=<cluster>&safe=<Safe>[&amount=<base units>]` | `transfer(safe, amount)` on USDG                                                                                   |
   | `/?action=kill&cluster=<cluster>&safe=<Safe>&issued=<unix seconds>`    | `execTransaction` → `removeDelegate(hot, true)`, the call `buildKillTx` builds                                     |
-  | `/?action=hand-over&cluster=<cluster>&safe=<Safe>` (ON-34)             | `execTransaction` → `addOwnerWithThreshold(ledger, 1)`, then from the Ledger `removeOwner(ledger, old, 1)`         |
   - The Safe calls carry the Safe's pre-validated signature (r = owner, v = 1). The Safe accepts it
     only with the owner as `msg.sender`, so nothing is signed off-chain. The batch is a delegatecall
     into MultiSendCallOnly, which itself refuses delegatecalls.

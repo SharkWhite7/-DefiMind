@@ -111,16 +111,6 @@ function inside(safe: Address, to: Address, data: Hex): Line[] {
       ? [read(`Enable the Safe Allowance Module ${args[0]} on the Safe.`)]
       : [UNKNOWN]
   }
-  if (functionName === 'addOwnerWithThreshold' || functionName === 'removeOwner') {
-    if (!isAddressEqual(to, safe)) return [UNKNOWN]
-    return functionName === 'addOwnerWithThreshold'
-      ? [
-          read(
-            `Add ${args[0]} as an owner of the Safe, threshold ${args[1]}: it can move its funds.`,
-          ),
-        ]
-      : [read(`Remove ${args[1]} from the owners of the Safe, threshold ${args[2]}.`)]
-  }
   // The module's own calls count only when they go to the known module.
   if (!known(to)) return [UNKNOWN]
   switch (functionName) {
