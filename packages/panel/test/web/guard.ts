@@ -71,6 +71,8 @@ export async function guardCore(
     tokens: [] as { agentId: string; stepUp?: { action: string; body: unknown } }[],
     /** guard-core's answer to an assertion it cannot verify, for the next decision. */
     refuseNextPasskey: false,
+    /** GC-68: what live would have asked, on the budget's shadow summary. */
+    shadowAsked: undefined as { count: number; flags: string[] } | undefined,
     /** CR-013: the first receipt that no longer holds, as guard-core's integrity check reports it. */
     brokenAt: undefined as number | undefined,
     policy: {
@@ -372,6 +374,9 @@ export async function guardCore(
     }
     if (path.startsWith('/v1/owner/budget/')) {
       return send(200, {
+        ...(state.shadowAsked === undefined
+          ? {}
+          : { shadow: { since: later, total: '4000000', count: 3, asked: state.shadowAsked } }),
         spentToday: '1250000',
         dailyMax: state.policy['dailyMax'],
         perTxMax: state.policy['perTxMax'],
