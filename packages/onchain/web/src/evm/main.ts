@@ -95,17 +95,17 @@ export async function evmMain(query: Record<string, string>, chain: EvmChain) {
 
 /** Read-only: anyone can open it, with no wallet, and nothing on the way asks for a signature. */
 async function prove(client: PublicClient, chain: EvmChain, safe: Address) {
-  if (!chain.hot) {
+  const hots = [...(chain.hot ? [chain.hot] : []), ...chain.agents]
+  if (hots.length === 0) {
     show('Not verified', [`This page knows no hot wallet for ${chain.name}.`], 'stop')
     return
   }
   show('Reading the chain…', [])
   const { module, usd, symbol } = chain
-  const hot = getAddress(chain.hot)
   const proof = await proveEvm(client, {
     cluster: chain.name,
     safe,
-    hot,
+    hots,
     module,
     usd,
     symbol,

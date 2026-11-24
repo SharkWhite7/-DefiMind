@@ -15,8 +15,11 @@ import { SAFE_L2, safeAbi } from './calls.js'
 export interface EvmProofRequest {
   cluster: string
   safe: Address
-  /** Fixed when the page was built, as are the module and the token: never taken from the link. */
-  hot: Address
+  /**
+   * The deployment's hot wallets, shared and per agent (CR-022), fixed when the page was built, as
+   * are the module and the token: never taken from the link.
+   */
+  hots: Address[]
   module: Address
   usd: Address
   symbol: string
@@ -31,13 +34,13 @@ const readAbi = parseAbi([
 ])
 
 /**
- * How much the hot wallet can draw from a Safe, read from the chain. The Safe must be the canonical
- * SafeL2 behind its proxy, with one owner who is not the hot wallet. Every enabled module and every
- * delegate counts: another module can move funds on its own terms, and another delegate, or an
- * allowance in another token, is a draw this page cannot bound.
+ * How much the hot wallets can draw from a Safe, read from the chain. The Safe must be the canonical
+ * SafeL2 behind its proxy, with one owner who is no hot wallet. Every enabled module and every
+ * delegate counts: another module can move funds on its own terms, and a delegate outside the
+ * deployment, or an allowance in another token, is a draw this page cannot bound.
  */
 export async function proveEvm(client: PublicClient, request: EvmProofRequest): Promise<Proof> {
-  const { cluster, safe, hot, module, usd, symbol } = request
+  const { cluster, safe, hots, module, usd, symbol } = request
   if (!(await client.getCode({ address: safe }))) {
     return notVerified([`There is no Safe at ${safe} on ${cluster}.`])
   }
@@ -66,55 +69,68 @@ export async function proveEvm(client: PublicClient, request: EvmProofRequest): 
     `It holds ${amount(balance)}.`,
   ]
   const moduleOn = modules.some((m) => isAddressEqual(m, module))
-  const allowance = moduleOn && delegates.some((d) => isAddressEqual(d, hot))
-  const [tokens, state] = await Promise.all([
+  const drawing = moduleOn
+    ? hots.filter((hot) => delegates.some((d) => isAddressEqual(d, hot)))
+    : []
+  const [tokens, states] = await Promise.all([
     moduleOn ? tokensOf(client, module, safe, delegates) : [],
-    allowance ? readAllowance(client, module, safe, hot, usd) : undefined,
+    Promise.all(drawing.map((hot) => readAllowance(client, module, safe, hot, usd))),
   ])
+  const live = states.flatMap((state, i) =>
+    state.amount > 0n ? [{ hot: drawing[i]!, state }] : [],
+  )
   const problems = [
-    ...safeProblems(singleton, owners, threshold, hot),
+    ...safeProblems(singleton, owners, threshold, hots),
     ...rightProblems(request, modules, delegates, tokens),
-    ...(state && state.amount > 0n && state.resetTimeMin !== BigInt(RESET_TIME_MIN)
-      ? [`The allowance resets every ${state.resetTimeMin} minutes, not daily.`]
-      : []),
+    ...live
+      .filter(({ state }) => state.resetTimeMin !== BigInt(RESET_TIME_MIN))
+      .map(
+        ({ hot, state }) =>
+          `The allowance${hots.length === 1 ? '' : ` of ${hot}`} resets every ` +
+          `${state.resetTimeMin} minutes, not daily.`,
+      ),
   ]
+  const one = hots.length === 1
   if (problems.length > 0) {
     return notVerified([
-      `This Safe is not only its owner's, with the hot wallet ${hot} drawing ${symbol} through ` +
-        'the Allowance Module under a daily cap, so this page cannot say how much can be drawn.',
+      `This Safe is not only its owner's, with ${one ? `the hot wallet ${hots[0]}` : `its hot wallets ${hots.join(', ')} each`} ` +
+        `drawing ${symbol} through the Allowance Module under a daily cap, so this page cannot ` +
+        'say how much can be drawn.',
       ...problems,
       ...facts,
     ])
   }
-  if (!state || state.amount === 0n) {
+  if (live.length === 0) {
     return {
       verified: true,
       title: `The most this agent can draw in the next 24 hours: 0 ${symbol}`,
       lines: [
-        'No allowance: the hot wallet cannot draw from the Safe. This is how a Safe looks after a ' +
-          'kill, or before the allowance is set.',
+        `No allowance: ${one ? 'the hot wallet cannot' : 'no hot wallet can'} draw from the Safe. This is ` +
+          'how a Safe looks after a kill, or before the allowance is set.',
         ...facts,
       ],
     }
   }
   return window({
-    ...today(state),
-    cap: state.amount,
+    draws: live.map(({ hot, state }) => ({ wallet: hot, ...today(state), cap: state.amount })),
     balance,
     format: amount,
     facts,
     verifiedBy:
-      `Verified from the chain: the Allowance Module ${module} lets only the hot wallet ${hot} ` +
-      `draw, and only ${symbol}.`,
+      live.length === 1
+        ? `Verified from the chain: the Allowance Module ${module} lets only the hot wallet ` +
+          `${live[0]!.hot} draw, and only ${symbol}.`
+        : `Verified from the chain: the Allowance Module ${module} lets only this deployment's ` +
+          `${live.length} hot wallets draw, each under its own cap, and only ${symbol}.`,
   })
 }
 
-/** The proxy must run the canonical SafeL2, with one owner, who is not the hot wallet. */
+/** The proxy must run the canonical SafeL2, with one owner, who is no hot wallet. */
 function safeProblems(
   singleton: `0x${string}` | undefined,
   owners: readonly Address[],
   threshold: bigint,
-  hot: Address,
+  hots: Address[],
 ): string[] {
   const problems = []
   const runs = singleton ? getAddress(slice(singleton, 12)) : undefined
@@ -124,14 +140,15 @@ function safeProblems(
   if (owners.length !== 1 || threshold !== 1n) {
     problems.push(`It has ${owners.length} owners at threshold ${threshold}, not one owner.`)
   }
-  if (owners.some((owner) => isAddressEqual(owner, hot))) {
-    problems.push('The hot wallet is an owner: it can change the allowance itself.')
+  if (owners.some((owner) => hots.some((hot) => isAddressEqual(owner, hot)))) {
+    const which = hots.length === 1 ? 'The hot wallet' : 'A hot wallet'
+    problems.push(`${which} is an owner: it can change the allowance itself.`)
   }
   return problems
 }
 
 function rightProblems(
-  { hot, module, usd, symbol }: EvmProofRequest,
+  { hots, module, usd, symbol }: EvmProofRequest,
   modules: readonly Address[],
   delegates: readonly Address[],
   tokens: readonly (readonly Address[])[],
@@ -140,7 +157,7 @@ function rightProblems(
     .filter((m) => !isAddressEqual(m, module))
     .map((m) => `Module ${m} is enabled: it can move the Safe's funds on its own terms.`)
   delegates.forEach((delegate, i) => {
-    if (!isAddressEqual(delegate, hot)) {
+    if (!hots.some((hot) => isAddressEqual(delegate, hot))) {
       problems.push(`Delegate ${delegate} of the Allowance Module can draw too.`)
     }
     const others = (tokens[i] ?? []).filter((token) => !isAddressEqual(token, usd))

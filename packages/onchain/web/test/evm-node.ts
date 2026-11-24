@@ -80,6 +80,8 @@ export async function stageEvm({ hosted = false } = {}) {
     otherModules: [] as Address[],
     otherDelegates: [] as Address[],
     otherTokens: [] as Address[],
+    /** The USDG allowance of each other delegate, by address: an agent's own wallet (CR-022). */
+    allowances: {} as Record<Address, readonly bigint[]>,
     /** The RPC fails the module's delegate list, as a flaky or rate-limited RPC would. */
     delegatesFail: false,
     /** What the Safe proxy runs: its storage slot 0. */
@@ -149,7 +151,10 @@ export async function stageEvm({ hosted = false } = {}) {
         const ours = [safe, delegate, token].every((a, i) =>
           isAddressEqual(a, [state.safe, state.hot, USDG][i]!),
         )
-        return answer(ours && state.listed ? state.allowance : [0n, 0n, 0n, 0n, 0n])
+        const other = isAddressEqual(safe, state.safe) && isAddressEqual(token, USDG)
+        const none = [0n, 0n, 0n, 0n, 0n]
+        if (!ours) return answer((other && state.allowances[getAddress(delegate)]) || none)
+        return answer(state.listed ? state.allowance : none)
       }
       case 'createProxyWithNonce': {
         const [, , salt] = args as [Address, Hex, bigint]

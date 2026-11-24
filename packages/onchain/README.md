@@ -375,6 +375,11 @@ design is in [ADR 003](../../docs/adr/003-phantom-owner.md).
     before the next reset plus the whole cap again after it, because the reset always falls within
     a day. The vault's balance bounds X. Both numbers are shown, with the reset time. After a kill,
     X is 0.
+  - **Agent wallets (CR-022):** a page built with agents' own wallets counts every one of them, and
+    the headline becomes "The most this deployment's agents can draw in the next 24 hours: X". X adds
+    up each wallet's own window, one line per wallet, still bounded by the vault's balance. The
+    wallet list comes from the build, never from the link, so a limit or delegate outside it is still
+    flagged.
   - **Below it:** the vault's owner, members and threshold (Squads), or its owners and threshold
     (Safe), and the vault's balance.
   - **"Verified" needs all of these.** Otherwise the headline is "Not verified", followed by what
