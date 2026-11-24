@@ -11,6 +11,7 @@ export type OwnerAction =
   | 'create_agent'
   | 'change_settings'
   | 'close_positions'
+  | 'agent_wallet'
 
 /** An answer guard-core gave as an error: its status and the code in its body. */
 export class ApiError extends Error {
@@ -182,6 +183,14 @@ export function ownerApi(passkey: Authenticator, fetchImpl: typeof fetch = fetch
     proof: (seq: number) => get(s.proof, `/v1/owner/executions/${seq}/proof`),
     passkeys: () => get(s.passkeys, '/v1/owner/passkeys'),
     kill: () => post(s.kill, '/v1/owner/kill'),
+    /** CR-022: pauses one agent; the transactions remove its own wallets' limits only. */
+    killAgent: (id: string) => post(s.kill, `/v1/owner/agents/${agent(id)}/kill`),
+
+    agentWallets: (id: string) => get(s.agentWallets, `/v1/owner/agents/${agent(id)}/wallets`),
+    createAgentWallet: (agentId: string, chain: string) =>
+      stepUp('agent_wallet', { agentId, chain }, (assertion) =>
+        post(s.agentWallet, `/v1/owner/agents/${agent(agentId)}/wallets`, { chain, assertion }),
+      ),
 
     portfolio: () => get(s.portfolio, '/v1/owner/portfolio'),
     closePositions: () =>
