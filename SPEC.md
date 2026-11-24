@@ -407,7 +407,7 @@ DELETE /v1/owner/push/:id
 GET  /v1/owner/push/key -> { publicKey }   the VAPID public key, base64url; session only (CR-014)
   Web Push with VAPID (VAPID_PRIVATE_KEY_FILE, VAPID_SUBJECT) and RFC 8291 encryption. Payload
   { kind: "approval" | "mandate" | "executed" | "attack" | "breaker" | "passkey_enrolled" | "kill"
-  | "chain_broken" (CR-013),
+  | "chain_broken" (CR-013) | "backup_failed" (CR-024),
   agentId?, chain?, amount?, intentId?, sentAt } and never a recipient or URL. A 404 or 410 from the
   push service deletes the subscription.
 GET  /panel/enrol#code=…   the first-passkey page; src/scripts/passkey-code.ts prints the link
@@ -521,7 +521,8 @@ serves a backup over HTTP. With BACKUP_BUCKET_URL set (an S3-compatible bucket, 
 BACKUP_ACCESS_KEY_ID and BACKUP_SECRET_ACCESS_KEY as secrets), each backup is also uploaded,
 encrypted with AES-256-GCM under BACKUP_ENCRYPTION_KEY, which a bucket requires. The doctor's
 backup check reads the newest backup: ok under 26 hours old, warn otherwise, and it names the last
-upload when a bucket is set. A failed backup or upload alerts the owner once a day.
+upload when a bucket is set. A failed backup or upload alerts the owner once a day:
+{ kind: "backup_failed" } to the bot and Web Push "backup_failed".
 
 Hosting behind one public listener. ADMIN_ROUTES=false leaves /v1/admin/* unregistered, as the
 one-click deployment does. With one listener (PUBLIC_PORT unset), guard-core refuses to start with
@@ -658,7 +659,8 @@ Gas: the agent's wallet pays its own fees. The panel shows the address and the g
 doctor warns below the minimum.
 
 Kill. POST /v1/owner/kill still pauses every agent, and now returns one ownerTransactions entry per
-chain and wallet, shared and per agent: every limit is removed. POST /v1/owner/agents/:id/kill {}
+chain and wallet, shared and per agent: every limit is removed. An agent's entry carries
+wallet: { agentId, address }, and its links name that wallet. POST /v1/owner/agents/:id/kill {}
 (session) pauses that agent and returns ownerTransactions for its own wallets only. Revoking an agent
 with its own wallet returns the same transactions and says the limit is still live until they are
 signed. The bot's and the admin's kill pause everything, as before, and carry no links.
@@ -693,6 +695,7 @@ POST {BOT_URL}/hooks/alert             (same X-Guard-Signature scheme; CR-010)
   | { kind: "passkey_enrolled", detail: string, sentAt: string }
   | { kind: "chain_broken", detail: string, sentAt: string }   (CR-013)
   | { kind: "admin_loosen_refused", detail: string, sentAt: string }   (CR-022)
+  | { kind: "backup_failed", detail: string, sentAt: string }   (CR-024: never a URL or a key)
 The approval-request body gains flags: ("RECIPIENT_CHANGED" | "PRICE_JUMP")[] (empty when none),
 pinned?: { recipient, amount } (the last executed payment to that domain, present with a flag),
 passkey: boolean (approve only through /owner/approve), and mandate?: Mandate when the request is to

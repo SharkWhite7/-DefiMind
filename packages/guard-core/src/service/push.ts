@@ -17,6 +17,7 @@ export interface PushPayload {
     | 'passkey_enrolled'
     | 'kill'
     | 'chain_broken'
+    | 'backup_failed'
   agentId?: string
   chain?: string
   amount?: string

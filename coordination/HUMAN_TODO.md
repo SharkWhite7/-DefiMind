@@ -24,6 +24,24 @@ Live addresses, caps and the launch record are in [`LAUNCH.md`](../LAUNCH.md) an
 
 ---
 
+## ✖️ HUMAN-36 — Move vault control to a Ledger (CR-022 HIGH-3) — dropped, risk accepted
+
+The independent review's HIGH-3: one Phantom account, one recovery phrase, controls every vault. On
+2026-11-24 the owner first chose a Ledger, then decided the same day to keep Phantom as the vault's
+only key ("let's keep Phantom"). The risk is accepted, as in LAUNCH.md D4. A Ledger stays optional
+for every user, and the product side of HIGH-3 (doctor's `<chain>:control` warning, the panel's
+advice, `docs/owner-keys.md`) is unchanged.
+
+What the owner keeps doing instead:
+
+- keep in the vault only what the agents need for the coming weeks, the rest in cold storage;
+- keep the Phantom recovery phrase on paper only, never typed into a phone, computer or website.
+
+If he changes his mind, the hand-over plan is on BOARD (ON-34, deferred): the Ledger must replace the
+old key as config authority and member on Squads, and as owner on the Safe, in two signatures.
+
+---
+
 ## ⏳ HUMAN-25 — Ask Phantom to review the signing page's domain
 
 When the owner created the Solana mainnet multisig, Phantom showed "This dApp could be malicious" and
