@@ -41,6 +41,14 @@ export function adminLoosenText(detail: string): string {
   ].join('\n')
 }
 
+/** CR-024: the nightly copy of the database failed; what is on the server is untouched. */
+export function backupFailedText(detail: string): string {
+  return [
+    '<b>Database backup failed.</b> Your data is still on the server. Open the doctor in the DefiMind panel.',
+    ...(detail === '' ? [] : [`guard-core says: <i>${escapeHtml(detail)}</i>`]),
+  ].join('\n')
+}
+
 // Telegram refuses a message over 4096 characters, and /status adds the chains after this.
 const PENDING_LIMIT = 2000
 
