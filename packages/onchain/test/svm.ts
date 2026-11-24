@@ -82,6 +82,10 @@ export class Svm {
     return this.inner.getClock()
   }
 
+  warpToSlot(slot: bigint): void {
+    this.inner.warpToSlot(slot)
+  }
+
   setClock(clock: Clock): void {
     this.inner.setClock(clock)
   }

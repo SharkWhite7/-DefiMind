@@ -38,6 +38,7 @@ export function liteConnection(svm: Svm, rpcEndpoint = 'http://127.0.0.1:0'): Co
 
   const fake = {
     rpcEndpoint,
+    getSlot: async () => Number(svm.getClock().slot),
     getLatestBlockhash: async () => ({
       blockhash: svm.latestBlockhash(),
       lastValidBlockHeight: 0,
