@@ -111,7 +111,11 @@ export type Chain = ReturnType<typeof chain>
  * Writes Squads accounts straight into the chain. Reading them back needs only their layout, not
  * the Squads program, which is what lets these tests run without its binary.
  */
-export function plantMultisig(c: Chain, configAuthority: PublicKey) {
+export function plantMultisig(
+  c: Chain,
+  configAuthority: PublicKey,
+  overrides: Partial<multisig.accounts.MultisigArgs> = {},
+) {
   const data = multisig.accounts.Multisig.fromArgs({
     createKey: Keypair.generate().publicKey,
     configAuthority,
@@ -122,6 +126,7 @@ export function plantMultisig(c: Chain, configAuthority: PublicKey) {
     rentCollector: null,
     bump: 255,
     members: [],
+    ...overrides,
   }).serialize()[0]
   plant(c, c.multisigPda, data)
 }

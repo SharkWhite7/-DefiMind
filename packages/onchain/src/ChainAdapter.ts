@@ -12,10 +12,17 @@ import type {
 } from '@defimind/shared'
 import type { PaymentRequirements, SchemeNetworkClient } from '@x402/core/types'
 
+/** Who can move the vault's funds: how many signatures it takes, out of how many keys (CR-022). */
+export interface Control {
+  threshold: number
+  signers: number
+}
+
 export interface Vault {
   address: Address
   token: Address
   balance: Amount
+  control?: Control
 }
 
 /** The transaction only the owner can sign: it zeroes the spend limit and removes the delegate. */

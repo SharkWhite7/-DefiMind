@@ -181,6 +181,13 @@ To refresh the fixtures, run `pnpm record:swap` again.
 vault at index 0 of the multisig, or the Safe itself. `token` is the chain's stablecoin and
 `balance` is read from the chain. A vault that has never held the token reports `'0'`.
 
+`control` (CR-022) is `{ threshold, signers }`: how many signatures move the funds, out of how many
+keys, read from the chain on every call. A Safe reports `getThreshold()` and `getOwners()`. An
+autonomous Squads multisig reports its threshold out of the members who can vote. A controlled one
+(every DefiMind deployment, since the kill needs a config authority) reports `{ threshold: 1,
+signers: 1 }`: its config authority can add itself a spending limit and empty the vault with no vote,
+whatever the threshold says.
+
 ### Anchors (CR-013)
 
 `createSvmAnchor({ chain, rpcUrl, secretKey })` returns `{ chain, publish(memo) }`. `publish`

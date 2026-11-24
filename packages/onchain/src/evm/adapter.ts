@@ -35,7 +35,7 @@ import {
 import { chainOf, type EvmChainId } from './config.js'
 import { hotWalletGas } from './gas.js'
 import { checkTypedData } from './gate.js'
-import { allowanceModuleAbi, hasAllowance, readAllowance } from './safe.js'
+import { allowanceModuleAbi, hasAllowance, readAllowance, readControl } from './safe.js'
 import { erc20Abi, simulatePayment, topUpData } from './simulate.js'
 import { TOKEN_DOMAINS } from './tokens.js'
 
@@ -147,7 +147,13 @@ export function evmAdapter(deps: EvmAdapterDeps): ChainAdapter {
 
     getHotWalletBalance: (token: TokenAddress) => balanceOf(getAddress(token), hot),
 
-    getVault: async () => ({ address: safe, token: usdc, balance: await balanceOf(usdc, safe) }),
+    async getVault() {
+      const [balance, control] = await Promise.all([
+        balanceOf(usdc, safe),
+        readControl(client, safe),
+      ])
+      return { address: safe, token: usdc, balance, control }
+    },
 
     getHotWalletGas: () => hotWalletGas(client, hot),
 
