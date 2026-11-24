@@ -439,7 +439,7 @@ integrator before any session writes code, since every package imports those typ
      - no blacklist, pause or fee, and no owner role;
      - verified on the explorer.
 
-     The owner deploys it from a **new wallet**, never the vault-owner Phantom account (D4).
+     The owner deploys it from a **new wallet**, never a wallet that owns a vault.
      `ERC20Votes` lets holders vote with no token held in escrow.
 
   2. **Governance**, through an OpenZeppelin `Governor` with a `TimelockController`. Its scope is
@@ -1294,9 +1294,9 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     already need a SameSite=Strict cookie and, for writes, the Origin. This is defense in depth.
   - **Tests:** a foreign Host is 421 on owner, agent and panel routes, and `/health` still answers.
 
-- **HIGH-3. One wallet controls every vault.** The owner's Squads multisig and Safe both have one
-  signer, from one Phantom account (one seed phrase). Leaking that seed loses every vault, past every
-  daily cap.
+- **HIGH-3. One wallet controls every vault.** A Squads multisig and a Safe set up from one Phantom
+  account each have one signer, behind one seed phrase. Leaking that seed loses every vault, past
+  every daily cap.
   - **Fix, product side:**
     - `ChainAdapter.getVault()` returns `control?: { threshold, signers }`, read onchain.
     - Doctor warns when a vault has threshold 1.
@@ -1304,20 +1304,6 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
       failure. Use a separate wallet per chain, or a 2-of-3 with a hardware key.
     - The owner guide explains the trade-off. A 2-of-3 is safer but makes the kill slower, because
       the second signer must also sign.
-  - The owner's own change goes on HUMAN_TODO (manager).
-  - **Addendum (ON-34): deferred by the owner on 2026-11-24 (he keeps Phantom); plan on BOARD
-    ON-34. No SPEC lines.** The plan, for when it is picked up: a signing-page action,
-    `action=hand-over`, gives the vault to a new key, a Ledger, in two signed phases:
-    - Phase A, signed by the current key:
-      - Squads: add the new key as a member with every permission, and set it as config authority;
-      - Safe: addOwnerWithThreshold(new key, 1).
-    - Phase B, signed by the new key:
-      - Squads: remove the old member;
-      - Safe: removeOwner(old key).
-    - The page decodes and shows each transaction before Phantom opens, and refuses a new key that
-      equals the old one or this deployment's hot wallet.
-    - Until phase B, the old key still controls the vault, and the page says so.
-    - Doctor's control check names the old key while it remains.
   - The signing page today requires the sole owner of a Safe and the config authority of a multisig.
     Multi-signer vaults need the page to propose rather than execute, which is a follow-up in the
     same rows.
@@ -1380,8 +1366,7 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
 
 - **From:** integrator, after onchain's finding in ON-29
 - **Date:** 2026-11-24
-- **Status:** deferred by the owner on 2026-11-24 in favour of a Ledger as config authority
-  (HUMAN-36). An option for later, not now.
+- **Status:** deferred by the owner on 2026-11-24.
 - **Problem:** every DefiMind Solana vault is a controlled Squads multisig. Its config authority
   removes the agent's spending limit in one signature, which is what makes the kill instant. But that
   same key can add itself a limit and empty the vault, so the vault is exactly as safe as one key.
