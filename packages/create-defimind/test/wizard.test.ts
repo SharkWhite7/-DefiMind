@@ -37,9 +37,6 @@ const route: Route = (method, url) => {
   if (method === 'POST' && url.endsWith('/v1/admin/agents')) {
     return { json: { agentId: 'agent-1', token: AGENT } }
   }
-  if (method === 'PUT') {
-    return { json: { agentId: 'agent-1', mode: 'shadow' } }
-  }
   if (url.endsWith('/v1/admin/doctor')) {
     return { json: { checks: [{ id: 'db', status: 'ok', message: 'The database is writable' }] } }
   }
@@ -153,21 +150,16 @@ describe('the wizard, against fakes', () => {
     expect(out).toContain('  pnpm --filter @defimind/mcp-server run setup claude-code')
   })
 
-  it('creates the agent and puts the preset policy in shadow mode, within the smallest cap', async () => {
-    const { ctx, http } = wizard()
+  it('creates the agent deny-all and leaves its rules to the panel, within the smallest cap', async () => {
+    const { ctx, http, out } = wizard()
     await setup(ctx)
     const admin = http.calls.filter((call) => call.url.includes('/v1/admin/'))
     expect(admin.map((call) => `${call.method} ${call.url}`)).toEqual([
       'POST http://127.0.0.1:18787/v1/admin/agents',
-      'PUT http://127.0.0.1:18787/v1/admin/policy/agent-1',
       'GET http://127.0.0.1:18787/v1/admin/doctor',
     ])
     expect(admin.every((call) => call.token === SERVICE)).toBe(true)
-    expect(admin[1]?.body).toMatchObject({
-      mode: 'shadow',
-      perTxMax: '1000000',
-      dailyMax: '3000000',
-    })
+    expect(out.join('\n')).toContain('and set: $1 per payment, $3 a day, your approval from $0.5,')
   })
 
   it('continues where it stopped, without asking or running a done step again', async () => {
@@ -217,11 +209,7 @@ describe('the wizard, against fakes', () => {
     const { ctx } = wizard(memory)
     ctx.run = runner.runner
     ctx.http = fakeHttp((method, url) =>
-      method === 'POST'
-        ? { status: 404 }
-        : method === 'PUT'
-          ? { json: { agentId: 'agent-1' } }
-          : route(method, url, undefined),
+      method === 'POST' ? { status: 404 } : route(method, url, undefined),
     ).http
     const out: string[] = []
     ctx.say = (l = '') => void out.push(l)
@@ -230,6 +218,5 @@ describe('the wizard, against fakes', () => {
     expect(memory.files.get(`${HOME}/.defimind/acme-agent-agent-1.token`)?.contents).toBe(
       `${'d'.repeat(64)}\n`,
     )
-    expect(out.some((l) => l.includes('predates shadow mode'))).toBe(true)
   })
 })
