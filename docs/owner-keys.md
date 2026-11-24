@@ -26,9 +26,17 @@ So, on Solana:
 - **Adding members or raising the threshold does not protect the vault.** The config authority acts
   alone whatever the threshold says. The panel and the doctor report such a vault as one key
   (`threshold 1 of 1`).
-- **What protects it: make the config authority a hardware wallet.** A Ledger connected through
-  Phantom keeps the key off your phone and computer. Every vault change and every kill then needs the
-  device in your hand.
+- **What protects it: hand the vault to a hardware wallet, entirely.** A Ledger connected through
+  Phantom keeps the key off your phone and computer. It must take over every role your old key has:
+  config authority _and_ member. A vault made in the panel has your old key as its only member,
+  threshold 1, so a Ledger that only became the authority would leave the old key able to propose
+  and approve alone. Every vault change and every kill then needs the device in your hand.
+- **The hand-over** happens on the signing page, in two steps:
+  1. your current wallet adds the Ledger as a member and makes it the config authority;
+  2. the Ledger removes the old key.
+
+  Until step 2 is signed, the old key still controls the vault.
+
 - A vault that no single key can empty, an _autonomous_ multisig with a kill by proposal and vote, is
   a possible later option (CR-023, deferred). Its price is a slower kill: two people or two devices,
   and minutes instead of seconds. guard-core's own pause stays instant either way.
@@ -42,7 +50,9 @@ A Safe's threshold binds every owner, so more signers really do protect it:
 - It is slower to stop in an emergency, because a second signer must sign the kill too. You then
   approve vault changes in the Safe app: the signing page works with a one-signer Safe.
 - If you keep one signer, make it a separate wallet from your Solana one, and ideally a hardware
-  wallet.
+  wallet that **replaces** the old owner rather than joining it. The hand-over is two steps here too:
+  1. add the Ledger as an owner;
+  2. the Ledger removes the old owner.
 
 ## What DefiMind checks for you
 
