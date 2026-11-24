@@ -6,6 +6,7 @@ import { extname, join, normalize } from 'node:path'
 import { CHAINS, getAddress } from '@defimind/shared'
 import { canonicalJson } from '../../src/domain/canonical.js'
 import { setupMock } from './setup.js'
+import { tradingMock } from './trading.js'
 
 /** SPEC's panel CSP, so a test fails on anything the real one would block. */
 export const CSP = [
@@ -46,11 +47,13 @@ export interface Decision {
  * what the panel must get right: the session cookie, X-DefiMind-Request and Origin on writes, and
  * that each step-up assertion signs a challenge issued for that exact action and body.
  */
-export async function guardCore(dist: string, { fresh = false } = {}) {
+export async function guardCore(dist: string, { fresh = false, trading = false } = {}) {
   const setup = setupMock()
   const intentId = randomUUID()
   const mandateId = randomUUID()
   const later = new Date(Date.now() + 10 * 60_000).toISOString()
+  // CR-021 only where a test asks for it: every other flow sees a guard-core without trading.
+  const trades = trading ? tradingMock(later) : undefined
   const state = {
     passkeys: 0,
     sessions: new Set<string>(),
@@ -153,28 +156,33 @@ export async function guardCore(dist: string, { fresh = false } = {}) {
       paused: state.killed,
       mode: state.policy['mode'],
     })),
-    pending: state.decisions.some((d) => d.id === intentId)
-      ? []
-      : [
-          {
-            intent: {
-              id: intentId,
-              agentId: 'research-bot',
-              kind: 'x402',
-              chain,
-              token: usd,
-              amount: '2500000',
-              recipient: '0x1111111111111111111111111111111111111111',
-              domain: 'api.example.com',
-              reason: 'Buy the market report',
-              status: 'pending_approval',
-              expiresAt: later,
+    pending: [
+      ...(trades === undefined || state.decisions.some((d) => d.id === trades.intentId)
+        ? []
+        : [trades.pending()]),
+      ...(state.decisions.some((d) => d.id === intentId)
+        ? []
+        : [
+            {
+              intent: {
+                id: intentId,
+                agentId: 'research-bot',
+                kind: 'x402',
+                chain,
+                token: usd,
+                amount: '2500000',
+                recipient: '0x1111111111111111111111111111111111111111',
+                domain: 'api.example.com',
+                reason: 'Buy the market report',
+                status: 'pending_approval',
+                expiresAt: later,
+              },
+              simulation: { summary: 'Pays 2.5 USDC to the API.' },
+              approveBefore: later,
+              flags: ['first payment to this domain'],
             },
-            simulation: { summary: 'Pays 2.5 USDC to the API.' },
-            approveBefore: later,
-            flags: ['first payment to this domain'],
-          },
-        ],
+          ]),
+    ],
     mandates: state.decisions.some((d) => d.id === mandateId)
       ? []
       : [
@@ -338,6 +346,9 @@ export async function guardCore(dist: string, { fresh = false } = {}) {
     if (setup.route(method, path, body, send, stepUp, { passkeys: state.passkeys, origin })) {
       return
     }
+    if (trades?.route(method, path, send, stepUp)) {
+      return
+    }
     if (path.startsWith('/v1/owner/policy/')) {
       if (method === 'PUT') {
         const bound = stepUp()
@@ -460,6 +471,7 @@ export async function guardCore(dist: string, { fresh = false } = {}) {
     state,
     receipts,
     setup: setup.state,
+    trading: trades,
     intentId,
     mandateId,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),

@@ -7,10 +7,12 @@ import { approval, mandate } from './ui/approval.js'
 import type { Context, Screen } from './ui/context.js'
 import { el } from './ui/dom.js'
 import { kill } from './ui/kill.js'
+import { wholeTabs } from './ui/nav.js'
 import { deposit } from './ui/deposit.js'
 import { guide } from './ui/guide.js'
 import { enrol, login, setup } from './ui/login.js'
 import { overview } from './ui/overview.js'
+import { portfolio } from './ui/portfolio.js'
 import { executions } from './ui/executions.js'
 import { doctor, report } from './ui/report.js'
 import { settings } from './ui/settings.js'
@@ -97,6 +99,8 @@ function screen(route: Route): Screen {
       return settings(ctx)
     case 'kill':
       return kill(ctx)
+    case 'portfolio':
+      return portfolio(ctx)
     case 'setup':
       return setup(ctx)
     case 'deposit':
@@ -141,11 +145,13 @@ document.addEventListener('click', (event) => {
     event.preventDefault()
     status.textContent = ''
     history.pushState(null, '', anchor.pathname + anchor.hash)
+    wholeTabs(document.querySelector('nav')!)
     void render()
   }
 })
 window.addEventListener('popstate', () => {
   ctx.say('')
+  wholeTabs(document.querySelector('nav')!)
   void render()
 })
 
@@ -155,4 +161,5 @@ if ('serviceWorker' in navigator) {
     .register(`${BASE}sw.js`, { scope: BASE })
     .catch((error: unknown) => console.warn('service worker not registered', error))
 }
+wholeTabs(document.querySelector('nav')!)
 void render()

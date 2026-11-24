@@ -1,10 +1,11 @@
 import type { Overview } from '../adapters/schemas.js'
 import { chainName, networkOf } from '../domain/chains.js'
 import { amountText, formatUsd, meterPercent } from '../domain/money.js'
+import { swapTitle } from '../domain/trading.js'
 import { doneSteps, nextStep, STEPS, type StepId } from '../domain/guide.js'
 import { href, type Route } from '../domain/route.js'
 import type { Context, Screen } from './context.js'
-import { card, el, when } from './dom.js'
+import { card, el, meter, when } from './dom.js'
 
 const link = (route: Route, ...children: (Node | string)[]) =>
   el('a', { href: href(route), class: 'item' }, ...children)
@@ -58,13 +59,6 @@ function noChain(done: Set<StepId> | undefined) {
         el('a', { href: href({ name: 'guide', step: 'vault' }) }, 'Create your vault'),
       )
     : el('p', {}, 'No chain is configured: every payment is refused.')
-}
-
-/** CSSOM, not a style attribute: the CSP's style-src blocks the latter, not the former. */
-function meter(percent: number) {
-  const fill = el('i')
-  fill.style.width = `${percent}%`
-  return el('div', { class: 'meter', 'aria-hidden': 'true' }, fill)
 }
 
 const cell = (label: string, value: string) =>
@@ -139,9 +133,13 @@ export async function overview(ctx: Context): Screen {
       ...data.pending.map(({ intent }) =>
         link(
           { name: 'approval', id: intent.id },
-          el('strong', {}, amountText(intent)),
+          el('strong', {}, intent.kind === 'swap' ? swapTitle(intent) : amountText(intent)),
           el('span', {}, `${intent.agentId} on ${chainName(intent.chain)}`),
-          el('span', { class: 'muted' }, intent.domain ?? intent.recipient),
+          el(
+            'span',
+            { class: 'muted' },
+            intent.swap?.tokenOut ?? intent.domain ?? intent.recipient,
+          ),
         ),
       ),
       ...data.mandates.map(({ mandate }) =>
