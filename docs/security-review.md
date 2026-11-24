@@ -271,7 +271,7 @@ The kill was rehearsed live:
   - Meanwhile, the docs say to override the warning only on your own page, and only after reading
     its summary.
 
-## Pre-release code review (2026-11-09, before the repository went public)
+## Pre-release code review (2026-11-09)
 
 Three read-only passes over every package: guard-core; onchain and the signing page; the bot,
 mcp-server, shared and e2e. No critical finding: nothing signs without the policy and the

@@ -242,37 +242,20 @@ Each line can be checked by someone other than its author.
 
 - [ ] **Bug bounty, landing page, MCP setup docs for agent builders** (INT-8 scope).
   - MCP setup guide: done (#46, "For agent builders" in `packages/mcp-server/README.md`).
-  - Landing page: a draft in `site/` (#34, #36). Its repo links say "coming soon" until the repo is
-    public.
+  - Landing page: a draft in `site/` (#34, #36).
   - Bug bounty: not started.
-- [x] **Open-source release (D7, D8).** Done on 2026-11-09. In the repository: `LICENSE`,
-      `SECURITY.md`, `docs/self-host.md`, and the README rewritten for outside readers. A scan of all
-      494 commits found no key, token or keypair. The owner then made these GitHub settings, and the
-      repository is public at `github.com/SharkWhite7/-DefiMind`:
+- [x] **Release files (D7, D8).** Done on 2026-11-09. In the repository: `LICENSE`, `SECURITY.md`,
+      `docs/self-host.md`, and the README rewritten for outside readers. A scan of every commit found
+      no key, token or keypair. GitHub settings:
   1. `main` is the default branch;
   2. a ruleset protects `main`: PRs only, the CI checks required, no force-push or deletion;
   3. private vulnerability reporting, Dependabot and malware alerts, CodeQL default setup, secret
      protection and push protection are on;
-  4. the `defimind` environment, which holds the Fly deploy tokens, is limited to `main`;
-  5. the repository was flipped to public last.
-
-  Commit author emails become public with the history.
-
-  **`coordination/` goes public too:**
-  - what it holds: HUMAN_TODO, which names the owner's local paths and wallet addresses; the
-    sessions' messages; and SESSION_PROMPTS;
-  - what is not in it: nothing secret. The scan above covered it, and the wallet addresses are
-    public onchain anyway;
-  - recommendation: **keep it**, as the record of how the product was built and reviewed. Deleting
-    it on `main` would not hide it, because it stays in the history. Squashing the history would mean
-    force-pushing `main`, which this repository never does, and it would erase the provenance the
-    security review points to;
-  - if the owner would rather not show it on `main`, delete it there before the flip, knowing the
-    history keeps it.
+  4. the `defimind` environment, which holds the Fly deploy tokens, is limited to `main`.
 
 - [x] **Final report** (INT-9), and the owner's written go-ahead (HUMAN-8). The report is
       `docs/final-report.md`. The owner gave the go-ahead in writing on 2026-11-09, after the
-      pre-release review's fixes: "pode lançar" (go ahead and launch). Robinhood Chain launches with
+      pre-release review's fixes. Robinhood Chain launches with
       it; Solana follows on 2026-11-10 (D6).
 
 - [x] **Public beta, v0.1.0-beta.** Released on 2026-11-09 as a GitHub pre-release, with the notes
