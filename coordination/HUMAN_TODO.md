@@ -90,20 +90,6 @@ is lost: the panel's push goes out first.
 
 ---
 
-## ⬜ HUMAN-33 — Verify the one-click deploy on Render (CR-019) — risk accepted, run optional
-
-On 2026-11-20 the owner chose to ship the Deploy to Render button without a verified run, in his
-words: "Render is tested, let's use it anyway, I accept the risk; ship it, and if a problem comes up
-we test again". The button is in the README (#73), and
-`docs/getting-started.md` says the route is new and asks people to report a failing step. No
-complete run on Render has been recorded yet.
-
-Still useful, whenever the owner wants: one run from the button on a paid Starter instance with a
-disk, or panel's free devnet variant (no disk), which proves every step up to "live" except
-persistence. A failed step comes back through panel. No key is shared either way.
-
----
-
 ## ⬜ HUMAN-26 — Publish the packages to npm
 
 Later. `create-defimind` and `@defimind/mcp-server` go to npm so users can install with one
@@ -150,3 +136,4 @@ Only if simulation needs a second provider. Not needed so far.
 | HUMAN-28 | `SIGN_PAGE_URL` set on `defimind-guard-core` from the bot's live value                | 2026-11-19 | the legacy signing page, until GC-58                                           |
 | HUMAN-23 | Passkey enrolled for the panel, on the owner's iPhone (HUMAN-31 D1)                   | 2026-11-20 | `defimind-guard-core.fly.dev`; link carried by QR, never pasted                |
 | HUMAN-34 | Hosted signing page `defimind-sign` published on Vercel from this repository (CR-020) | 2026-11-23 | `https://defimind-sign.vercel.app`; `/?action=kill` says the link is not valid |
+| HUMAN-33 | One-click deploy on Render verified by the owner from the Deploy button (CR-019)      | 2026-11-24 | the owner reported it works end to end                                         |
