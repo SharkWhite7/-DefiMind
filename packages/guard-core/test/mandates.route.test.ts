@@ -94,7 +94,8 @@ describe('opening a mandate', () => {
     expect(asked).toMatchObject({ ttlSeconds: 3600 })
   })
 
-  it("starts the owner's own at once, whatever its size", async () => {
+  // CR-022: a mandate lets the agent pay, so the admin token alone cannot make one active.
+  it('leaves one opened with the admin token waiting for the owner', async () => {
     const res = await asAdmin(h, '/v1/admin/mandates', {
       agentId: 'agent-1',
       budget: '9000000',
@@ -102,7 +103,7 @@ describe('opening a mandate', () => {
       ttlSeconds: 600,
       reason: 'owner task',
     })
-    expect(res.json()).toMatchObject({ status: 'active', recipients: [] })
+    expect(res.json()).toMatchObject({ status: 'pending_approval', recipients: [] })
   })
 
   it('refuses a mandate wider than the policy, with the codes a payment would get', async () => {
@@ -211,6 +212,7 @@ describe('paying against a mandate', () => {
 
   it('redeems an approved x402 payment only with the mandate it was approved under', async () => {
     const { id } = (await open(h, { budget: '3000000' }, true)).json()
+    await decide(h, id, 'approve')
     h.fetch.mockImplementation(async (_url, init) =>
       new Headers(init?.headers).has('payment-signature')
         ? paid()

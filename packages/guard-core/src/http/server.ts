@@ -9,7 +9,7 @@ import Fastify, {
 } from 'fastify'
 import type { KeyObject } from 'node:crypto'
 import { botNotifier, type BotNotifier } from '../adapters/bot.js'
-import { botSettings, onMainnet, publicAdmin, type Config } from '../config.js'
+import { botSettings, publicAdmin, type Config } from '../config.js'
 import type { Db } from '../db/client.js'
 import { usdcFor } from '../chains.js'
 import { parseBearer, tokenMatches } from '../domain/auth.js'
@@ -243,7 +243,6 @@ async function serve(
         admin.addHook('preHandler', requireToken(config.ADMIN_TOKEN))
         await admin.register(
           adminRoutes(deps, {
-            mainnet: onMainnet(config),
             ...doctor,
             ...(config.PASSKEY_RP_ID === undefined ? {} : { passkeyRpId: config.PASSKEY_RP_ID }),
             ...(config.PASSKEY_ORIGIN === undefined

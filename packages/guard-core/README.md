@@ -14,9 +14,8 @@ pnpm --filter @defimind/guard-core dev                     # API on 127.0.0.1:87
 ```
 
 A new agent's policy is empty and in shadow mode, so it pays nothing until the owner opens its
-policy and switches it to `mode: "live"`: in the panel with the passkey step-up, or, on a testnet
-deployment with no passkey yet, with `PUT /v1/admin/policy/:agentId`. Without a terminal, the owner
-uses the admin API, which only tightens once a passkey exists or on mainnet (CR-022):
+policy and switches it to `mode: "live"` in the panel, with the passkey step-up. The admin API
+below only tightens (CR-022):
 
 - `POST /v1/admin/agents { agentId }` returns `{ agentId, token }`. The token is shown once; only its
   hash is kept. 409 `{ error: "exists" }` for a taken id.
@@ -319,20 +318,19 @@ With all three set, everything is as before.
 
 ### The admin token only tightens (CR-022)
 
-- Once any passkey is enrolled, or on any chain outside the testnets (`TESTNET_CHAINS`) even
-  before then, an admin write that loosens is refused with 403 `loosen_in_panel`:
+- An admin write that loosens is refused with 403 `loosen_in_panel`, before or after the first
+  passkey and on every chain:
   - `PUT /v1/admin/policy/:agentId` with anything `loosened()` counts: a raised limit, a new chain,
     token, recipient or domain, going live, unpausing, dropping `requireMandate`, or any trading
     loosening;
-  - `POST /v1/admin/resume`;
-  - `POST /v1/admin/mandates`.
+  - every `POST /v1/admin/resume`.
 - Each refusal is audited (`admin_loosen_refused`, `via: "admin"`) and alerts the owner: the bot's
   `admin_loosen_refused` alert and a Web Push "attack".
+- `POST /v1/admin/mandates` opens the mandate as an agent's would: above the approval threshold it
+  waits for the owner in the panel.
 - Tightening, reads, pause, kill, revoke and creating an agent are unchanged.
-- A fresh testnet deployment with no passkey keeps the admin token's loosening, so a setup script
-  works before the panel exists.
-- After that, loosening happens only in the owner's panel, with the passkey step-up (CR-015). A
-  leaked admin token can stop, narrow and read, and nothing more.
+- Loosening happens only in the owner's panel, with the passkey step-up (CR-015). A leaked admin
+  token can stop, narrow and read, and nothing more.
 - With one listener (no `PUBLIC_PORT`), the admin routes on and `HOST` beyond loopback, guard-core
   refuses to start, because the admin routes would face every interface. Split the listeners, keep
   `HOST` on loopback, set `ADMIN_ROUTES=false`, or set `ALLOW_PUBLIC_ADMIN=true`, which starts with
