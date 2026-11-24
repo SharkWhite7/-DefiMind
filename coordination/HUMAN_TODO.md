@@ -24,30 +24,21 @@ Live addresses, caps and the launch record are in [`LAUNCH.md`](../LAUNCH.md) an
 
 ---
 
-## ⏳ HUMAN-36 — Move vault control to a Ledger (CR-022 HIGH-3)
+## ✖️ HUMAN-36 — Move vault control to a Ledger (CR-022 HIGH-3) — dropped, risk accepted
 
-The independent review's HIGH-3: one Phantom account, one recovery phrase, controls every vault.
-On 2026-11-24 the owner chose the hardware wallet ("sim, vamos seguir com a ladger"), with an
-autonomous vault (CR-023) left for later as an option. What changes and what does not:
+The independent review's HIGH-3: one Phantom account, one recovery phrase, controls every vault. On
+2026-11-24 the owner first chose a Ledger, then decided the same day to keep Phantom as the vault's
+only key ("let's keep Phantom"). The risk is accepted, as in LAUNCH.md D4. A Ledger stays optional
+for every user, and the product side of HIGH-3 (doctor's `<chain>:control` warning, the panel's
+advice, `docs/owner-keys.md`) is unchanged.
 
-- Agents, payments, trades and passkey approvals in the panel work as today. The panel's Stop still
-  pauses every agent at once, with no device.
-- The Ledger is needed only for vault actions: the onchain kill, a new or changed daily limit, and
-  withdrawals from the vault.
+What the owner keeps doing instead:
 
-Steps (the onchain session confirms the exact signing flow before step 4; see the BOARD row):
+- keep in the vault only what the agents need for the coming weeks, the rest in cold storage;
+- keep the Phantom recovery phrase on paper only, never typed into a phone, computer or website.
 
-1. Buy a Ledger (Nano S Plus or Nano X) from Ledger's own site only. Set it up, write the 24 words on
-   paper, and never type them into a phone, computer or website.
-2. In Ledger Live, install the Solana app, and the Ethereum app for Robinhood Chain.
-3. In the Phantom browser extension, add the Ledger account over USB. Share its public addresses
-   with the manager. They are not secret.
-4. Sign, with the current Phantom account, the change that hands control to the Ledger:
-   - Solana: the Squads vault's config authority becomes the Ledger address;
-   - Robinhood Chain: the Ledger becomes the Safe's owner in place of the current one.
-5. Check: doctor's `<chain>:control` line names the Ledger address, and one harmless vault action
-   signed on the Ledger works (the onchain session names which).
-6. Move funds the agents will not need in the coming weeks to cold storage.
+If he changes his mind, the hand-over plan is on BOARD (ON-34, deferred): the Ledger must replace the
+old key as config authority and member on Squads, and as owner on the Safe, in two signatures.
 
 ---
 
