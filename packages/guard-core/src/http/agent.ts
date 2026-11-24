@@ -5,6 +5,7 @@ import { hashToken, parseBearer } from '../domain/auth.js'
 import { UpstreamError } from '../adapters/upstream.js'
 import { budget } from '../service/budget.js'
 import { portfolio } from '../service/portfolio.js'
+import { quote, swap, VenueUnavailable } from '../service/swap.js'
 import { transfer } from '../service/transfer.js'
 import { paidFetch, type X402Deps } from '../service/x402.js'
 import { appendExecution } from '../service/executions.js'
@@ -17,6 +18,8 @@ import {
   executionReport,
   intentIdParam,
   mandateRequest,
+  quoteRequest,
+  swapRequest,
   transferRequest,
   x402FetchRequest,
 } from './schemas.js'
@@ -48,6 +51,14 @@ export function agentRoutes(
       throw new HttpError(404, 'not_found')
     }
     return policy
+  }
+
+  /** A venue that is down is a 502, as an x402 API that is down is. */
+  function unavailable(reply: FastifyReply, error: unknown) {
+    if (error instanceof VenueUnavailable) {
+      return reply.code(502).send({ error: error.message })
+    }
+    throw error
   }
 
   return async (app: FastifyInstance) => {
@@ -135,6 +146,30 @@ export function agentRoutes(
         return reply.code(404).send({ error: 'not_found' })
       }
       return intent
+    })
+
+    // CR-021. The quote decides nothing; the swap runs the whole pipeline.
+    app.post('/quote', async (request, reply) => {
+      const body = quoteRequest.parse(request.body)
+      const policy = ownPolicy(request, body.agentId)
+      return quote(deps, body, policy).catch((error: unknown) => unavailable(reply, error))
+    })
+
+    app.post('/swap', async (request, reply) => {
+      const body = swapRequest.parse(request.body)
+      ownPolicy(request, body.agentId)
+      let intent
+      try {
+        intent = await swap(deps, body)
+      } catch (error) {
+        return unavailable(reply, error)
+      }
+      return {
+        intentId: intent.id,
+        status: intent.status,
+        rejectReasons: intent.rejectReasons,
+        ...(intent.txId === undefined ? {} : { txId: intent.txId }),
+      }
     })
 
     app.get('/portfolio/:agentId', async (request) => {

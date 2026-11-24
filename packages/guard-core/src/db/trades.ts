@@ -1,8 +1,33 @@
 import type { Amount, ChainId, Position } from '@defimind/shared'
-import { and, eq, sql } from 'drizzle-orm'
+import { and, eq, like, sql } from 'drizzle-orm'
 import { parseAmount, toAmount } from '../domain/amount.js'
 import type { Db } from './client.js'
-import { dailyTrades, positions } from './schema.js'
+import { dailyTrades, intents, positions } from './schema.js'
+
+/** In shadow nothing is bought, so the day's limit holds against the buys that would have been. */
+export function shadowBoughtToday(
+  db: Db,
+  agentId: string,
+  chain: ChainId,
+  day: string,
+  dollar: string,
+): bigint {
+  return db
+    .select({ amount: intents.amount })
+    .from(intents)
+    .where(
+      and(
+        eq(intents.agentId, agentId),
+        eq(intents.chain, chain),
+        eq(intents.kind, 'swap'),
+        eq(intents.status, 'shadowed'),
+        eq(intents.token, dollar),
+        like(intents.createdAt, `${day}%`),
+      ),
+    )
+    .all()
+    .reduce((sum, row) => sum + parseAmount(row.amount), 0n)
+}
 
 /** Every chain's buys today, for the portfolio. */
 export function boughtTodayAll(db: Db, agentId: string, day: string): bigint {

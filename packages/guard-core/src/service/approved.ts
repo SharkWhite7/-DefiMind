@@ -2,6 +2,7 @@ import type { PayIntent } from '@defimind/shared'
 import { pin } from '../db/pins.js'
 import { recordOwnerApproval } from '../db/receipts.js'
 import type { PaymentDeps } from './payments.js'
+import { sendApprovedSwap } from './swap-approved.js'
 import { sendApproved } from './transfer.js'
 
 /**
@@ -19,6 +20,9 @@ export async function afterApproval(
   if (intent.kind === 'x402') {
     pin(deps.db, intent, deps.now())
     return intent
+  }
+  if (intent.kind === 'swap') {
+    return sendApprovedSwap(deps, intent)
   }
   return (await sendApproved(deps, intent.id)) ?? intent
 }

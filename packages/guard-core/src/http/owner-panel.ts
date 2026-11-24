@@ -9,6 +9,7 @@ import { pushEndpointAllowed } from '../domain/push-host.js'
 import type { PasskeySetup } from '../service/passkeys.js'
 import { type OwnerAction, stepUpChallenge, verifyStepUp } from '../service/step-up.js'
 import type { X402Deps } from '../service/x402.js'
+import { closePositions } from '../service/close.js'
 import { ownerPortfolio } from '../service/portfolio.js'
 import { controls } from './control.js'
 import { decideIntent, decideMandateFor } from './decisions.js'
@@ -24,6 +25,7 @@ import {
   idParam,
   intentIdParam,
   ownerChallenge,
+  ownerClose,
   ownerDecision,
   ownerNewAgent,
   ownerPolicy,
@@ -109,6 +111,13 @@ export function ownerPanelRoutes(
     })
 
     app.get('/v1/owner/portfolio', async () => ownerPortfolio(db, now()))
+    // CR-021. Works while agents are paused: it is how the owner gets out of every token.
+    app.post('/v1/owner/positions/close', async (request) => {
+      const { assertion } = ownerClose.parse(request.body)
+      const passkey = await stepUp('close_positions', {}, assertion)
+      repo.audit(db, { event: 'positions_close', detail: { passkey } }, now())
+      return { intents: await closePositions(deps) }
+    })
     app.get('/v1/owner/report', async (request) => control.report(request.query))
     // CR-012 mirror: the panel matches a payment's execution entry to its receipt by hash.
     app.get('/v1/owner/receipts', async (request) => control.receipts(request.query))

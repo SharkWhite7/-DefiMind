@@ -68,6 +68,8 @@ export async function harness(
     keys?: PublicKeys
     /** Turns the owner's settings on (CR-019), rebuilding the chains with this. */
     build?: ChainHost['build']
+    /** The chain the agent pays on; a plain StubChain by default. */
+    chain?: StubChain
   } = {},
 ): Promise<Harness> {
   const db = openDb(':memory:')
@@ -89,7 +91,7 @@ export async function harness(
     })
     .run()
 
-  const chain = new StubChain(CHAIN, options.balance ?? 100_000_000n)
+  const chain = options.chain ?? new StubChain(CHAIN, options.balance ?? 100_000_000n)
   const bot: BotNotifier = {
     requestApproval: vi.fn(async () => {}),
     intentEvent: vi.fn(async () => {}),

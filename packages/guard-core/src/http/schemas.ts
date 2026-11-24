@@ -52,6 +52,17 @@ export const transferRequest = z.object({
   mandateId: z.uuid().optional(),
 })
 
+/** CR-021. A swap or its quote; one side must be the chain's dollar, which the service checks. */
+export const quoteRequest = z.object({
+  agentId,
+  chain: caip2,
+  tokenIn: address,
+  tokenOut: address,
+  amountIn: atomicAmount.refine((value) => value !== '0', 'must be more than zero'),
+  maxSlippageBps: z.number().int().min(0).max(10_000).optional(),
+})
+export const swapRequest = quoteRequest.extend({ reason })
+
 /** A task budget. Its lists are bounded like the policy's, and it lives between a minute and a day. */
 export const mandateRequest = z.object({
   agentId,
@@ -113,6 +124,8 @@ export const policyBody = z.object({
 
 export type X402FetchRequest = z.infer<typeof x402FetchRequest>
 export type TransferRequest = z.infer<typeof transferRequest>
+export type QuoteRequest = z.infer<typeof quoteRequest>
+export type SwapRequest = z.infer<typeof swapRequest>
 export type BotDecisionRequest = z.infer<typeof botDecisionRequest>
 export type PolicyBody = z.infer<typeof policyBody>
 
@@ -161,6 +174,9 @@ export const ownerSettings = z.object({
   assertion: webAuthnResponse.optional(),
 })
 
+/** CR-021. The step-up is over the body {}: Close has nothing to choose. */
+export const ownerClose = z.object({ assertion: webAuthnResponse.optional() })
+
 export const ownerSetup = z.object({ setupCode: z.string().min(1).max(256) })
 
 const enrolCode = z.string().regex(/^[A-Za-z0-9_-]{32}$/, 'not an enrolment code')
@@ -179,6 +195,7 @@ const OWNER_ACTIONS = [
   'resume',
   'create_agent',
   'change_settings',
+  'close_positions',
 ] as const
 
 /** CR-012. `body` is hashed as sent, so it is only bounded here, never reshaped. */
