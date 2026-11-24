@@ -1,10 +1,11 @@
+import type { ChainAdapter } from '@defimind/onchain'
 import type { ChainId, PayIntent, Policy } from '@defimind/shared'
 import { listAgents } from '../db/agents.js'
 import * as repo from '../db/repo.js'
 import { applyTrade, listPositions } from '../db/trades.js'
 import { evaluateTrade } from '../domain/trading.js'
 import { newIntent, reject, type PaymentDeps } from './payments.js'
-import { clearSwap, fetchQuote, type Trader, VenueUnavailable, withQuote } from './swap.js'
+import { clearSwap, fetchQuote, VenueUnavailable, withQuote } from './swap.js'
 
 const REASON = 'owner: close positions'
 
@@ -16,8 +17,7 @@ const REASON = 'owner: close positions'
  */
 export async function closePositions(deps: PaymentDeps): Promise<PayIntent[]> {
   const intents: PayIntent[] = []
-  for (const [chain, adapter] of deps.chains) {
-    const trader: Trader = adapter
+  for (const [chain, trader] of deps.chains) {
     const dollar = deps.usdc.get(chain)
     if (trader.getPositions === undefined || dollar === undefined) {
       continue
@@ -41,7 +41,7 @@ export async function closePositions(deps: PaymentDeps): Promise<PayIntent[]> {
  */
 async function sell(
   deps: PaymentDeps,
-  trader: Trader,
+  trader: ChainAdapter,
   held: { chain: ChainId; dollar: string; token: string; amount: string },
 ): Promise<PayIntent | undefined> {
   const { db, now } = deps
