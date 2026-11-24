@@ -5,6 +5,7 @@ import { chainName, usdSymbolFor } from '../domain/chains.js'
 import { explainStatus } from '../domain/explain.js'
 import { formatAmount } from '../domain/usd.js'
 import { listOf } from '../domain/list.js'
+import { formatUnits, tokenLabel } from '../domain/trading.js'
 import type { ToolDeps } from './deps.js'
 import { guarded, text } from './result.js'
 
@@ -131,12 +132,22 @@ function describePayment(intent: Intent): string {
 /** A swap spends `amount` of `token` and must return at least minAmountOut of tokenOut. */
 function describeSwap(intent: Intent, usd: ToolDeps['usd']): string {
   const dollar = usd(intent.chain)
-  const amountOf = (token: string | undefined, atomic: string) =>
-    dollar !== undefined && token === dollar.address
-      ? `${formatAmount(atomic)} ${dollar.symbol}`
-      : `${atomic} units of ${token ?? 'the token sold'}`
+  const amountOf = (
+    token: string | undefined,
+    atomic: string,
+    decimals?: number,
+    symbol?: string,
+  ) => {
+    if (dollar !== undefined && token === dollar.address) {
+      return `${formatAmount(atomic)} ${dollar.symbol}`
+    }
+    const name = tokenLabel(token ?? 'the token sold', symbol)
+    return decimals === undefined
+      ? `${atomic} units of ${name}`
+      : `${formatUnits(atomic, decimals)} of ${name} (${atomic} smallest units)`
+  }
   const out = intent.swap
   return out === undefined
     ? `Swap spending ${amountOf(intent.token, intent.amount)}`
-    : `Swap of ${amountOf(intent.token, intent.amount)} for at least ${amountOf(out.tokenOut, out.minAmountOut)} through ${out.venue}`
+    : `Swap of ${amountOf(intent.token, intent.amount, out.decimalsIn, out.symbolIn)} for at least ${amountOf(out.tokenOut, out.minAmountOut, out.decimalsOut, out.symbolOut)} through ${out.venue}`
 }

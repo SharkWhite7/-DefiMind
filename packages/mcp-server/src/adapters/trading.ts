@@ -6,6 +6,14 @@ const bps = z.number().int().min(0).max(10_000)
 // Codes and flags are echoed to the model, so only well-formed ones get through.
 const code = z.string().regex(/^[A-Z0-9_]{1,64}$/)
 const flag = z.enum(['NEW_TOKEN', 'MINT_AUTHORITY']) satisfies z.ZodType<TradingFlag>
+export const decimals = z.number().int().min(0).max(30)
+// Untrusted display text: kept only to be quoted beside the mint, and only when it is plain.
+export const symbol = z
+  .string()
+  .optional()
+  .transform((value) =>
+    value !== undefined && /^[A-Za-z0-9.$_-]{1,16}$/.test(value) ? value : undefined,
+  )
 
 export const swapQuote = z.object({
   venue: z.string().min(1).max(32),
@@ -30,6 +38,8 @@ export const portfolio = z.object({
         token: z.string().min(1).max(128),
         amount: atomic,
         cost: atomic,
+        decimals,
+        symbol,
       }) satisfies z.ZodType<Position>,
     )
     .max(500),
@@ -37,8 +47,13 @@ export const portfolio = z.object({
   dailyTradeMax: atomic,
 })
 
-export type Quote = z.infer<typeof swapQuote>
-export type Portfolio = z.infer<typeof portfolio>
+/** Risks stay strings: a code this server does not know yet is still shown, not dropped. */
+export type Quote = Omit<SwapQuote, 'risks'> & { risks: string[] }
+export interface Portfolio {
+  positions: Position[]
+  tradedToday: string
+  dailyTradeMax: string
+}
 
 /** The body of POST /v1/agent/quote and /v1/agent/swap, as the SPEC shapes them. */
 export interface SwapInput {

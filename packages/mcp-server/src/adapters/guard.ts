@@ -5,7 +5,9 @@ import {
   type Quote,
   type SwapInput,
   type SwapOrder,
+  decimals,
   portfolio,
+  symbol,
   swapQuote,
 } from './trading.js'
 
@@ -95,6 +97,11 @@ export const payIntent = z.object({
       minAmountOut: atomic,
       slippageBps: z.number(),
       priceImpactBps: z.number(),
+      // Absent from a guard-core before the panel's clarification of CR-021.
+      decimalsIn: decimals.optional(),
+      decimalsOut: decimals.optional(),
+      symbolIn: symbol,
+      symbolOut: symbol,
     })
     .optional(),
   createdAt: z.string(),

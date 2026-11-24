@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { Portfolio, Quote } from '../adapters/trading.js'
 import { CHAIN_NAMES, chainName } from '../domain/chains.js'
 import { explainFlags, explainReject, explainStatus } from '../domain/explain.js'
-import { type ResolvedSwap, resolveSwap } from '../domain/trading.js'
+import { type ResolvedSwap, formatUnits, resolveSwap, tokenLabel } from '../domain/trading.js'
 import { formatAmount } from '../domain/usd.js'
 import type { ToolDeps } from './deps.js'
 import { failure, guarded, text } from './result.js'
@@ -161,10 +161,26 @@ function describeTrade(swap: Resolved, deps: ToolDeps, at: string): string {
     : `Sell ${spent} for ${deps.usd(at)?.symbol ?? 'dollars'}`
 }
 
+/** A token amount as the agent reads it: exact, from the mint's own decimals, named by its mint. */
+function held(
+  token: string,
+  atomic: string,
+  decimals: number,
+  symbol: string | undefined,
+  deps: ToolDeps,
+  at: string,
+): string {
+  const dollar = deps.usd(at)
+  return dollar !== undefined && token === dollar.address
+    ? `${formatAmount(atomic)} ${dollar.symbol}`
+    : `${formatUnits(atomic, decimals)} of ${tokenLabel(token, symbol)} (${atomic} smallest units)`
+}
+
 function describeQuote(quote: Quote, swap: Resolved, deps: ToolDeps, at: string): string {
+  const out = (atomic: string) => amountOf(quote.tokenOut, atomic, deps, at)
   const lines = [
     `Quote from ${quote.venue}, ${quote.quotedAt}: ${describeTrade(swap, deps, at)}.`,
-    `Expected: ${amountOf(quote.tokenOut, quote.expectedOut, deps, at)}; at least ${amountOf(quote.tokenOut, quote.minAmountOut, deps, at)}.`,
+    `Expected: ${out(quote.expectedOut)}; at least ${out(quote.minAmountOut)}.`,
     `Slippage ${quote.slippageBps} bps, price impact ${quote.priceImpactBps} bps.`,
     swap.side === 'buy'
       ? quote.exitImpactBps === null
@@ -193,11 +209,19 @@ function describePortfolio(portfolio: Portfolio, deps: ToolDeps): string {
     lines.push('No token positions.')
     return lines.join('\n')
   }
-  lines.push('Positions (amounts in the smallest units of each token; cost in dollars):')
+  lines.push('Positions (to sell, pass amount in smallest units):')
   for (const position of portfolio.positions.slice(0, 50)) {
-    lines.push(
-      `- ${position.token} on ${chainName(position.chain)}: ${position.amount}, cost ${formatAmount(position.cost)} ${deps.usd(position.chain)?.symbol ?? ''}`.trimEnd(),
+    const amount = held(
+      position.token,
+      position.amount,
+      position.decimals,
+      position.symbol,
+      deps,
+      position.chain,
     )
+    const cost =
+      `${formatAmount(position.cost)} ${deps.usd(position.chain)?.symbol ?? ''}`.trimEnd()
+    lines.push(`- ${amount} on ${chainName(position.chain)}, cost ${cost}`)
   }
   if (portfolio.positions.length > 50) {
     lines.push(`and ${portfolio.positions.length - 50} more.`)

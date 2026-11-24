@@ -60,3 +60,19 @@ export function resolveSwap(request: SwapRequest, dollar: string): ResolvedSwap 
     amountIn: BigInt(request.amount),
   }
 }
+
+/** An exact decimal from atomic units, with trailing zeros dropped: never through a float. */
+export function formatUnits(atomic: string, decimals: number): string {
+  const digits = atomic.padStart(decimals + 1, '0')
+  const whole = digits.slice(0, digits.length - decimals)
+  const fraction = digits.slice(digits.length - decimals).replace(/0+$/, '')
+  return fraction === '' ? whole : `${whole}.${fraction}`
+}
+
+/**
+ * How a token is named to the agent: always by its mint. A venue's or the mint's own symbol is only
+ * a label anyone can set, so it is quoted as what the token calls itself, never trusted.
+ */
+export function tokenLabel(mint: string, symbol?: string): string {
+  return symbol === undefined ? mint : `${mint} (calls itself "${symbol}")`
+}

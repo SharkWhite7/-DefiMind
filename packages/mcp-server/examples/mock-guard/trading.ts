@@ -87,6 +87,7 @@ export function tradingRoutes(options: { usd: string; tradable: string[]; now: (
         token,
         amount: amount.toString(),
         cost: cost.toString(),
+        decimals: 6,
       }))
       return [
         200,

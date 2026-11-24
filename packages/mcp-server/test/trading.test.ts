@@ -2,7 +2,7 @@ import { CHAINS } from '@defimind/shared'
 import { describe, expect, it, vi } from 'vitest'
 import type { Quote, SwapOrder } from '../src/adapters/trading.js'
 import { usdTokenFor } from '../src/domain/chains.js'
-import { resolveSwap } from '../src/domain/trading.js'
+import { formatUnits, resolveSwap, tokenLabel } from '../src/domain/trading.js'
 import { call, connect, fakeGuard } from './support.js'
 
 const USDC = usdTokenFor(CHAINS.solanaDevnet, undefined)?.address ?? ''
@@ -213,11 +213,32 @@ describe('quote tool', () => {
   })
 })
 
+describe('token amounts and names', () => {
+  it('formats atomic units exactly, without a float', () => {
+    expect(formatUnits('250000000', 5)).toBe('2500')
+    expect(formatUnits('123456789012345678901', 9)).toBe('123456789012.345678901')
+    expect(formatUnits('5', 6)).toBe('0.000005')
+    expect(formatUnits('7', 0)).toBe('7')
+  })
+
+  it('names a token by its mint and quotes its symbol as a claim', () => {
+    expect(tokenLabel(BONK)).toBe(BONK)
+    expect(tokenLabel(BONK, 'BONK')).toBe(`${BONK} (calls itself "BONK")`)
+  })
+})
+
 describe('get_portfolio tool', () => {
   it('lists positions at cost and the day trading budget', async () => {
     const portfolio = vi.fn(async () => ({
       positions: [
-        { chain: CHAINS.solanaDevnet, token: BONK, amount: '250000000', cost: '5000000' },
+        {
+          chain: CHAINS.solanaDevnet,
+          token: BONK,
+          amount: '250000000',
+          cost: '5000000',
+          decimals: 5,
+          symbol: 'BONK',
+        },
       ],
       tradedToday: '5000000',
       dailyTradeMax: '50000000',
@@ -225,7 +246,9 @@ describe('get_portfolio tool', () => {
     const client = await connect(fakeGuard({ portfolio }))
     const { text } = await call(client, 'get_portfolio')
     expect(text).toContain('Traded today: $5.00 of $50.00 (the daily limit counts buys only).')
-    expect(text).toContain(`- ${BONK} on Solana devnet: 250000000, cost $5.00 USDC`)
+    expect(text).toContain(
+      `- 2500 of ${BONK} (calls itself "BONK") (250000000 smallest units) on Solana devnet, cost $5.00 USDC`,
+    )
   })
 
   it('says when there is nothing held', async () => {
@@ -252,6 +275,10 @@ describe('check_intent on a swap', () => {
         minAmountOut: '247500000',
         slippageBps: 100,
         priceImpactBps: 12,
+        decimalsIn: 6,
+        decimalsOut: 5,
+        symbolIn: undefined,
+        symbolOut: 'BONK',
       },
       createdAt: '2026-11-24T16:00:00.000Z',
       expiresAt: '2026-11-24T16:10:00.000Z',
@@ -260,7 +287,7 @@ describe('check_intent on a swap', () => {
       intentId: INTENT,
     })
     expect(text).toContain(
-      `Swap of $5.00 USDC for at least 247500000 units of ${BONK} through jupiter, on Solana devnet`,
+      `Swap of $5.00 USDC for at least 2475 of ${BONK} (calls itself "BONK") (247500000 smallest units) through jupiter, on Solana devnet`,
     )
     expect(text).toContain('The swap is waiting for the owner to approve it')
   })

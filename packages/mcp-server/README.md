@@ -283,6 +283,10 @@ from the same spending wallet and under the same daily cap.
   - every risk that would get the buy refused;
   - every flag that would send it to the owner.
 - **`maxSlippageBps`** can only tighten the owner's limit. Left out, the owner's limit applies.
+- **Tokens are named by their mint.** A symbol is a label anyone can give a token, so it is shown
+  only as what the token "calls itself", beside the mint, and only when it is plain text. Amounts
+  are exact, from the decimals guard-core reads from the mint onchain, with the smallest units
+  beside them because a sell takes those.
 - **What DefiMind controls:** allowed tokens, per-trade, daily and per-token limits, slippage, price
   impact, and tokens that can be frozen, carry risky extensions or cannot be sold back. Every swap
   is simulated and its balance changes are checked before anything is signed.

@@ -30,7 +30,9 @@ describe('trading tools against a fake guard-core over HTTP', () => {
 
     const held = await call(client, 'get_portfolio')
     expect(held.text).toContain('Traded today: $2.00 of $20.00')
-    expect(held.text).toContain(`- ${BONK} on Solana devnet: 100000000, cost $2.00 USDC`)
+    expect(held.text).toContain(
+      `- 100 of ${BONK} (100000000 smallest units) on Solana devnet, cost $2.00 USDC`,
+    )
 
     const sold = await call(client, 'swap', {
       from: BONK,
