@@ -212,8 +212,9 @@ export async function clearSwap(
   const { db, now } = deps
   const short =
     parseAmount(await adapter.getHotWalletBalance(intent.token)) < parseAmount(intent.amount)
+  const asks = how.verdict.decision === 'needs_approval'
   if (how.shadow && short) {
-    return shadowed(deps, intent, [])
+    return shadowed(deps, intent, how.verdict.flags, asks)
   }
   const waits = how.verdict.decision === 'needs_approval' && owner === undefined
   if (waits && short) {
@@ -244,7 +245,7 @@ export async function clearSwap(
     return reject(deps, intent, reasons)
   }
   if (how.shadow) {
-    return shadowed(deps, intent, [])
+    return shadowed(deps, intent, how.verdict.flags, asks)
   }
   if (waits) {
     const passkey = needsPasskey(deps.passkey, intent)

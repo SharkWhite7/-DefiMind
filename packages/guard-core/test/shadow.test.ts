@@ -10,6 +10,7 @@ import {
   paymentRequired,
   spent,
   type Harness,
+  wouldHave,
 } from './harness.js'
 
 const transfer = (h: Harness, amount = '1000000', recipient = MERCHANT) =>
@@ -76,6 +77,14 @@ describe('shadow mode', () => {
     })
     await transfer(h, '1500000')
     expect((await transfer(h, '1000000')).json().rejectReasons).toEqual(['DAILY_EXCEEDED'])
+  })
+
+  it('records whether live would have asked the owner', async () => {
+    const h = await shadow()
+    const small = (await transfer(h, '1000000')).json().intentId
+    const large = (await transfer(h, '3000000')).json().intentId
+    expect(wouldHave(h, small)).toMatchObject({ wouldAsk: false })
+    expect(wouldHave(h, large)).toMatchObject({ wouldAsk: true })
   })
 
   it('does not ask the owner, even above the threshold', async () => {
