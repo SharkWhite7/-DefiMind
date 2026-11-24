@@ -2,7 +2,7 @@ import { getAddress } from 'viem'
 import { chromium, type Browser, type Page } from 'playwright'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { MODULE, stageEvm } from './evm-node.js'
-import { heading, lines } from './harness.js'
+import { heading, lines, reconfigure } from './harness.js'
 
 /** The proof page on Robinhood: read-only, no wallet, against a stand-in chain. */
 let browser: Browser
@@ -115,5 +115,36 @@ describe('the proof page on an EVM chain', () => {
     const page = await proof()
     expect(await heading(page).textContent()).toBe('Not verified')
     expect((await lines(page))[0]).toBe(`There is no Safe at ${s.state.safe} on evm-localnet.`)
+  })
+})
+
+describe("the proof page with agents' own wallets (CR-022)", () => {
+  const agent = getAddress('0x00000000000000000000000000000000000a6e01')
+
+  beforeEach(() => {
+    s.state.balance = 500_000_000n
+    s.state.otherDelegates = [agent]
+    s.state.allowances[agent] = [20_000_000n, 5_000_000n, 1440n, 29_000_000n, 1n]
+  })
+
+  it("adds up every wallet's own allowance", async () => {
+    await reconfigure(s.dist, (config) => {
+      config.evm['evm-localnet']!.agents = [agent]
+    })
+    const page = await proof()
+    expect(await heading(page).textContent()).toBe(
+      "The most this deployment's agents can draw in the next 24 hours: 133.5 USDG",
+    )
+    const text = (await lines(page)).join('\n')
+    expect(text).toContain("lets only this deployment's 2 hot wallets draw, each under its own cap")
+    expect(text).toMatch(
+      new RegExp(`${agent}: left until \\S+: 15 USDG\\. Then the daily cap again: 20 USDG\\.`),
+    )
+  })
+
+  it('still flags a delegate the page was not built with', async () => {
+    const page = await proof()
+    expect(await heading(page).textContent()).toBe('Not verified')
+    expect(await lines(page)).toContain(`Delegate ${agent} of the Allowance Module can draw too.`)
   })
 })

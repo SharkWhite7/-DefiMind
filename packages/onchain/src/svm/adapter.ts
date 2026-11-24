@@ -31,6 +31,7 @@ import {
   type SimulationOutcome,
 } from '../ChainAdapter.js'
 import { squadsControl } from './control.js'
+import { landedChanges } from './landed.js'
 import { hotWalletGas } from './gas.js'
 import { inspectTransfer } from './inspect.js'
 import { simulateMessage, topUpFor } from './simulate.js'
@@ -171,6 +172,15 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
   return {
     chain,
     ...(trading ? { quoteSwap: trading.quoteSwap, getPositions: trading.getPositions } : {}),
+
+    async getLandedChanges(txId: TxId) {
+      const tx = await connection.getTransaction(txId, {
+        commitment: 'confirmed',
+        maxSupportedTransactionVersion: 0,
+      })
+      if (!tx?.meta) throw new Error(`tx_not_found: ${txId}`)
+      return landedChanges(tx.meta, hotWallet.publicKey.toBase58())
+    },
 
     async getAllowanceState(): Promise<AllowanceState> {
       const delegate = hotWallet.publicKey.toBase58()
