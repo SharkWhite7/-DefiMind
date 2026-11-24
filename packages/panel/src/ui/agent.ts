@@ -6,6 +6,7 @@ import { chainRules, loosens } from '../domain/policy.js'
 import type { Context, Screen } from './context.js'
 import { button, card, el, row, when } from './dom.js'
 import { tradingForm } from './trading.js'
+import { stopAgentCard, walletsCard } from './wallets.js'
 
 function field(id: string, label: string, value: string, multiline = false) {
   const input = multiline
@@ -108,13 +109,18 @@ function policyForm(ctx: Context, policy: PolicyView, known: string[]) {
 
 export async function agent(ctx: Context, id: string): Screen {
   // A guard-core older than CR-019 has no settings route: the chains are then shown, not edited.
-  const [policy, budget, known] = await Promise.all([
+  // A guard-core before CR-022 has no agent wallets: the card is then left out.
+  const [policy, budget, known, wallets] = await Promise.all([
     ctx.api.policy(id),
     ctx.api.budget(id),
     ctx.api
       .settings()
       .then(({ chains }) => chains.map((c) => c.chain))
       .catch(() => []),
+    ctx.api
+      .agentWallets(id)
+      .then(({ wallets }) => wallets)
+      .catch(() => undefined),
   ])
   const shadow = policy.mode === 'shadow'
   return [
@@ -175,6 +181,8 @@ export async function agent(ctx: Context, id: string): Screen {
     ),
     policyForm(ctx, policy, known),
     tradingForm(ctx, policy, (after, message) => save(ctx, policy, after, message)),
+    wallets !== undefined && walletsCard(ctx, id, known, wallets),
+    wallets !== undefined && stopAgentCard(ctx, id),
     card(
       el('h2', {}, 'Revoke'),
       el('p', {}, 'Cuts the agent off at its next request. Its token never works again.'),

@@ -1,6 +1,8 @@
 import type { RegistrationResponseJSON } from '@simplewebauthn/server'
 import type { FastifyInstance } from 'fastify'
 import { revokeMandate } from '../db/mandates.js'
+import { loosened } from '../domain/loosen.js'
+import { alert } from '../service/events.js'
 import * as repo from '../db/repo.js'
 import { openMandate } from '../service/mandates.js'
 import { enrol, enrolmentOptions, issueEnrolCode } from '../service/passkeys.js'
@@ -22,10 +24,30 @@ import {
 
 export function adminRoutes(
   deps: PaymentDeps & { fetch: typeof fetch },
-  setup: { botUrl?: string; databaseUrl: string; passkeyRpId?: string; passkeyOrigin?: string },
+  setup: {
+    botUrl?: string
+    databaseUrl: string
+    passkeyRpId?: string
+    passkeyOrigin?: string
+    publicAdmin?: boolean
+  },
 ) {
   const { db, now } = deps
   const control = controls(deps, 'admin')
+
+  /** Refuses a loosening by the admin token; audited, and the owner hears of it as an attack. */
+  function refuse(agentId: string, fields: string[]): never {
+    repo.audit(
+      db,
+      { event: 'admin_loosen_refused', agentId, detail: { fields, via: 'admin' } },
+      now(),
+    )
+    alert(deps, {
+      kind: 'admin_loosen_refused',
+      detail: `the admin token tried to loosen ${agentId} (${fields.join(', ')}); refused`,
+    })
+    throw new HttpError(403, 'loosen_in_panel')
+  }
 
   function passkeyAddress() {
     if (setup.passkeyRpId === undefined || setup.passkeyOrigin === undefined) {
@@ -91,9 +113,10 @@ export function adminRoutes(
 
     app.get('/chains', async (request) => ({ chains: await control.chains(request.log) }))
 
-    // The owner's own mandates start active: there is nobody else to ask.
+    // A mandate lets an agent pay, so one opened with the admin token waits for the owner's
+    // approval in the panel, like an agent's own (CR-022).
     app.post('/mandates', async (request, reply) =>
-      mandateReply(reply, await openMandate(deps, mandateRequest.parse(request.body), true)),
+      mandateReply(reply, await openMandate(deps, mandateRequest.parse(request.body), false)),
     )
 
     app.post('/mandates/:id/revoke', async (request) => {
@@ -115,17 +138,28 @@ export function adminRoutes(
 
     app.get('/receipts', async (request) => control.receipts(request.query))
 
+    // CR-022: the admin token alone only tightens. Anything loosened() counts takes the owner's
+    // passkey in the panel (CR-015), so a leaked admin token cannot widen what an agent may pay.
     app.put('/policy/:agentId', async (request) => {
       const { agentId } = agentIdParam.parse(request.params)
-      return control.putPolicy({ agentId, ...policyBody.parse(request.body) })
+      const next = { agentId, ...policyBody.parse(request.body) }
+      const before = control.existing(agentId)
+      const fields = loosened(before, next)
+      if (fields.length > 0) {
+        refuse(agentId, fields)
+      }
+      return control.putPolicy(next)
     })
 
     app.post('/pause', async (request) =>
       control.setPaused(agentIdParam.parse(request.body).agentId, true),
     )
-    app.post('/resume', async (request) =>
-      control.setPaused(agentIdParam.parse(request.body).agentId, false),
-    )
+    // Resuming lets a stopped agent pay again.
+    app.post('/resume', async (request) => {
+      const { agentId } = agentIdParam.parse(request.body)
+      control.existing(agentId)
+      refuse(agentId, ['paused'])
+    })
 
     app.post('/kill', async (request) => control.kill(request.log))
 

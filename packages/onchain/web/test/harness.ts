@@ -1,4 +1,4 @@
-import { mkdtemp } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -8,6 +8,7 @@ import * as multisig from '@sqds/multisig'
 import type { Browser, Page } from 'playwright'
 import { chain, plantProgramConfig } from '../../test/fixture.js'
 import { buildPage } from '../build.js'
+import { pageHtml, type PageConfig } from '../page.js'
 import { mockPhantom, servePage } from './server.js'
 
 const squads = fileURLToPath(new URL('../../test/fixtures/squads_v4.so', import.meta.url))
@@ -72,3 +73,14 @@ export const shape = (ix: TransactionInstruction) => ({
 
 export const sentInstructions = (tx: VersionedTransaction) =>
   TransactionMessage.decompile(tx.message).instructions.map(shape)
+
+/** The built page with its config changed, as guard-core would serve it for its agents' wallets. */
+export async function reconfigure(dist: string, change: (config: PageConfig) => void) {
+  const template = await readFile(join(dist, 'index.template.html'), 'utf8')
+  const json = /id="config">([^<]*)<\/script>/.exec(
+    await readFile(join(dist, 'index.html'), 'utf8'),
+  )![1]!
+  const config = JSON.parse(json) as PageConfig
+  change(config)
+  await writeFile(join(dist, 'index.html'), pageHtml(template, config))
+}

@@ -16,7 +16,7 @@ let api: PaidApi
 async function start(chain?: StubChain) {
   s = await stack(chain === undefined ? {} : { chain })
   api = await paidApi()
-  await s.setPolicy({ allowedRecipients: [MERCHANT] })
+  s.setPolicy({ allowedRecipients: [MERCHANT] })
 }
 
 afterEach(async () => {
@@ -77,7 +77,7 @@ describe('malicious 402 responses', () => {
   })
 
   it('from a host the policy does not allow, refused before any request is made', async () => {
-    await s.setPolicy({ allowedDomains: ['api.example.com'] })
+    s.setPolicy({ allowedDomains: ['api.example.com'] })
     await refusedFetch(['DOMAIN_NOT_ALLOWED'])
     expect(api.requests).toBe(0)
   })
@@ -110,7 +110,7 @@ describe('policy limits on direct transfers', () => {
   })
 
   it('past the daily limit', async () => {
-    await s.setPolicy({ allowedRecipients: [MERCHANT], approvalThreshold: '100000000' })
+    s.setPolicy({ allowedRecipients: [MERCHANT], approvalThreshold: '100000000' })
     for (const amount of ['4', '4']) {
       expect(await transfer(MERCHANT, amount)).toContain(': executed.')
     }

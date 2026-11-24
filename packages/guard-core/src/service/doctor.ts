@@ -24,6 +24,8 @@ export interface DoctorDeps {
   passkeyAbove?: Amount | undefined
   /** A one-click host with no admin routes (CR-019): its owner may have no shell to run a script. */
   hosted?: boolean
+  /** ALLOW_PUBLIC_ADMIN let the admin routes face every interface (CR-022). */
+  publicAdmin?: boolean
 }
 
 /**
@@ -39,6 +41,7 @@ export async function doctor(deps: DoctorDeps): Promise<DoctorCheck[]> {
     ...chains.flat(),
     ...passkeyChecks(deps),
     ...(deps.botUrl === undefined ? [] : [await bot(deps.botUrl, deps.fetch)]),
+    ...(deps.publicAdmin === true ? [PUBLIC_ADMIN] : []),
     await backup(deps),
   ]
 }
@@ -170,6 +173,14 @@ async function bot(url: string, fetchImpl: typeof fetch): Promise<DoctorCheck> {
     message: 'The Telegram bot does not answer, so approvals and alerts cannot reach the owner.',
     fix: 'Check that the bot is running and that BOT_URL points at it.',
   }
+}
+
+const PUBLIC_ADMIN: DoctorCheck = {
+  id: 'public_admin',
+  status: 'warn',
+  message:
+    'The admin routes answer on every interface, so anyone who reaches this address can try the admin token.',
+  fix: 'Split the listeners with PUBLIC_PORT, keep HOST on loopback, or set ADMIN_ROUTES=false.',
 }
 
 async function backup(deps: DoctorDeps): Promise<DoctorCheck> {

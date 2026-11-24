@@ -7,6 +7,7 @@ import { CHAINS, getAddress } from '@defimind/shared'
 import { canonicalJson } from '../../src/domain/canonical.js'
 import { setupMock } from './setup.js'
 import { tradingMock } from './trading.js'
+import { walletsMock } from './wallets.js'
 
 /** SPEC's panel CSP, so a test fails on anything the real one would block. */
 export const CSP = [
@@ -47,13 +48,17 @@ export interface Decision {
  * what the panel must get right: the session cookie, X-DefiMind-Request and Origin on writes, and
  * that each step-up assertion signs a challenge issued for that exact action and body.
  */
-export async function guardCore(dist: string, { fresh = false, trading = false } = {}) {
+export async function guardCore(
+  dist: string,
+  { fresh = false, trading = false, wallets = false } = {},
+) {
   const setup = setupMock()
   const intentId = randomUUID()
   const mandateId = randomUUID()
   const later = new Date(Date.now() + 10 * 60_000).toISOString()
   // CR-021 only where a test asks for it: every other flow sees a guard-core without trading.
   const trades = trading ? tradingMock(later) : undefined
+  const agentWallets = wallets ? walletsMock(() => origin) : undefined
   const state = {
     passkeys: 0,
     sessions: new Set<string>(),
@@ -252,6 +257,11 @@ export async function guardCore(dist: string, { fresh = false, trading = false }
         ...(state.passkeys > 0 ? { stepUp: issue(null) } : {}),
       })
     }
+    if (path === '/v1/owner/passkeys' && method === 'GET') {
+      const at = new Date().toISOString()
+      const ids = Array.from({ length: state.passkeys }, (_, i) => `credential-${i}`)
+      return send(200, { passkeys: ids.map((id) => ({ id, createdAt: at, lastUsedAt: null })) })
+    }
     if (path === '/v1/owner/passkeys' && method === 'POST') {
       if (state.passkeys > 0 && redeem(body['assertion']) === undefined) {
         return send(409, { error: 'step_up_required' })
@@ -347,6 +357,9 @@ export async function guardCore(dist: string, { fresh = false, trading = false }
       return
     }
     if (trades?.route(method, path, send, stepUp)) {
+      return
+    }
+    if (agentWallets?.route(method, path, body, send, stepUp)) {
       return
     }
     if (path.startsWith('/v1/owner/policy/')) {
@@ -472,6 +485,7 @@ export async function guardCore(dist: string, { fresh = false, trading = false }
     receipts,
     setup: setup.state,
     trading: trades,
+    wallets: agentWallets,
     intentId,
     mandateId,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),

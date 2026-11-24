@@ -56,8 +56,8 @@ describe('HOST', () => {
     expect(loadConfig(env).HOST).toBe('127.0.0.1')
   })
 
-  it.each(['0.0.0.0', '::', 'guard.internal'])('accepts %s', (HOST) => {
-    expect(loadConfig({ ...env, HOST }).HOST).toBe(HOST)
+  it.each(['0.0.0.0', '::', 'guard.internal'])('accepts %s behind a split listener', (HOST) => {
+    expect(loadConfig({ ...env, HOST, PUBLIC_PORT: '8080' }).HOST).toBe(HOST)
   })
 
   it.each(['', 'http://0.0.0.0', 'not a host'])('refuses %j', (HOST) => {
