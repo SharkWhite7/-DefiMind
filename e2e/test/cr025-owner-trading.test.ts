@@ -124,7 +124,13 @@ describe.skipIf(skipped)(
       it("keeps the venue's answer to known fields, bounded, verified first", async () => {
         await start()
         venue.answer = [
-          { id: ATTACKER.toBase58(), symbol: 'USDC'.padEnd(200, 'C'), name: 'x', decimals: 6 },
+          {
+            id: ATTACKER.toBase58(),
+            symbol: 'USDC'.padEnd(200, 'C'),
+            name: 'x',
+            decimals: 6,
+            liquidity: 41250000.5,
+          },
           {
             id: WSOL.toBase58(),
             symbol: 'SOL',
@@ -153,6 +159,8 @@ describe.skipIf(skipped)(
           venue: {},
         })
         expect(tokens[1]?.symbol).toHaveLength(16)
+        // The panel reads it as display-only decimal dollars (#152), never as atomic units.
+        expect(tokens[1]?.venue).toEqual({ liquidityUsd: '41250000.50' })
       })
 
       it('reads the facts onchain, and only labels what the venue claims', async () => {

@@ -592,8 +592,9 @@ GET  /v1/owner/tokens/search?q=&chain= -> { tokens: TokenInfo[] }
   fields are dropped except those below. Verified tokens come first; the panel shows unverified
   ones only after an explicit "Show unverified tokens", with a warning.
   TokenInfo = { chain, mint, symbol, name, decimals, verified, venue: { holders?, liquidityUsd?,
-  organicScore?, createdAt? } }. The symbol and name are display only and always shown beside the
-  full mint. The decimals are the venue's and are re-read from the mint before any use. No remote
+  organicScore?, createdAt? } }. liquidityUsd is the venue's figure as a decimal string, display
+  only: never money and never in a decision. The symbol and name are display only and always shown
+  beside the full mint. The decimals are the venue's and are re-read from the mint before any use. No remote
   image is ever loaded: the CSP allows img-src 'self' data: only, so at most a mint-derived
   identicon.
 GET  /v1/owner/tokens/:mint/risk?chain= -> TokenRisk
