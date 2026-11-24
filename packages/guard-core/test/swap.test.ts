@@ -120,6 +120,15 @@ describe('swaps (CR-021)', () => {
     expect(getPosition(h.db, 'agent-1', CHAIN, BONK).amount).toBe(994_000_000n)
   })
 
+  it('marks nothing untested when the buy was tested before asking', async () => {
+    const { h } = await setup()
+    await h.agent('POST', '/v1/agent/swap', buy())
+    const owner = await signedIn(h)
+    const [asked] = (await owner.call('GET', '/v1/owner/overview')).json().pending
+    expect(asked.untested).toBeUndefined()
+    expect(asked.simulation.balanceChanges).not.toEqual([])
+  })
+
   it('tops the hot wallet up for a buy before the test run', async () => {
     const { h, chain } = await setup({ balance: 0n })
     await bought(h)
@@ -134,6 +143,8 @@ describe('swaps (CR-021)', () => {
     expect((await h.agent('GET', '/v1/agent/portfolio/agent-1')).json().tradedToday).toBe('0')
     const owner = await signedIn(h)
     const id = res.json().intentId
+    const [asked] = (await owner.call('GET', '/v1/owner/overview')).json().pending
+    expect(asked).toMatchObject({ untested: true, simulation: { balanceChanges: [] } })
     await owner.call('POST', `/v1/owner/intents/${id}/decision`, {
       decision: 'approve',
       assertion: await owner.stepUp('approve_intent', { intentId: id }),
