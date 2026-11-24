@@ -214,6 +214,8 @@ describe('trading routes', () => {
     risks: [],
     flags: ['NEW_TOKEN'],
     quotedAt: '2026-11-24T16:00:00.000Z',
+    decimalsIn: 6,
+    decimalsOut: 5,
   }
   const input = {
     chain: 'solana:x',

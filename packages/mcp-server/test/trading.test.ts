@@ -65,6 +65,10 @@ const quote: Quote = {
   risks: [],
   flags: [],
   quotedAt: '2026-11-24T16:00:00.000Z',
+  decimalsIn: 6,
+  decimalsOut: 5,
+  symbolIn: 'USDC',
+  symbolOut: 'BONK',
 }
 
 describe('swap tool', () => {
@@ -186,8 +190,9 @@ describe('quote tool', () => {
       tokenOut: BONK,
       amountIn: '5000000',
     })
+    expect(text).toContain('Spend: $5.00 USDC.')
     expect(text).toContain(
-      `Expected: 250000000 units of ${BONK}; at least 247500000 units of ${BONK}.`,
+      `Expected: 2500 of ${BONK} (calls itself "BONK") (250000000 smallest units); at least 2475 of ${BONK} (calls itself "BONK") (247500000 smallest units).`,
     )
     expect(text).toContain('Slippage 100 bps, price impact 12 bps.')
     expect(text).toContain('No route to sell this token back was found.')

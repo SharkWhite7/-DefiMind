@@ -28,6 +28,10 @@ export const swapQuote = z.object({
   risks: z.array(code).max(32),
   flags: z.array(flag).max(8),
   quotedAt: z.iso.datetime({ offset: true }),
+  decimalsIn: decimals,
+  decimalsOut: decimals,
+  symbolIn: symbol,
+  symbolOut: symbol,
 }) satisfies z.ZodType<Omit<SwapQuote, 'risks'> & { risks: string[] }>
 
 export const portfolio = z.object({

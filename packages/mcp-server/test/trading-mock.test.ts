@@ -16,7 +16,7 @@ describe('trading tools against a fake guard-core over HTTP', () => {
     const client = await connect(httpGuard({ baseUrl: mock.url, agentId: 'agent-1', token: 'tok' }))
 
     const quoted = await call(client, 'quote', { from: 'USDC', to: BONK, amountUsd: '2' })
-    expect(quoted.text).toContain(`Expected: 100000000 units of ${BONK}`)
+    expect(quoted.text).toContain(`Expected: 100 of ${BONK} (100000000 smallest units)`)
     expect(quoted.text).toContain('- NEW_TOKEN: the first buy of this token')
 
     const bought = await call(client, 'swap', {

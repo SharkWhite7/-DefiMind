@@ -198,9 +198,11 @@ function held(
 }
 
 function describeQuote(quote: Quote, swap: Resolved, deps: ToolDeps, at: string): string {
-  const out = (atomic: string) => amountOf(quote.tokenOut, atomic, deps, at)
+  const out = (atomic: string) =>
+    held(quote.tokenOut, atomic, quote.decimalsOut, quote.symbolOut, deps, at)
   const lines = [
     `Quote from ${quote.venue}, ${quote.quotedAt}: ${describeTrade(swap, deps, at)}.`,
+    `Spend: ${held(quote.tokenIn, quote.amountIn, quote.decimalsIn, quote.symbolIn, deps, at)}.`,
     `Expected: ${out(quote.expectedOut)}; at least ${out(quote.minAmountOut)}.`,
     `Slippage ${quote.slippageBps} bps, price impact ${quote.priceImpactBps} bps.`,
     swap.side === 'buy'

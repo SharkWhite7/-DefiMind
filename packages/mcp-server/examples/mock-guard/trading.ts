@@ -32,6 +32,8 @@ export function tradingRoutes(options: { usd: string; tradable: string[]; now: (
       risks: [],
       flags: buy && !held.has(tokenOut) ? ['NEW_TOKEN'] : [],
       quotedAt: options.now().toISOString(),
+      decimalsIn: 6,
+      decimalsOut: 6,
     }
   }
 
