@@ -4,6 +4,16 @@ import { parseAmount, toAmount } from '../domain/amount.js'
 import type { Db } from './client.js'
 import { dailyTrades, positions } from './schema.js'
 
+/** Every chain's buys today, for the portfolio. */
+export function boughtTodayAll(db: Db, agentId: string, day: string): bigint {
+  return db
+    .select({ bought: dailyTrades.bought })
+    .from(dailyTrades)
+    .where(and(eq(dailyTrades.agentId, agentId), eq(dailyTrades.day, day)))
+    .all()
+    .reduce((sum, row) => sum + parseAmount(row.bought), 0n)
+}
+
 export function boughtToday(db: Db, agentId: string, chain: ChainId, day: string): bigint {
   const row = db
     .select({ bought: dailyTrades.bought })

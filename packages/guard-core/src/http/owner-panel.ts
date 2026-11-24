@@ -9,6 +9,7 @@ import { pushEndpointAllowed } from '../domain/push-host.js'
 import type { PasskeySetup } from '../service/passkeys.js'
 import { type OwnerAction, stepUpChallenge, verifyStepUp } from '../service/step-up.js'
 import type { X402Deps } from '../service/x402.js'
+import { ownerPortfolio } from '../service/portfolio.js'
 import { controls } from './control.js'
 import { decideIntent, decideMandateFor } from './decisions.js'
 import { ownerExecutions } from './executions.js'
@@ -107,6 +108,7 @@ export function ownerPanelRoutes(
       return decideMandateFor(deps, id, decision, { via: 'panel', passkey })
     })
 
+    app.get('/v1/owner/portfolio', async () => ownerPortfolio(db, now()))
     app.get('/v1/owner/report', async (request) => control.report(request.query))
     // CR-012 mirror: the panel matches a payment's execution entry to its receipt by hash.
     app.get('/v1/owner/receipts', async (request) => control.receipts(request.query))

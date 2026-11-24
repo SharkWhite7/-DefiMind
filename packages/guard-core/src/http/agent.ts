@@ -4,6 +4,7 @@ import * as repo from '../db/repo.js'
 import { hashToken, parseBearer } from '../domain/auth.js'
 import { UpstreamError } from '../adapters/upstream.js'
 import { budget } from '../service/budget.js'
+import { portfolio } from '../service/portfolio.js'
 import { transfer } from '../service/transfer.js'
 import { paidFetch, type X402Deps } from '../service/x402.js'
 import { appendExecution } from '../service/executions.js'
@@ -134,6 +135,12 @@ export function agentRoutes(
         return reply.code(404).send({ error: 'not_found' })
       }
       return intent
+    })
+
+    app.get('/portfolio/:agentId', async (request) => {
+      const { agentId } = agentIdParam.parse(request.params)
+      ownPolicy(request, agentId)
+      return portfolio(db, agentId, deps.now())
     })
 
     app.get('/budget/:agentId', async (request) => {
