@@ -407,7 +407,7 @@ DELETE /v1/owner/push/:id
 GET  /v1/owner/push/key -> { publicKey }   the VAPID public key, base64url; session only (CR-014)
   Web Push with VAPID (VAPID_PRIVATE_KEY_FILE, VAPID_SUBJECT) and RFC 8291 encryption. Payload
   { kind: "approval" | "mandate" | "executed" | "attack" | "breaker" | "passkey_enrolled" | "kill"
-  | "chain_broken" (CR-013),
+  | "chain_broken" (CR-013) | "backup_failed" (CR-024),
   agentId?, chain?, amount?, intentId?, sentAt } and never a recipient or URL. A 404 or 410 from the
   push service deletes the subscription.
 GET  /panel/enrol#code=…   the first-passkey page; src/scripts/passkey-code.ts prints the link
@@ -521,7 +521,8 @@ serves a backup over HTTP. With BACKUP_BUCKET_URL set (an S3-compatible bucket, 
 BACKUP_ACCESS_KEY_ID and BACKUP_SECRET_ACCESS_KEY as secrets), each backup is also uploaded,
 encrypted with AES-256-GCM under BACKUP_ENCRYPTION_KEY, which a bucket requires. The doctor's
 backup check reads the newest backup: ok under 26 hours old, warn otherwise, and it names the last
-upload when a bucket is set. A failed backup or upload alerts the owner once a day.
+upload when a bucket is set. A failed backup or upload alerts the owner once a day:
+{ kind: "backup_failed" } to the bot and Web Push "backup_failed".
 
 Hosting behind one public listener. ADMIN_ROUTES=false leaves /v1/admin/* unregistered, as the
 one-click deployment does. With one listener (PUBLIC_PORT unset), guard-core refuses to start with
@@ -694,6 +695,7 @@ POST {BOT_URL}/hooks/alert             (same X-Guard-Signature scheme; CR-010)
   | { kind: "passkey_enrolled", detail: string, sentAt: string }
   | { kind: "chain_broken", detail: string, sentAt: string }   (CR-013)
   | { kind: "admin_loosen_refused", detail: string, sentAt: string }   (CR-022)
+  | { kind: "backup_failed", detail: string, sentAt: string }   (CR-024: never a URL or a key)
 The approval-request body gains flags: ("RECIPIENT_CHANGED" | "PRICE_JUMP")[] (empty when none),
 pinned?: { recipient, amount } (the last executed payment to that domain, present with a flag),
 passkey: boolean (approve only through /owner/approve), and mandate?: Mandate when the request is to
