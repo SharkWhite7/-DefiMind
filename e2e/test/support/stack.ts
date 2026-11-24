@@ -69,6 +69,7 @@ export async function stack(options: { chain?: StubChain; net?: Net; panel?: boo
     handlers: {
       approvalRequest: (request) => required(late.tg).desk.post(request),
       intentEvent: (event) => required(late.tg).desk.event(event),
+      alert: (event) => required(late.tg).desk.alert(event),
     },
     logger: log,
   })
