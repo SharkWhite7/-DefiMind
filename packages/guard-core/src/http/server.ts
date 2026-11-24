@@ -3,19 +3,18 @@ import type { ChainId, KillTarget } from '@defimind/shared'
 import rateLimit from '@fastify/rate-limit'
 import Fastify, {
   type FastifyBaseLogger,
-  type FastifyError,
   type FastifyInstance,
   type FastifyReply,
   type FastifyRequest,
 } from 'fastify'
 import type { KeyObject } from 'node:crypto'
-import { z } from 'zod'
 import { botNotifier, type BotNotifier } from '../adapters/bot.js'
-import { botSettings, type Config } from '../config.js'
+import { botSettings, publicAdmin, type Config } from '../config.js'
 import type { Db } from '../db/client.js'
 import { usdcFor } from '../chains.js'
 import { parseBearer, tokenMatches } from '../domain/auth.js'
 import { serializeError } from '../domain/redact.js'
+import { errorHandler } from './errors.js'
 import type { PasskeySetup } from '../service/passkeys.js'
 import { publicKeyHex } from '../service/receipts.js'
 import { serial } from '../service/serial.js'
@@ -182,16 +181,7 @@ async function serve(
     keyGenerator: ipOf,
   })
 
-  app.setErrorHandler((error: FastifyError | z.ZodError, request, reply) => {
-    if (error instanceof z.ZodError) {
-      return reply.code(400).send({ error: 'invalid_request', issues: issuesOf(error) })
-    }
-    if (error.statusCode !== undefined && error.statusCode < 500) {
-      return reply.code(error.statusCode).send({ error: error.message })
-    }
-    request.log.error({ err: error }, 'unhandled error')
-    return reply.code(500).send({ error: 'internal_error' })
-  })
+  app.setErrorHandler(errorHandler)
 
   function requireToken(expected: string) {
     return async (request: FastifyRequest, reply: FastifyReply) => {
@@ -202,6 +192,12 @@ async function serve(
     }
   }
 
+  // What the doctor reads, the same on the panel's and the admin's (CR-017, CR-022).
+  const doctor = {
+    ...(config.BOT_URL === undefined ? {} : { botUrl: config.BOT_URL }),
+    databaseUrl: config.DATABASE_URL,
+    publicAdmin: publicAdmin(config),
+  }
   if (surface !== 'private') {
     // The owner's passkey page faces the internet: it is opened from Telegram on any device.
     const rp =
@@ -220,8 +216,7 @@ async function serve(
           deps,
           rp,
           ownerPanelRoutes(deps, rp, {
-            ...(config.BOT_URL === undefined ? {} : { botUrl: config.BOT_URL }),
-            databaseUrl: config.DATABASE_URL,
+            ...doctor,
             hosted: config.ADMIN_ROUTES === 'false',
             ...(pushKey === undefined ? {} : { pushKey }),
             ...(keys === undefined ? {} : { keys }),
@@ -248,8 +243,7 @@ async function serve(
         admin.addHook('preHandler', requireToken(config.ADMIN_TOKEN))
         await admin.register(
           adminRoutes(deps, {
-            ...(config.BOT_URL === undefined ? {} : { botUrl: config.BOT_URL }),
-            databaseUrl: config.DATABASE_URL,
+            ...doctor,
             ...(config.PASSKEY_RP_ID === undefined ? {} : { passkeyRpId: config.PASSKEY_RP_ID }),
             ...(config.PASSKEY_ORIGIN === undefined
               ? {}
@@ -289,10 +283,6 @@ async function serve(
       ? reply.code(404).send({ error: 'not_configured' })
       : { publicKey: publicKeyHex(deps.receiptKey) },
   )
-}
-
-function issuesOf(error: z.ZodError): { path: string; message: string }[] {
-  return error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message }))
 }
 
 export type Server = FastifyInstance

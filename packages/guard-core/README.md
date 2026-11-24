@@ -13,9 +13,9 @@ pnpm --filter @defimind/guard-core create-agent my-agent   # prints the agent to
 pnpm --filter @defimind/guard-core dev                     # API on 127.0.0.1:8787
 ```
 
-A new agent's policy is empty and in shadow mode, so it pays nothing until the owner sets a policy
-with `PUT /v1/admin/policy/:agentId` and switches it to `mode: "live"`. Without a terminal, the
-owner does the same through the admin API (the bot's commands use it):
+A new agent's policy is empty and in shadow mode, so it pays nothing until the owner opens its
+policy and switches it to `mode: "live"` in the panel, with the passkey step-up. The admin API
+below only tightens (CR-022):
 
 - `POST /v1/admin/agents { agentId }` returns `{ agentId, token }`. The token is shown once; only its
   hash is kept. 409 `{ error: "exists" }` for a taken id.
@@ -315,6 +315,27 @@ partial set stops the start, naming the missing variables. With none set:
 - the doctor leaves out its bot check instead of failing it.
 
 With all three set, everything is as before.
+
+### The admin token only tightens (CR-022)
+
+- An admin write that loosens is refused with 403 `loosen_in_panel`, before or after the first
+  passkey and on every chain:
+  - `PUT /v1/admin/policy/:agentId` with anything `loosened()` counts: a raised limit, a new chain,
+    token, recipient or domain, going live, unpausing, dropping `requireMandate`, or any trading
+    loosening;
+  - every `POST /v1/admin/resume`.
+- Each refusal is audited (`admin_loosen_refused`, `via: "admin"`) and alerts the owner: the bot's
+  `admin_loosen_refused` alert and a Web Push "attack".
+- `POST /v1/admin/mandates` opens the mandate as an agent's would: above the approval threshold it
+  waits for the owner in the panel.
+- Tightening, reads, pause, kill, revoke and creating an agent are unchanged.
+- Loosening happens only in the owner's panel, with the passkey step-up (CR-015). A leaked admin
+  token can stop, narrow and read, and nothing more.
+- With one listener (no `PUBLIC_PORT`), the admin routes on and `HOST` beyond loopback, guard-core
+  refuses to start, because the admin routes would face every interface. Split the listeners, keep
+  `HOST` on loopback, set `ADMIN_ROUTES=false`, or set `ALLOW_PUBLIC_ADMIN=true`, which starts with
+  a warning.
+- The start-up log names each listener's address and its route groups (`listener layout`).
 
 ### Guarded trading (CR-021)
 

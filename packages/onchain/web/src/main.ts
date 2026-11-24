@@ -16,7 +16,7 @@ import { proveSolana, unreadable } from './proof.js'
 import { button, decoded, link, show, waitFor } from './view.js'
 import { openInPhantom, phantom, type Wallet } from './wallet.js'
 
-const { rpc: RPC_URLS, usdc: USDC_MINTS, hot: HOT_WALLETS } = config
+const { rpc: RPC_URLS, usdc: USDC_MINTS, hot: HOT_WALLETS, agents: AGENT_WALLETS } = config
 const built = configured
 
 const key = z
@@ -69,9 +69,13 @@ async function prepare(
       askDeposit('USDC', request.amount),
     )
   }
-  const ours = built(HOT_WALLETS, request.cluster)
+  const shared = built(HOT_WALLETS, request.cluster)
+  const agents = built(AGENT_WALLETS, request.cluster) ?? []
   const hot = whichHot(
-    ours === undefined ? undefined : new PublicKey(ours),
+    {
+      shared: shared === undefined ? undefined : new PublicKey(shared),
+      agents: agents.map((key) => new PublicKey(key)),
+    },
     request.hot,
     request.action === 'kill',
     (a, b) => a.equals(b),
@@ -99,12 +103,13 @@ async function main() {
   const query = Object.fromEntries(new URLSearchParams(location.search))
   const evm = built(config.evm, query['cluster'] ?? '')
   if (evm) {
-    const { hot, ...chain } = evm
+    const { hot, agents = [], ...chain } = evm
     await evmMain(query, {
       ...chain,
       module: getAddress(chain.module),
       usd: getAddress(chain.usd),
       ...(hot ? { hot: getAddress(hot) } : {}),
+      agents: agents.map((key) => getAddress(key)),
       name: query['cluster']!,
       rpc: RPC_URLS[query['cluster']!]!,
     })

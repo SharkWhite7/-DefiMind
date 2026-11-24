@@ -188,6 +188,19 @@ autonomous Squads multisig reports its threshold out of the members who can vote
 signers: 1 }`: its config authority can add itself a spending limit and empty the vault with no vote,
 whatever the threshold says.
 
+### Agent wallets (CR-022)
+
+An agent with its own wallet is one more hot wallet on the same multisig or Safe. Build an adapter
+for it exactly as for the shared one, with the agent's key as `hotWallet` (Solana) or as the
+wallet's account (EVM). `getAllowanceState`, `buildKillTx` and every payment then act on that
+wallet's own limit only: on Solana the spending limit whose PDA derives from the agent's key, with
+it as the only member and destination; on EVM the Allowance Module delegate for the agent's address,
+with its own allowance. Killing one never touches another's.
+
+`signPageHtml` takes `agents` per cluster next to `hot`. The page grants add-limit or enable to the
+shared wallet or any of those, and refuses every other key; a link naming no hot wallet means the
+shared one. The hosted page has none and never serves add-limit.
+
 ### Anchors (CR-013)
 
 `createSvmAnchor({ chain, rpcUrl, secretKey })` returns `{ chain, publish(memo) }`. `publish`
