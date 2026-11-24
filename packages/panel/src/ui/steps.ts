@@ -40,7 +40,7 @@ async function setupChain(ctx: Context): Promise<Chain | undefined> {
   return chains.find((c) => isSolana(c.chain)) ?? chains[0]
 }
 
-function walletLinks(link: string | undefined, what: string): Child[] {
+export function walletLinks(link: string | undefined, what: string): Child[] {
   if (link === undefined) {
     return [el('p', { class: 'flag' }, 'The signing page does not serve this chain yet.')]
   }

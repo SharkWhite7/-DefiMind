@@ -10,7 +10,7 @@ import { button, card, el } from './dom.js'
  * one), the owner removes the limit in the vault's own app. The agents are already paused; this only
  * takes away what the hot wallet could still draw.
  */
-function byHand(chain: string) {
+function byHand(chain: string, paused: string) {
   const [app, where] = isSolana(chain)
     ? [
         'https://app.squads.so',
@@ -24,13 +24,16 @@ function byHand(chain: string) {
     el(
       'p',
       {},
-      `Your agents are paused. To be sure the vault pays nothing more, connect your wallet there, ${where}.`,
+      `${paused} To be sure the vault pays nothing more, connect your wallet there, ${where}.`,
     ),
     el('a', { href: app, class: 'button primary', rel: 'noreferrer' }, `Open ${new URL(app).host}`),
   ]
 }
 
-function onchain(tx: KillView['ownerTransactions'][number]) {
+export function onchain(
+  tx: KillView['ownerTransactions'][number],
+  paused = 'Your agents are paused.',
+) {
   const built = tx.payload !== null
   const linked = tx.link !== undefined || tx.pageLink !== undefined
   return card(
@@ -39,7 +42,7 @@ function onchain(tx: KillView['ownerTransactions'][number]) {
     tx.link !== undefined && el('a', { href: tx.link, class: 'button primary' }, 'Open in Phantom'),
     tx.pageLink !== undefined &&
       el('a', { href: tx.pageLink, class: 'button' }, 'Open on this computer'),
-    ...(linked ? [] : byHand(tx.chain)),
+    ...(linked ? [] : byHand(tx.chain, paused)),
     built &&
       tx.link === undefined &&
       el(
@@ -112,7 +115,7 @@ export async function kill(ctx: Context): Screen {
         const done = await ctx.api.kill()
         const agents = done.pausedAgents === 1 ? 'agent' : 'agents'
         ctx.say(`Stopped. ${done.pausedAgents} ${agents} paused.`, 'done')
-        result.replaceChildren(...done.ownerTransactions.map(onchain))
+        result.replaceChildren(...done.ownerTransactions.map((tx) => onchain(tx)))
       },
       'kill',
     ),
