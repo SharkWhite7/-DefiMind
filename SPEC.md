@@ -517,11 +517,13 @@ build so a modified /sign can be detected.
 Backups (CR-024). guard-core backs up its own database every day at BACKUP_HOUR_UTC (default 3),
 with SQLite's online backup (the same as db:backup), to backups/guard-<UTC date>.db beside the
 database on the data volume, mode 0600. It keeps the newest 14 and deletes older ones, and never
-serves a backup over HTTP. With BACKUP_BUCKET_URL set (an S3-compatible bucket, with
-BACKUP_ACCESS_KEY_ID and BACKUP_SECRET_ACCESS_KEY as secrets), each backup is also uploaded,
-encrypted with AES-256-GCM under BACKUP_ENCRYPTION_KEY, which a bucket requires. The doctor's
-backup check reads the newest backup: ok under 26 hours old, warn otherwise, and it names the last
-upload when a bucket is set. A failed backup or upload alerts the owner once a day:
+serves a backup over HTTP. With BACKUP_BUCKET_URL set (an S3-compatible bucket, path-style
+https://<endpoint>/<bucket>[/<prefix>], signed with SigV4 for BACKUP_REGION, default "auto", with
+BACKUP_ACCESS_KEY_ID and BACKUP_SECRET_ACCESS_KEY as secrets), each backup is also uploaded as
+<name>.enc, encrypted with AES-256-GCM under BACKUP_ENCRYPTION_KEY (12-byte IV, ciphertext, 16-byte
+tag), which a bucket requires. The doctor's backup check reads the newest backup: ok under 26 hours
+old, warn otherwise; with a bucket it names the last upload and warns until one is under 26 hours
+old. A failed backup or upload alerts the owner once a day:
 { kind: "backup_failed" } to the bot and Web Push "backup_failed".
 
 Hosting behind one public listener. ADMIN_ROUTES=false leaves /v1/admin/* unregistered, as the
