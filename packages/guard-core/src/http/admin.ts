@@ -1,6 +1,7 @@
 import type { RegistrationResponseJSON } from '@simplewebauthn/server'
 import type { FastifyInstance } from 'fastify'
 import { revokeMandate } from '../db/mandates.js'
+import { loosened } from '../domain/loosen.js'
 import * as repo from '../db/repo.js'
 import { openMandate } from '../service/mandates.js'
 import { enrol, enrolmentOptions, issueEnrolCode } from '../service/passkeys.js'
@@ -91,9 +92,10 @@ export function adminRoutes(
 
     app.get('/chains', async (request) => ({ chains: await control.chains(request.log) }))
 
-    // The owner's own mandates start active: there is nobody else to ask.
+    // A mandate lets an agent pay, so one opened with the admin token alone waits for the owner's
+    // passkey in the panel, like an agent's own (CR-022).
     app.post('/mandates', async (request, reply) =>
-      mandateReply(reply, await openMandate(deps, mandateRequest.parse(request.body), true)),
+      mandateReply(reply, await openMandate(deps, mandateRequest.parse(request.body), false)),
     )
 
     app.post('/mandates/:id/revoke', async (request) => {
@@ -115,17 +117,34 @@ export function adminRoutes(
 
     app.get('/receipts', async (request) => control.receipts(request.query))
 
+    // CR-022: the admin token alone only tightens. Anything loosened() counts, from a raised limit
+    // to a new recipient or going live, takes the owner's passkey in the panel (CR-015), so a
+    // leaked admin token cannot widen what an agent may pay.
     app.put('/policy/:agentId', async (request) => {
       const { agentId } = agentIdParam.parse(request.params)
-      return control.putPolicy({ agentId, ...policyBody.parse(request.body) })
+      const next = { agentId, ...policyBody.parse(request.body) }
+      const fields = loosened(control.existing(agentId), next)
+      if (fields.length > 0) {
+        repo.audit(db, { event: 'admin_loosen_refused', agentId, detail: { fields } }, now())
+        throw new HttpError(403, 'loosen_in_panel')
+      }
+      return control.putPolicy(next)
     })
 
     app.post('/pause', async (request) =>
       control.setPaused(agentIdParam.parse(request.body).agentId, true),
     )
-    app.post('/resume', async (request) =>
-      control.setPaused(agentIdParam.parse(request.body).agentId, false),
-    )
+    // Resuming lets a stopped agent pay again: the panel's resume, with its passkey (CR-015).
+    app.post('/resume', async (request) => {
+      const { agentId } = agentIdParam.parse(request.body)
+      control.existing(agentId)
+      repo.audit(
+        db,
+        { event: 'admin_loosen_refused', agentId, detail: { fields: ['paused'] } },
+        now(),
+      )
+      throw new HttpError(403, 'loosen_in_panel')
+    })
 
     app.post('/kill', async (request) => control.kill(request.log))
 
