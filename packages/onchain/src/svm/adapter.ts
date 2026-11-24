@@ -1,4 +1,5 @@
 import {
+  CHAINS,
   USDC_DECIMALS,
   type Address,
   type AllowanceState,
@@ -35,6 +36,8 @@ import { simulateMessage, topUpFor } from './simulate.js'
 import { confirm, connect, findSpendingLimit, spendingLimitPda, VAULT_INDEX } from './squads.js'
 import { useSpendingLimit } from './draw.js'
 import { expectedTransfer, transferInstructions, type Payment } from './transfer.js'
+import { jupiter, type Venue } from './swap/jupiter.js'
+import { swaps } from './swap/service.js'
 import { gatedScheme } from './x402.js'
 
 export interface SvmAdapterDeps {
@@ -44,6 +47,8 @@ export interface SvmAdapterDeps {
   hotWallet: Keypair
   multisigPda: PublicKey
   mint: PublicKey
+  /** CR-021: where swaps are quoted and built. Without one the adapter trades nothing. */
+  venue?: Venue
 }
 
 /** An x402 payment someone else built, as guard-core sees it before signing. */
@@ -68,6 +73,8 @@ export function createSvmAdapter(config: {
   hotWalletSecretKey: Uint8Array
   multisig: Address
   mint: Address
+  /** Jupiter's Swap API base, for a self-hosted or paid endpoint. */
+  jupiterUrl?: string
 }): SvmAdapter {
   return svmAdapter({
     chain: config.chain,
@@ -75,6 +82,8 @@ export function createSvmAdapter(config: {
     hotWallet: Keypair.fromSecretKey(config.hotWalletSecretKey),
     multisigPda: new PublicKey(config.multisig),
     mint: new PublicKey(config.mint),
+    // Jupiter routes mainnet only; on any other cluster the adapter trades nothing.
+    ...(config.chain === CHAINS.solanaMainnet ? { venue: jupiter(config.jupiterUrl) } : {}),
   })
 }
 
@@ -99,6 +108,7 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
   const { chain, connection, hotWallet, multisigPda, mint } = deps
   const limit = spendingLimitPda(multisigPda, hotWallet.publicKey)
   const draw = { multisigPda, spendingLimit: limit, mint, member: hotWallet.publicKey }
+  const trading = deps.venue && swaps({ connection, hotWallet, dollar: mint, venue: deps.venue })
 
   function payment(recipient: Address, amount: Amount, feePayer = hotWallet.publicKey): Payment {
     return {
@@ -146,8 +156,20 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
     }).compileToV0Message()
   }
 
+  async function simulateSwap(intent: PayIntent): Promise<SimulationOutcome> {
+    if (intent.chain !== chain)
+      return { simulation: NOT_SIMULATED, rejectReasons: ['CHAIN_NOT_ALLOWED'] }
+    if (!trading) return { simulation: NOT_SIMULATED, rejectReasons: ['VENUE_NOT_ALLOWED'] }
+    try {
+      return await trading.simulate(intent)
+    } catch (error) {
+      return notSimulated(error)
+    }
+  }
+
   return {
     chain,
+    ...(trading ? { quoteSwap: trading.quoteSwap, getPositions: trading.getPositions } : {}),
 
     async getAllowanceState(): Promise<AllowanceState> {
       const delegate = hotWallet.publicKey.toBase58()
@@ -191,6 +213,7 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
     },
 
     async simulate(intent: PayIntent): Promise<SimulationOutcome> {
+      if (intent.kind === 'swap') return simulateSwap(intent)
       const refused = refuse(intent)
       if (refused.length > 0) {
         return { simulation: NOT_SIMULATED, rejectReasons: refused }
@@ -230,6 +253,10 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
     },
 
     async send(intent: PayIntent): Promise<TxId> {
+      if (intent.kind === 'swap') {
+        if (!trading || intent.chain !== chain) throw new Error('send_refused: VENUE_NOT_ALLOWED')
+        return trading.send(intent)
+      }
       const refused = refuse(intent)
       if (refused.length > 0) {
         throw new Error(`send_refused: ${refused.join(',')}`)
