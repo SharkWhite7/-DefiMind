@@ -175,6 +175,14 @@ and by the slot its code was deployed at. The test reads that code from mainnet 
 
 To refresh the fixtures, run `pnpm record:swap` again.
 
+### Landed changes (ON-32)
+
+`getLandedChanges(txId)` (Solana) returns what a confirmed transaction really moved for the hot
+wallet: `{ token, delta }[]`, signed atomic deltas netted per mint from the transaction's own pre and
+post token balances, none zero, SOL left out. A swap lands at its own price, never exactly the test
+run's, so positions are booked from this. A failed transaction throws `tx_failed`, one the RPC does
+not have yet `tx_not_found`. Tested against the owner's recorded mainnet buy, Close and top-up.
+
 ### Vault (CR-019)
 
 `getVault()` returns `{ address, token, balance }`. This is the vault deposits go to: the Squads
@@ -375,6 +383,11 @@ design is in [ADR 003](../../docs/adr/003-phantom-owner.md).
     before the next reset plus the whole cap again after it, because the reset always falls within
     a day. The vault's balance bounds X. Both numbers are shown, with the reset time. After a kill,
     X is 0.
+  - **Agent wallets (CR-022):** a page built with agents' own wallets counts every one of them, and
+    the headline becomes "The most this deployment's agents can draw in the next 24 hours: X". X adds
+    up each wallet's own window, one line per wallet, still bounded by the vault's balance. The
+    wallet list comes from the build, never from the link, so a limit or delegate outside it is still
+    flagged.
   - **Below it:** the vault's owner, members and threshold (Squads), or its owners and threshold
     (Safe), and the vault's balance.
   - **"Verified" needs all of these.** Otherwise the headline is "Not verified", followed by what

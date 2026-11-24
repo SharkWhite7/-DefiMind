@@ -138,16 +138,17 @@ async function main() {
 
 /** Read-only: anyone can open it, with no wallet, and nothing on the way asks for a signature. */
 async function prove(connection: Connection, request: Extract<SolanaLink, { action: 'proof' }>) {
-  const hot = built(HOT_WALLETS, request.cluster)
+  const shared = built(HOT_WALLETS, request.cluster)
+  const hotWallets = [...(shared ? [shared] : []), ...(built(AGENT_WALLETS, request.cluster) ?? [])]
   const usdc = built(USDC_MINTS, request.cluster)
-  if (!hot || !usdc) {
+  if (hotWallets.length === 0 || !usdc) {
     show('Not verified', [`This page knows no hot wallet or USDC for ${request.cluster}.`], 'stop')
     return
   }
   show('Reading the chain…', [])
   const proof = await proveSolana(connection, {
     ...request,
-    hotWallet: new PublicKey(hot),
+    hotWallets: hotWallets.map((key) => new PublicKey(key)),
     usdc: new PublicKey(usdc),
   }).catch(unreadable)
   show(proof.title, proof.lines, proof.verified ? 'done' : 'stop')

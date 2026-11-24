@@ -12,7 +12,7 @@ import {
 } from '../../src/svm/squads.js'
 import { USDC } from '../../test/fixture.js'
 import { Clock } from '../../test/svm.js'
-import { heading, lines, stage } from './harness.js'
+import { heading, lines, reconfigure, stage } from './harness.js'
 
 /** The proof page on Solana: read-only, no wallet, against the real Squads program. */
 let browser: Browser
@@ -217,5 +217,52 @@ describe('the proof page on Solana', () => {
     const page = await proof(Keypair.generate().publicKey)
     expect(await heading(page).textContent()).toBe('Not verified')
     expect((await lines(page))[0]).toMatch(/^There is no Squads multisig at /)
+  })
+})
+
+describe("the proof page with agents' own wallets (CR-022)", () => {
+  let agent: PublicKey
+
+  beforeEach(async () => {
+    agent = Keypair.generate().publicKey
+    await reconfigure(s.server.dist, (config) => {
+      config.agents['localnet'] = [agent.toBase58()]
+    })
+  })
+
+  it("adds up every wallet's own limit", async () => {
+    await addLimit(agent, agent, 20n * USDC)
+    const page = await proof()
+    expect(await heading(page).textContent()).toBe(
+      "The most this deployment's agents can draw in the next 24 hours: 240 USDC",
+    )
+    const text = (await lines(page)).join('\n')
+    expect(text).toContain('2 daily spending limits, one per hot wallet of this deployment')
+    expect(text).toMatch(
+      new RegExp(
+        `${agent.toBase58()}: left until \\S+: 20 USDC\\. Then the daily cap again: 20 USDC\\.`,
+      ),
+    )
+  })
+
+  it("refuses a limit at an agent's address that another key may use", async () => {
+    const other = Keypair.generate().publicKey
+    const extra = await addLimit(agent, other)
+    const page = await proof()
+    expect(await heading(page).textContent()).toBe('Not verified')
+    expect(await lines(page)).toContain(
+      `Spending limit ${extra.toBase58()}: its members are ${other.toBase58()}; ` +
+        `its destinations are ${other.toBase58()}.`,
+    )
+  })
+
+  it('still refuses a limit for a key outside the deployment', async () => {
+    const other = Keypair.generate().publicKey
+    const extra = await addLimit(other, other)
+    const page = await proof()
+    expect(await lines(page)).toContain(
+      `Spending limit ${extra.toBase58()}: it is not the limit of any hot wallet of this ` +
+        `deployment; its members are ${other.toBase58()}; its destinations are ${other.toBase58()}.`,
+    )
   })
 })

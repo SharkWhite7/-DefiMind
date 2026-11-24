@@ -536,7 +536,8 @@ label.check {
 }
 
 input:not([type='checkbox']),
-textarea {
+textarea,
+select {
   width: 100%;
   min-height: 44px;
   padding: 10px 12px;
@@ -549,7 +550,8 @@ textarea {
 }
 
 input:not([type='checkbox']):focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   border-color: var(--blue-ink);
 }
 
@@ -835,4 +837,45 @@ body[data-screen='enrol'] .primary {
   padding-top: 12px;
   margin-top: 12px;
   border-top: 1px solid var(--line);
+}
+
+/* CR-025: a token is its mint-drawn mark, its claimed name and its whole mint. */
+.token {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.token > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.token select {
+  min-width: 0;
+  flex: 1;
+}
+
+.identicon {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line2);
+  border-radius: 5px;
+  background: var(--raise);
+}
+
+.risk h3 {
+  margin: 14px 0 6px;
+}
+
+.facts {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.facts li + li {
+  margin-top: 4px;
 }
