@@ -216,6 +216,12 @@ export interface SwapQuote {
   minAmountOut: Amount
   slippageBps: number
   priceImpactBps: number
+  /** Read from each mint onchain by the adapter, never from the venue. */
+  decimalsIn: number
+  decimalsOut: number
+  /** Display only and untrusted: always shown beside the mint. */
+  symbolIn?: string
+  symbolOut?: string
   /** A sell quote for the amount bought; null when there is no exit route. */
   exitImpactBps: number | null
   risks: RejectCode[]
