@@ -4,6 +4,8 @@ RUN corepack enable
 WORKDIR /repo
 # Only the files guard-core runs from, so no .env, key file or test can end up in a layer.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# The pnpm override's local packages (pnpm-workspace.yaml).
+COPY vendor vendor
 COPY packages/shared/package.json packages/shared/
 COPY packages/onchain/package.json packages/onchain/
 COPY packages/guard-core/package.json packages/guard-core/
@@ -24,6 +26,7 @@ FROM node:22-slim AS panel
 RUN corepack enable
 WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY vendor vendor
 COPY packages/shared/package.json packages/shared/
 COPY packages/panel/package.json packages/panel/
 RUN pnpm install --frozen-lockfile --ignore-scripts --filter @defimind/panel...
@@ -39,6 +42,7 @@ FROM node:22-slim AS sign
 RUN corepack enable
 WORKDIR /repo
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY vendor vendor
 COPY packages/shared/package.json packages/shared/
 COPY packages/onchain/package.json packages/onchain/
 RUN pnpm install --frozen-lockfile --ignore-scripts --filter @defimind/onchain...

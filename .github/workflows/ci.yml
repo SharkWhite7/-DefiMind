@@ -190,6 +190,13 @@ jobs:
           docker run --rm --entrypoint node defimind-guard-core -e \
             "new (require('better-sqlite3'))(':memory:').prepare('select 1').get(); console.log('sqlite ok')"
           docker run --rm --entrypoint sh defimind-guard-core -c 'command -v mount && command -v setpriv'
+          # bigint-buffer must be the vendored JavaScript copy, never the one with a native binding.
+          docker run --rm --entrypoint node defimind-guard-core -e \
+            "const [d] = require('fs').readdirSync('node_modules/.pnpm').filter((n) => n.startsWith('bigint-buffer@'));
+            if (!d.includes('vendor')) throw new Error(d);
+            const b = require('./node_modules/.pnpm/' + d + '/node_modules/bigint-buffer');
+            if (b.toBigIntLE(Buffer.from([1, 2])) !== 513n) throw new Error('toBigIntLE');
+            console.log('bigint-buffer ok:', d)"
 
   foundry:
     name: forge test (onchain)
