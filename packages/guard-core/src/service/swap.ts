@@ -90,6 +90,12 @@ export function withQuote(
   }
 }
 
+/** What the owner is shown for a buy that has drawn nothing yet: it is tested once approved. */
+const UNTESTED = {
+  summary: 'not tested yet: the hot wallet is funded and the swap tested once you approve',
+  balanceChanges: [],
+}
+
 /** POST /v1/agent/quote: read-only, so it decides nothing and records nothing. */
 export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy) {
   const trading = policy.trading
@@ -189,9 +195,11 @@ export async function swap(deps: PaymentDeps, req: SwapRequest): Promise<PayInte
 }
 
 /**
- * The adapter's checks, then the owner or the signature. A buy is topped up first: the adapter
- * cannot draw inside a venue's transaction, and the onchain cap still bounds the draw. In shadow
- * nothing is drawn or signed, so a hot wallet short of the dollar records the quote alone.
+ * The adapter's checks, then the owner or the signature. A buy is topped up before its test run:
+ * the adapter cannot draw inside a venue's transaction, and the onchain cap still bounds the draw.
+ * Nothing is drawn while the owner has not answered (GC-66): a buy that must wait and that the hot
+ * wallet cannot cover goes to the owner untested, and is funded and tested once approved. In
+ * shadow nothing is drawn or signed, so a hot wallet short of the dollar records the quote alone.
  */
 export async function clearSwap(
   deps: PaymentDeps,
@@ -206,6 +214,11 @@ export async function clearSwap(
     parseAmount(await adapter.getHotWalletBalance(intent.token)) < parseAmount(intent.amount)
   if (how.shadow && short) {
     return shadowed(deps, intent, [])
+  }
+  const waits = how.verdict.decision === 'needs_approval' && owner === undefined
+  if (waits && short) {
+    const passkey = needsPasskey(deps.passkey, intent)
+    return askOwner(deps, intent, UNTESTED, { flags: how.verdict.flags, passkey })
   }
   if (how.side === 'buy' && !how.shadow) {
     try {
@@ -233,7 +246,7 @@ export async function clearSwap(
   if (how.shadow) {
     return shadowed(deps, intent, [])
   }
-  if (how.verdict.decision === 'needs_approval' && owner === undefined) {
+  if (waits) {
     const passkey = needsPasskey(deps.passkey, intent)
     return askOwner(deps, intent, simulation, { flags: how.verdict.flags, passkey })
   }
