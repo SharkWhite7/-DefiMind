@@ -383,3 +383,12 @@ export const positions = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.agentId, t.chain, t.token] })],
 )
+
+/**
+ * CR-022: the request an x402 intent was for, as the SHA-256 of its method, full URL with query and
+ * body. An approval is redeemed only by the same request; another one is a new intent.
+ */
+export const x402Requests = sqliteTable('x402_requests', {
+  intentId: text('intent_id').primaryKey(),
+  requestHash: text('request_hash').notNull(),
+})

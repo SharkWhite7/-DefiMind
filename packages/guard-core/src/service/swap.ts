@@ -1,4 +1,4 @@
-import type { ChainAdapter } from '@defimind/onchain'
+import { type ChainAdapter, SwapUnavailable } from '@defimind/onchain'
 import type { PayIntent, Policy, SwapQuote } from '@defimind/shared'
 import { z } from 'zod'
 import { admit } from '../db/breaker.js'
@@ -16,9 +16,6 @@ import { policyHash } from './receipts.js'
 import { simulate } from './simulate.js'
 import { settle } from './swap-settle.js'
 
-/** The adapter's typed refusal (ON-28), read by shape so guard-core needs no chain SDK. */
-const unavailable = z.object({ code: z.enum(['venue_unavailable', 'no_route']) })
-
 /** Read from the mints onchain by the adapter; a quote without them is not one we can record. */
 const mints = z.object({
   decimalsIn: z.number().int().min(0).max(255),
@@ -28,20 +25,6 @@ const mints = z.object({
 })
 
 type Pair = Pick<Trade, 'side' | 'token'>
-
-/**
- * SPEC v0.16's optional swap methods on the ChainAdapter. Declared here until onchain's ON-28 adds
- * them to the interface; an adapter without them refuses every swap.
- */
-export interface Trader extends ChainAdapter {
-  quoteSwap?(req: {
-    tokenIn: string
-    tokenOut: string
-    amountIn: string
-    slippageBps: number
-  }): Promise<SwapQuote>
-  getPositions?(): Promise<{ token: string; amount: string; decimals: number }[]>
-}
 
 /** Phase 1: every swap has the chain's dollar on exactly one side. */
 export function pairOf(deps: PaymentDeps, req: QuoteRequest): Pair | undefined {
@@ -64,7 +47,7 @@ export class VenueUnavailable extends Error {
 
 /** The venue's quote, or 'no_route'. A venue that is down is not a rejection of the trade. */
 export async function fetchQuote(
-  adapter: Trader,
+  adapter: ChainAdapter,
   req: QuoteRequest,
   slippageBps: number,
 ): Promise<SwapQuote | 'no_route'> {
@@ -75,7 +58,7 @@ export async function fetchQuote(
     const { tokenIn, tokenOut, amountIn } = req
     return await adapter.quoteSwap({ tokenIn, tokenOut, amountIn, slippageBps })
   } catch (error) {
-    if (unavailable.safeParse(error).data?.code === 'no_route') {
+    if (error instanceof SwapUnavailable && error.code === 'no_route') {
       return 'no_route'
     }
     throw new VenueUnavailable()
@@ -107,10 +90,16 @@ export function withQuote(
   }
 }
 
+/** What the owner is shown for a buy that has drawn nothing yet: it is tested once approved. */
+const UNTESTED = {
+  summary: 'not tested yet: the hot wallet is funded and the swap tested once you approve',
+  balanceChanges: [],
+}
+
 /** POST /v1/agent/quote: read-only, so it decides nothing and records nothing. */
 export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy) {
   const trading = policy.trading
-  const adapter: Trader | undefined = deps.chains.get(req.chain)
+  const adapter: ChainAdapter | undefined = deps.chains.get(req.chain)
   if (trading === undefined || !trading.enabled) {
     throw new HttpError(403, 'trading_disabled')
   }
@@ -129,7 +118,7 @@ export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy
 export async function swap(deps: PaymentDeps, req: SwapRequest): Promise<PayIntent> {
   return deps.serial(req.agentId, async () => {
     const { db, now } = deps
-    const adapter: Trader | undefined = deps.chains.get(req.chain)
+    const adapter: ChainAdapter | undefined = deps.chains.get(req.chain)
     const intent = newIntent(
       {
         agentId: req.agentId,
@@ -206,9 +195,11 @@ export async function swap(deps: PaymentDeps, req: SwapRequest): Promise<PayInte
 }
 
 /**
- * The adapter's checks, then the owner or the signature. A buy is topped up first: the adapter
- * cannot draw inside a venue's transaction, and the onchain cap still bounds the draw. In shadow
- * nothing is drawn or signed, so a hot wallet short of the dollar records the quote alone.
+ * The adapter's checks, then the owner or the signature. A buy is topped up before its test run:
+ * the adapter cannot draw inside a venue's transaction, and the onchain cap still bounds the draw.
+ * Nothing is drawn while the owner has not answered (GC-66): a buy that must wait and that the hot
+ * wallet cannot cover goes to the owner untested, and is funded and tested once approved. In
+ * shadow nothing is drawn or signed, so a hot wallet short of the dollar records the quote alone.
  */
 export async function clearSwap(
   deps: PaymentDeps,
@@ -223,6 +214,11 @@ export async function clearSwap(
     parseAmount(await adapter.getHotWalletBalance(intent.token)) < parseAmount(intent.amount)
   if (how.shadow && short) {
     return shadowed(deps, intent, [])
+  }
+  const waits = how.verdict.decision === 'needs_approval' && owner === undefined
+  if (waits && short) {
+    const passkey = needsPasskey(deps.passkey, intent)
+    return askOwner(deps, intent, UNTESTED, { flags: how.verdict.flags, passkey })
   }
   if (how.side === 'buy' && !how.shadow) {
     try {
@@ -250,7 +246,7 @@ export async function clearSwap(
   if (how.shadow) {
     return shadowed(deps, intent, [])
   }
-  if (how.verdict.decision === 'needs_approval' && owner === undefined) {
+  if (waits) {
     const passkey = needsPasskey(deps.passkey, intent)
     return askOwner(deps, intent, simulation, { flags: how.verdict.flags, passkey })
   }

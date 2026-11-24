@@ -47,6 +47,7 @@ describe.each([390, 1280])('trading at %i px', (width) => {
       'NEW_TOKEN: First buy of this token by any of your agents.',
       'MINT_AUTHORITY: The token can still be minted: its supply is not fixed.',
     ])
+    await app.getByText(/^Its dollars are already in the spending wallet/).waitFor()
     expect(await fits(page)).toBeLessThanOrEqual(width)
 
     await page.getByRole('button', { name: 'Approve with passkey' }).click()

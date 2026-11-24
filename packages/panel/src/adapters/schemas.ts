@@ -20,6 +20,62 @@ export const allowance = z
   ])
   .nullable()
 
+/** CR-025: what Jupiter says about a token, labelled as the venue's. Untrusted display text. */
+const venue = z.object({
+  holders: z.number().int().nonnegative().optional(),
+  liquidityUsd: atomic.optional(),
+  organicScore: z.number().min(0).max(100).optional(),
+  createdAt: isoTime.optional(),
+})
+
+export const tokenInfo = z.object({
+  chain: text(64),
+  mint: text(128),
+  symbol: text(32),
+  name: text(64),
+  decimals: z.number().int().min(0).max(255),
+  verified: z.boolean(),
+  venue,
+})
+
+export const tokens = z.object({ tokens: z.array(tokenInfo).max(50) })
+
+/** CR-025: read onchain by guard-core, except venue. */
+export const tokenRisk = z.object({
+  chain: text(64),
+  mint: text(128),
+  decimals: z.number().int().min(0).max(255),
+  freezeAuthority: z.boolean(),
+  mintAuthority: z.boolean(),
+  extensions: z.array(text(64)).max(32),
+  risks: z.array(text(64)).max(16),
+  flags: z.array(text(64)).max(8),
+  exit: z.object({ amountUsd: atomic, priceImpactBps: bps }).nullable(),
+  venue: venue.extend({ verified: z.boolean() }),
+})
+
+export const swapQuote = z.object({
+  venue: text(64),
+  tokenIn: text(128),
+  amountIn: atomic,
+  tokenOut: text(128),
+  expectedOut: atomic,
+  minAmountOut: atomic,
+  slippageBps: bps,
+  priceImpactBps: bps,
+  exitImpactBps: bps.nullable(),
+  risks: z.array(text(64)).max(16),
+  flags: z.array(text(64)).max(8),
+  quotedAt: isoTime,
+})
+
+export const tradeResult = z.object({
+  intentId: z.uuid(),
+  status: text(32),
+  rejectReasons: z.array(text(64)).max(32),
+  txId: text(128).optional(),
+})
+
 /** SPEC v0.17, CR-022: an agent's own hot wallet on one chain, opt-in. */
 export const agentWallet = z.object({
   chain: text(64),
@@ -310,6 +366,9 @@ export type ApprovalView = z.infer<typeof approvalRequest>
 export type MandateView = z.infer<typeof mandateRequest>
 export type AgentView = z.infer<typeof agentSummary>
 export type AgentWalletView = z.infer<typeof agentWallet>
+export type TokenInfo = z.infer<typeof tokenInfo>
+export type TokenRiskView = z.infer<typeof tokenRisk>
+export type QuoteView = z.infer<typeof swapQuote>
 export type PolicyView = z.infer<typeof policy>
 export type BudgetView = z.infer<typeof budget>
 export type KillView = z.infer<typeof kill>

@@ -9,6 +9,7 @@ import type {
   RejectCode,
   SimulationResult,
   SwapQuote,
+  TokenRisk,
   TxId,
 } from '@defimind/shared'
 import type { PaymentRequirements, SchemeNetworkClient } from '@x402/core/types'
@@ -20,16 +21,7 @@ export interface Control {
 }
 
 /** CR-025: what the chain says about a token, before anyone allows it. Facts, never a verdict. */
-export interface TokenRiskFacts {
-  chain: ChainId
-  mint: Address
-  decimals: number
-  freezeAuthority: boolean
-  mintAuthority: boolean
-  extensions: string[]
-  risks: RejectCode[]
-  exit: { amountUsd: Amount; priceImpactBps: number } | null
-}
+export type TokenRiskFacts = Omit<TokenRisk, 'venue' | 'flags'>
 
 export interface Vault {
   address: Address

@@ -134,6 +134,10 @@ export function applyTrade(
       const sold = trade.amount < held ? trade.amount : held
       amount = held - sold
       cost = held === 0n ? 0n : paid - (paid * sold) / held
+      // What is left at no cost is dust from rounding or a fill that differed (GC-66): closed.
+      if (cost === 0n) {
+        amount = 0n
+      }
     }
     const values = {
       ...trade,
@@ -178,4 +182,44 @@ export function listPositions(db: Db, agentId?: string): (Position & { agentId: 
       decimals,
       ...(symbol === null ? {} : { symbol }),
     }))
+}
+
+/**
+ * Brings the agents' positions in a token down to what the hot wallet really holds, after a swap
+ * landed (GC-66): a fill below the test run's, or a balance gone to zero, must not leave a position
+ * the wallet cannot back. `first` loses the excess first, being the agent whose trade just landed.
+ * Never raised: more onchain than booked may be someone else's airdrop.
+ */
+export function capPositions(
+  db: Db,
+  where: { chain: ChainId; token: string; first: string },
+  held: bigint,
+  now: Date,
+) {
+  const rows = listPositions(db).filter((p) => p.chain === where.chain && p.token === where.token)
+  rows.sort((a, b) => (a.agentId === where.first ? -1 : b.agentId === where.first ? 1 : 0))
+  let excess = rows.reduce((sum, p) => sum + parseAmount(p.amount), 0n) - held
+  for (const row of rows) {
+    if (excess <= 0n) {
+      return
+    }
+    const amount = parseAmount(row.amount)
+    const cut = held === 0n || excess >= amount ? amount : excess
+    excess -= cut
+    db.update(positions)
+      .set({
+        amount: toAmount(amount - cut),
+        // A position cut to nothing is closed; one cut in part keeps what it paid.
+        cost: amount === cut ? '0' : row.cost,
+        updatedAt: now.toISOString(),
+      })
+      .where(
+        and(
+          eq(positions.agentId, row.agentId),
+          eq(positions.chain, row.chain),
+          eq(positions.token, row.token),
+        ),
+      )
+      .run()
+  }
 }

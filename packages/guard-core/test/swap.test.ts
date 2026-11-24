@@ -1,4 +1,4 @@
-import type { SimulationOutcome } from '@defimind/onchain'
+import { type SimulationOutcome, SwapUnavailable } from '@defimind/onchain'
 import type { PayIntent, SwapQuote, TradingPolicy } from '@defimind/shared'
 import { describe, expect, it } from 'vitest'
 import { StubChain } from '../src/adapters/stub.js'
@@ -33,7 +33,7 @@ class Venue extends StubChain {
   async quoteSwap(req: { tokenIn: string; tokenOut: string; amountIn: string }) {
     this.quotes += 1
     if (this.down !== undefined) {
-      throw Object.assign(new Error(this.down), { code: this.down })
+      throw new SwapUnavailable(this.down, 'test venue')
     }
     const buy = req.tokenIn === USDC
     const out = buy ? BigInt(req.amountIn) * 1000n : BigInt(req.amountIn) / 1000n
@@ -52,6 +52,23 @@ class Venue extends StubChain {
       decimalsOut: buy ? 5 : 6,
     }
     return quote
+  }
+
+  /** What the swap really brings in, when the market moved after its test run. */
+  landed: bigint | undefined
+
+  override async send(intent: PayIntent): Promise<string> {
+    const tx = await super.send(intent)
+    const swap = intent.swap
+    if (swap !== undefined) {
+      const bought = intent.token === USDC
+      const token = bought ? swap.tokenOut : intent.token
+      const before = this.held.get(token) ?? 0n
+      const got = this.landed ?? this.received ?? BigInt(swap.minAmountOut)
+      const left = bought ? before + got : before - BigInt(intent.amount)
+      this.held.set(token, left > 0n ? left : 0n)
+    }
+    return tx
   }
 
   async getPositions() {
@@ -162,10 +179,54 @@ describe('swaps (CR-021)', () => {
     })
   })
 
+  it('books what landed, not what the test run promised (GC-66)', async () => {
+    const { h, chain } = await setup()
+    chain.landed = 994_000_000n
+    await bought(h)
+    expect(getPosition(h.db, 'agent-1', CHAIN, BONK)).toEqual({
+      amount: 994_000_000n,
+      cost: 1_000_000n,
+    })
+  })
+
+  it('closes a position the wallet no longer holds', async () => {
+    const { h, chain } = await setup()
+    await bought(h)
+    await h.agent('POST', '/v1/agent/swap', sell('10000000'))
+    chain.held.set(BONK, 0n)
+    await h.agent('POST', '/v1/agent/swap', sell('1000000'))
+    expect(getPosition(h.db, 'agent-1', CHAIN, BONK)).toEqual({ amount: 0n, cost: 0n })
+  })
+
   it('tops the hot wallet up for a buy before the test run', async () => {
     const { h, chain } = await setup({ balance: 0n })
     await bought(h)
     expect(chain.topUps).toEqual(['1000000'])
+  })
+
+  it('draws nothing for a buy waiting for the owner, and funds it once approved (GC-66)', async () => {
+    const { h, chain } = await setup({ balance: 0n })
+    const res = await h.agent('POST', '/v1/agent/swap', buy())
+    expect(res.json()).toMatchObject({ status: 'pending_approval' })
+    expect(chain.topUps).toEqual([])
+    expect((await h.agent('GET', '/v1/agent/portfolio/agent-1')).json().tradedToday).toBe('0')
+    const owner = await signedIn(h)
+    const id = res.json().intentId
+    await owner.call('POST', `/v1/owner/intents/${id}/decision`, {
+      decision: 'approve',
+      assertion: await owner.stepUp('approve_intent', { intentId: id }),
+    })
+    expect(chain.topUps).toEqual(['1000000'])
+    expect(chain.sent).toHaveLength(1)
+  })
+
+  it('leaves the vault untouched when the owner rejects a waiting buy (GC-66)', async () => {
+    const { h, chain } = await setup({ balance: 0n })
+    const id = (await h.agent('POST', '/v1/agent/swap', buy())).json().intentId
+    const owner = await signedIn(h)
+    await owner.call('POST', `/v1/owner/intents/${id}/decision`, { decision: 'reject' })
+    expect(chain.topUps).toEqual([])
+    expect(chain.sent).toEqual([])
   })
 
   it('refuses without trading, before asking the venue', async () => {

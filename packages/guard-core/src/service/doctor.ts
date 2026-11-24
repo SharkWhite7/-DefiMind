@@ -1,6 +1,6 @@
-import type { ChainAdapter } from '@defimind/onchain'
+import type { ChainAdapter, Vault } from '@defimind/onchain'
 import type { Amount, ChainId, DoctorCheck } from '@defimind/shared'
-import { usdSymbol } from '@defimind/shared'
+import { isSvm, usdSymbol } from '@defimind/shared'
 import { readdir, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { dbFile, type Db } from '../db/client.js'
@@ -71,10 +71,10 @@ function database({ db, now }: { db: Db; now: () => Date }): DoctorCheck {
 async function chainChecks(deps: DoctorDeps, adapter: ChainAdapter): Promise<DoctorCheck[]> {
   const id = adapter.chain
   const chain = chainName(id)
-  const attempt = (check: string, read: () => Promise<Omit<DoctorCheck, 'id'>>) =>
+  const attempt = (check: string, read: () => Promise<Omit<DoctorCheck, 'id'> | undefined>) =>
     within(`${id}:${check}`, chain, read)
-  // Side by side, so a chain whose RPC hangs costs one timeout, not three.
-  return Promise.all([
+  // Side by side, so a chain whose RPC hangs costs one timeout, not four.
+  const checks = await Promise.all([
     attempt('allowance', async () => {
       const allowance = await adapter.getAllowanceState()
       return allowance.status === 'active'
@@ -104,22 +104,57 @@ async function chainChecks(deps: DoctorDeps, adapter: ChainAdapter): Promise<Doc
       const balance = formatDollars(await adapter.getHotWalletBalance(token))
       return { status: 'ok', message: `The hot wallet on ${chain} holds ${balance} ${symbol}.` }
     }),
+    attempt('control', async () => vaultControl(id, chain, (await adapter.getVault()).control)),
   ])
+  return checks.filter((check) => check !== undefined)
+}
+
+/**
+ * A vault one key can empty is only as safe as that key (CR-022). On Solana the key is the
+ * multisig's config authority, which can add itself a spending limit whatever the threshold says,
+ * so raising the threshold would not help there: only keeping that key on a hardware wallet does.
+ */
+function vaultControl(
+  id: ChainId,
+  chain: string,
+  control: Vault['control'],
+): Omit<DoctorCheck, 'id'> | undefined {
+  if (control === undefined) {
+    return undefined
+  }
+  if (control.threshold > 1) {
+    return {
+      status: 'ok',
+      message: `The vault on ${chain} needs ${control.threshold} of ${control.signers} keys to move funds.`,
+    }
+  }
+  return isSvm(id)
+    ? {
+        status: 'warn',
+        message: `One key, the multisig's config authority, can empty the vault on ${chain}.`,
+        fix: 'Keep the config authority on a hardware wallet, such as a Ledger connected through Phantom.',
+      }
+    : {
+        status: 'warn',
+        message: `One key can empty the vault on ${chain}.`,
+        fix: 'Add another owner to the Safe, or make it a 2-of-3, so no single key can move its funds.',
+      }
 }
 
 /** A check whose read throws fails, and says which read, never the error text: it may hold a URL. */
 async function within(
   id: string,
   chain: string,
-  check: () => Promise<Omit<DoctorCheck, 'id'>>,
-): Promise<DoctorCheck> {
+  check: () => Promise<Omit<DoctorCheck, 'id'> | undefined>,
+): Promise<DoctorCheck | undefined> {
   let timer: NodeJS.Timeout | undefined
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(new Error('timeout')), READ_TIMEOUT_MS)
   })
   try {
     // A hung RPC must not hang the whole report: the owner is waiting on it in Telegram.
-    return { id, ...(await Promise.race([check(), timeout])) }
+    const result = await Promise.race([check(), timeout])
+    return result === undefined ? undefined : { id, ...result }
   } catch {
     return {
       id,
