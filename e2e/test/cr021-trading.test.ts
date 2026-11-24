@@ -46,8 +46,7 @@ async function start(overrides: Partial<Policy> = {}) {
   s = await stack({ chain: f.chain, net: MAINNET })
   // The adapter stamps quotes with the real time; guard-core must agree on what "now" is.
   s.clock.now = new Date()
-  const res = await s.setPolicy({ trading, ...overrides })
-  expect(res.status).toBe(200)
+  s.setPolicy({ trading, ...overrides })
 }
 
 const buy = () =>
@@ -109,22 +108,22 @@ describe.skipIf(skipped)(
       })
 
       it('paper trades in shadow: the real test run, nothing signed', async () => {
-        await s.setPolicy({ trading, mode: 'shadow' })
+        s.setPolicy({ trading, mode: 'shadow' })
         const text = await buy()
         expect(text).toContain(': shadowed.')
         untouched()
       })
 
       it('refuses what the policy refuses before the venue builds anything', async () => {
-        await s.setPolicy({ trading: { ...trading, maxTradeUsd: '500000' } })
+        s.setPolicy({ trading: { ...trading, maxTradeUsd: '500000' } })
         await rejected(['TRADE_EXCEEDED'])
-        await s.setPolicy({ trading: { ...trading, dailyTradeMax: '500000' } })
+        s.setPolicy({ trading: { ...trading, dailyTradeMax: '500000' } })
         await rejected(['TRADE_DAILY_EXCEEDED'])
-        await s.setPolicy({ trading: { ...trading, maxPositionUsd: '500000' } })
+        s.setPolicy({ trading: { ...trading, maxPositionUsd: '500000' } })
         await rejected(['POSITION_EXCEEDED'])
-        await s.setPolicy({ trading: { ...trading, tokens: [] } })
+        s.setPolicy({ trading: { ...trading, tokens: [] } })
         await rejected(['TOKEN_NOT_TRADABLE'])
-        await s.setPolicy({ trading: { ...trading, enabled: false } })
+        s.setPolicy({ trading: { ...trading, enabled: false } })
         await rejected(['TRADING_DISABLED'])
       })
     })

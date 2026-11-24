@@ -1245,18 +1245,24 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   policy with the admin token only. The reviewer used it to send 50M test units to a "Thief" address
   automatically; onchain, the loss stopped at the daily cap. Loosening is meant to need the owner's
   passkey (CR-012, CR-015), and the admin token is a machine credential that can leak.
-  - **Fix:** an admin write that loosens, as `loosened()` counts it, is refused with
-    403 `{ error: "loosen_in_panel" }` once any passkey is enrolled, and on any chain that is not a
-    testnet even before then. This covers `PUT /v1/admin/policy/:agentId`, `POST /v1/admin/resume`
-    and `POST /v1/admin/mandates`. Before the first passkey, admin may still loosen a policy whose
-    chains are all testnets, so local runs, devnet scripts and the e2e suite stay scriptable. Real
-    money always needs the passkey.
+  - **Fix:** the admin token only tightens, as the bot's does (CR-016). A `PUT /v1/admin/policy`
+    that loosens, as `loosened()` counts it, and every `POST /v1/admin/resume` are refused with
+    403 `{ error: "loosen_in_panel" }`. `POST /v1/admin/mandates` opens the mandate pending the
+    owner's approval in the panel. There is no exception for a new agent's first policy: it would
+    reopen the hole, since the token can create an agent. Tests and local tools write policies into
+    the database directly, and the setup wizard leaves the rules to the panel.
+  - An earlier draft let the admin loosen testnet-only policies before the first passkey. It was
+    dropped the same day, in favour of the simpler rule guard-core built (GC-60).
   - Every refusal is audited (`admin_loosen_refused`, via `admin`) and alerts the owner (webhook
     alert and Web Push `attack`): someone who has the admin token is trying to widen a policy.
   - Unchanged: admin reads, tightening, pause, kill, revoke, and creating an agent (deny-all, shadow).
-  - **Tests:** with a passkey enrolled, a raised perTxMax, an added recipient or domain, mode `live`,
-    resume and an admin mandate are each 403 and audited, with no policy changed. Without a passkey,
-    the same on a mainnet chain is 403, and on devnet it passes. Tightening still passes.
+  - **Tests:** a raised perTxMax, an added recipient or domain, mode `live` and resume are each 403
+    and audited, with no policy changed. An admin mandate waits for the owner. Tightening still
+    passes. The reviewer's own attack is a test.
+  - **First passkey.** While no passkey exists, the admin token could enrol one and take over a fresh
+    deployment. With SETUP_CODE set, only the setup code enrols the first passkey; the admin routes
+    refuse it, audited and alerted. Without SETUP_CODE, guard-core warns at every start until a
+    passkey exists. Built in GC-62/63.
 
 - **MEDIUM-1. One public listener can serve the admin API without a warning.** With PUBLIC_PORT
   unset, HOST=0.0.0.0 and ADMIN_ROUTES=true, `/v1/admin/*` faces whatever network the host faces.
@@ -1340,7 +1346,7 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     - PANEL-22: the "own wallet" step and per-agent kill.
     - INT-49: e2e, the shared types, and the migration guide.
 - **Risks for the owner to accept:**
-  - Scripts that loosened mainnet policies with the admin token stop working. The panel does it,
-    with the passkey.
+  - Scripts that loosened policies with the admin token stop working. The panel does it, with the
+    passkey.
   - A single-listener deployment that served the admin API publicly will not start until it chooses
     ADMIN_ROUTES=false, a split listener or ALLOW_PUBLIC_ADMIN=true.

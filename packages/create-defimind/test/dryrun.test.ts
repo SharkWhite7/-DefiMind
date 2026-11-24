@@ -60,9 +60,8 @@ describe('--dry-run', () => {
     expect(text).toContain(
       '  https://acme-signing-page.vercel.app/?action=add-limit&cluster=mainnet-beta&multisig=%3Cyour+Squads+multisig%3E&amount=20000000',
     )
-    expect(text).toMatch(
-      /→ PUT http:\/\/127\.0\.0\.1:18787\/v1\/admin\/policy\/agent-1 .*"mode":"shadow"/,
-    )
+    expect(text).not.toContain('/v1/admin/policy')
+    expect(text).toContain('Agents → agent-1 → Rules')
   })
 
   it('writes nothing, calls nothing, and asks no secret', async () => {

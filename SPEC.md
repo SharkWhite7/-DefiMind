@@ -56,8 +56,7 @@ Neither chain needs a contract we write. Both primitives are audited and already
 Chains are CAIP-2 strings, never numbers: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" style for Solana,
 "eip155:8453" for Base mainnet, "eip155:84532" for Base Sepolia, "eip155:4663" for Robinhood Chain and
 "eip155:46630" for its testnet (CR-007). The values live in
-packages/shared/src/constants.ts, with TESTNET_CHAINS (Solana devnet, Base Sepolia and Robinhood
-Chain testnet; CR-022). The Solana references are the first 32 characters of each cluster's
+packages/shared/src/constants.ts. The Solana references are the first 32 characters of each cluster's
 genesis hash, confirmed with `solana genesis-hash` (CR-002):
 
   mainnet-beta | solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp
@@ -313,12 +312,13 @@ POST /v1/admin/kill         {} -> pauses all agents AND prepares, for every chai
   A chain whose kill tx could not be built stays in the list with payload: null and a description
   telling the owner to remove the spend limit by hand: that chain's allowance is still live.
 GET/PUT /v1/admin/policy/:agentId  Policy
-  Admin loosening (CR-022). An admin write that loosens, as loosened() counts it, is refused with
-  403 { error: "loosen_in_panel" } once any passkey is enrolled, and on any chain outside
-  TESTNET_CHAINS even before then. This covers this PUT, POST /v1/admin/resume and
-  POST /v1/admin/mandates. Each refusal is audited (event "admin_loosen_refused", via "admin") and
-  alerts the owner: { kind: "admin_loosen_refused" } to the bot and Web Push "attack". Reads,
-  tightening, pause, kill, revoke and creating an agent are unchanged.
+  Admin only tightens (CR-022). A PUT that loosens, as loosened() counts it, and every
+  POST /v1/admin/resume are refused with 403 { error: "loosen_in_panel" }, as for the bot (CR-016):
+  loosening is the panel's, with the passkey. POST /v1/admin/mandates opens the mandate
+  pending_approval, for the owner to approve in the panel. Each refusal is audited (event
+  "admin_loosen_refused", via "admin") and alerts the owner: { kind: "admin_loosen_refused" } to the
+  bot and Web Push "attack". Reads, tightening, pause, kill, revoke and creating an agent (deny-all,
+  shadow) are unchanged. Tests and local tools write a policy into the database directly.
 POST /v1/admin/agents { agentId } -> { agentId, token }   (CR-011) the token once; only its hash is
   kept. The new agent gets a deny-all policy with mode "shadow". 409 { error: "exists" }.
 GET  /v1/admin/agents -> { agents: { agentId, paused, mode }[] }
@@ -326,7 +326,8 @@ POST /v1/admin/agents/:id/revoke -> { agentId, revoked: true }   cuts it off at 
 GET  /v1/admin/doctor -> { checks: { id, status: "ok" | "warn" | "fail", message, fix? }[] }
   Plain-English checks, never a secret: database writable, each chain's allowance readable, each
   hot wallet's gas (getHotWalletGas) and token balance, the bot reachable, the last backup's age.
-POST /v1/admin/mandates { agentId, budget, domains, recipients?, ttlSeconds, reason } -> Mandate (active)
+POST /v1/admin/mandates { agentId, budget, domains, recipients?, ttlSeconds, reason } -> Mandate
+  (pending_approval since CR-022: the owner approves it in the panel)
 POST /v1/admin/mandates/:id/revoke -> Mandate
 GET  /v1/admin/receipts?from&to -> { receipts: Receipt[] }
 GET  /v1/admin/report?from&to -> { agents: { agentId, spent, payments, refused: Record<RejectCode, number>,
@@ -336,6 +337,10 @@ POST /v1/admin/passkeys/code -> { code, expiresAt }   one-time, 10 minutes, hash
   GET /owner/enrol#code=… on the public listener (in the fragment, so no request line or log holds it),
   which runs WebAuthn registration for this origin via POST /v1/owner/passkeys/options { code } and
   POST /v1/owner/passkeys { code, response }. The bot's /passkey enrol sends the link.
+  First passkey (CR-022). With SETUP_CODE set, only POST /v1/owner/setup { setupCode } issues the
+  code for the first passkey: the admin routes refuse it with 403 { error: "use_setup_code" }, audited
+  and alerted as admin_loosen_refused, so an admin token cannot take over a fresh deployment. Without
+  SETUP_CODE, guard-core warns at every start while no passkey exists.
   Code enrolment adds the FIRST passkey only. Once one exists, POST /v1/owner/passkeys also needs an
   assertion from an enrolled passkey (step-up), so a stolen Telegram account cannot add its own key.
   Every enrolment sends the bot an alert { kind: "passkey_enrolled" }. GET /v1/admin/passkeys lists them
@@ -642,7 +647,8 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 
 ## Changelog
 - v0.17 (2026-11-24): CR-022, approved by the owner. Fixes from an independent review:
-  - the admin token no longer loosens a policy once a passkey exists, nor on mainnet ever;
+  - the admin token only tightens: loosening, resuming and opening a mandate are the panel's;
+  - with SETUP_CODE set, only the setup code enrols the first passkey;
   - one public listener refuses to serve the admin API unless told to;
   - an x402 approval is bound to its exact request;
   - the public listener checks the Host header;
