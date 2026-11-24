@@ -1,5 +1,13 @@
 import type { BudgetView, Mandate } from '@defimind/shared'
 import { z } from 'zod'
+import {
+  type Portfolio,
+  type Quote,
+  type SwapInput,
+  type SwapOrder,
+  portfolio,
+  swapQuote,
+} from './trading.js'
 
 const intentStatus = z.enum([
   'approved',
@@ -71,7 +79,7 @@ export const budget = z.object({
 
 export const payIntent = z.object({
   id: z.string(),
-  kind: z.enum(['x402', 'transfer']),
+  kind: z.enum(['x402', 'transfer', 'swap']),
   chain: z.string(),
   amount: z.string(),
   recipient: z.string(),
@@ -79,6 +87,16 @@ export const payIntent = z.object({
   status: intentStatus,
   rejectReasons,
   txId: z.string().optional(),
+  token: z.string().optional(),
+  swap: z
+    .object({
+      venue: z.string(),
+      tokenOut: z.string(),
+      minAmountOut: atomic,
+      slippageBps: z.number(),
+      priceImpactBps: z.number(),
+    })
+    .optional(),
   createdAt: z.string(),
   expiresAt: z.string(),
 })
@@ -123,6 +141,9 @@ export interface Guard {
   startTask(input: MandateInput): Promise<Mandate>
   /** Whether guard-core holds a signed receipt for the intent. Its content is for the owner. */
   hasReceipt(id: string): Promise<boolean>
+  quote(input: SwapInput): Promise<Quote>
+  swap(input: SwapOrder): Promise<TransferResult>
+  portfolio(): Promise<Portfolio>
 }
 
 /** A guard-core call that did not produce a usable answer. `message` is safe to show the model. */
@@ -195,6 +216,9 @@ export function httpGuard(options: HttpGuardOptions): Guard {
     budget: () => call(budget, `/v1/agent/budget/${agent}`),
     intent: (id) => call(payIntent, `/v1/agent/intents/${encodeURIComponent(id)}`),
     startTask: (input) => call(mandate, '/v1/agent/mandates', { agentId, ...input }),
+    quote: (input) => call(swapQuote, '/v1/agent/quote', { agentId, ...input }),
+    swap: (input) => call(transferResult, '/v1/agent/swap', { agentId, ...input }),
+    portfolio: () => call(portfolio, `/v1/agent/portfolio/${agent}`),
     hasReceipt: (id) =>
       call(receipt, `/v1/agent/intents/${encodeURIComponent(id)}/receipt`).then(
         () => true,

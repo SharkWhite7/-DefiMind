@@ -1,4 +1,4 @@
-import type { IntentStatus, PayIntentKind, RejectCode } from '@defimind/shared'
+import type { IntentStatus, PayIntentKind, RejectCode, TradingFlag } from '@defimind/shared'
 
 const REASONS: Record<RejectCode, string> = {
   PAUSED: 'the owner has paused all payments for this agent',
@@ -51,6 +51,20 @@ const ADVICE: Partial<Record<RejectCode, string>> = {
     'Stop paying for this task and tell the user. Open a new task budget only if the user still wants it done.',
   BREAKER_TRIPPED:
     'Stop making payments and tell the user: every payment is refused until the owner resumes the agent.',
+  TRADING_DISABLED: 'Do not try to trade. Tell the user the owner has to turn trading on.',
+  VENUE_NOT_ALLOWED: 'Trading is not available here for this agent. Tell the user.',
+  TOKEN_NOT_TRADABLE: 'Do not try this token again. Tell the user the owner has to allow it.',
+  TRADE_EXCEEDED: 'Tell the user. Do not split the trade into smaller ones to get under the limit.',
+  TRADE_DAILY_EXCEEDED: 'Stop buying for today and tell the user.',
+  POSITION_EXCEEDED: 'Do not buy more of this token. Tell the user.',
+  SLIPPAGE_TOO_HIGH: "Leave maxSlippageBps out, or set it lower, to stay within the owner's limit.",
+  PRICE_IMPACT_TOO_HIGH:
+    "The trade is too large for the market's depth. Tell the user; do not split it to get under the limit.",
+  NO_EXIT_ROUTE: 'Do not buy this token. Tell the user why it was refused.',
+  TOKEN_FREEZABLE: 'Do not buy this token. Tell the user why it was refused.',
+  TOKEN_EXTENSION_RISK: 'Do not buy this token. Tell the user why it was refused.',
+  QUOTE_STALE:
+    'The price moved on before the trade was checked. You may try the same swap once more.',
 }
 
 export function explainReject(code: string): string {
@@ -93,12 +107,45 @@ const X402_NEXT_STEP: Partial<Record<IntentStatus, string>> = {
     'expires at the time check_intent shows if it is not used.',
 }
 
+/** A swap trades rather than pays: what it bought stays in the agent's wallet. */
+const SWAP_NEXT_STEP: Partial<Record<IntentStatus, string>> = {
+  approved: 'The owner approved the swap and it is being sent.',
+  executed:
+    "The swap went through. What it bought stays in the agent's wallet; get_portfolio shows it.",
+  pending_approval:
+    'The swap is waiting for the owner to approve it. Tell the user it needs their approval, then ' +
+    'call check_intent with this intent id every 15 to 30 seconds until it settles. Pending swaps ' +
+    'expire after 10 minutes. Do not repeat the swap while it is pending.',
+  rejected: 'The swap was rejected and nothing was traded. Do not retry the same swap.',
+  failed: 'The swap was approved but sending it failed. Nothing further was traded.',
+  expired: 'The owner did not approve the swap in time, so it expired. Nothing was traded.',
+  shadowed:
+    'Shadow mode: nothing was traded and no money moved. This is a paper trade at a live quote; ' +
+    'the owner is trying the agent out before letting it trade. Tell the user if the task needed it.',
+}
+
+const FLAGS: Record<TradingFlag, string> = {
+  NEW_TOKEN: 'the first buy of this token',
+  MINT_AUTHORITY: "the token's issuer can still create more of it",
+}
+
+/** Flags never refuse a buy: they send it to the owner, whatever its size. */
+export function explainFlags(flags: readonly TradingFlag[]): string[] {
+  return flags.length === 0
+    ? []
+    : [
+        "A buy will wait for the owner's approval, because:",
+        ...flags.map((flag) => `- ${flag}: ${FLAGS[flag]}`),
+      ]
+}
+
 export function explainStatus(
   status: IntentStatus,
   rejectReasons: readonly string[],
   kind: PayIntentKind,
 ): string {
-  const lines = [(kind === 'x402' ? X402_NEXT_STEP[status] : undefined) ?? NEXT_STEP[status]]
+  const special = kind === 'x402' ? X402_NEXT_STEP : kind === 'swap' ? SWAP_NEXT_STEP : {}
+  const lines = [special[status] ?? NEXT_STEP[status]]
   if (rejectReasons.length > 0) {
     lines.push('Reasons:', ...rejectReasons.map((code) => `- ${explainReject(code)}`))
     const advice = rejectReasons.flatMap((code) => ADVICE[code as RejectCode] ?? [])

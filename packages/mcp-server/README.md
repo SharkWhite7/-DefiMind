@@ -225,13 +225,16 @@ leaves the token in your shell history.
 
 ### The tools
 
-| Tool           | Input                                                          | What it does                                               |
-| -------------- | -------------------------------------------------------------- | ---------------------------------------------------------- |
-| `paid_fetch`   | `{ url, method?, headers?, body?, maxAmountUsd?, mandateId? }` | Fetches the URL, paying an x402 request if any             |
-| `transfer`     | `{ to, amountUsd, reason, chain?, mandateId? }`                | Sends the chain's dollar to an address                     |
-| `get_budget`   | `{}`                                                           | Spend today, limits, chains, task budgets, pause, balances |
-| `start_task`   | `{ budgetUsd, domains, recipients?, minutes, reason }`         | Opens a task budget and returns its `mandateId`            |
-| `check_intent` | `{ intentId }`                                                 | The current status of one payment                          |
+| Tool            | Input                                                                  | What it does                                                |
+| --------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `paid_fetch`    | `{ url, method?, headers?, body?, maxAmountUsd?, mandateId? }`         | Fetches the URL, paying an x402 request if any              |
+| `transfer`      | `{ to, amountUsd, reason, chain?, mandateId? }`                        | Sends the chain's dollar to an address                      |
+| `get_budget`    | `{}`                                                                   | Spend today, limits, chains, task budgets, pause, balances  |
+| `start_task`    | `{ budgetUsd, domains, recipients?, minutes, reason }`                 | Opens a task budget and returns its `mandateId`             |
+| `check_intent`  | `{ intentId }`                                                         | The current status of one payment or swap                   |
+| `swap`          | `{ from, to, amountUsd? \| amount?, maxSlippageBps?, reason, chain? }` | Buys or sells a token inside the owner's trading limits     |
+| `quote`         | `{ from, to, amountUsd? \| amount?, chain? }`                          | Prices a swap without making it                             |
+| `get_portfolio` | `{}`                                                                   | Tokens held from trades, their cost, the day's trade budget |
 
 - **Amounts are decimal strings** such as `"0.25"`, never JSON numbers: a number has already been
   through a float by the time it arrives. A sign, an exponent, `NaN`, `Infinity` and more than 6
@@ -263,6 +266,31 @@ day). It then passes the returned `mandateId` to each `paid_fetch` and `transfer
 - `get_budget` lists the open budgets with what each has spent. When the owner runs the agent in
   shadow mode, it also says what the agent would have spent today; nothing of that is paid.
 - An owner can require a budget for every payment. Then a payment without `mandateId` is refused.
+
+### Trading (CR-021)
+
+With the owner's `trading` policy turned on, the agent can swap tokens on Solana through Jupiter,
+from the same spending wallet and under the same daily cap.
+
+- **One side is always the chain's dollar.** A buy is `from: "USDC"` with `amountUsd`, the dollars
+  to spend. A sell is `to: "USDC"` with `amount`, in the smallest units of the token sold, as
+  `get_portfolio` shows them. `"USD"`, `"USDC"`, `"USDG"`, `"$"` and the dollar's own address all
+  mean the dollar. Anything else, including two tokens or two dollars, is refused before DefiMind is
+  asked.
+- **`quote`** prices the same request without trading. It shows:
+  - the expected and minimum amount out, slippage and price impact;
+  - for a buy, whether the token can be sold back;
+  - every risk that would get the buy refused;
+  - every flag that would send it to the owner.
+- **`maxSlippageBps`** can only tighten the owner's limit. Left out, the owner's limit applies.
+- **What DefiMind controls:** allowed tokens, per-trade, daily and per-token limits, slippage, price
+  impact, and tokens that can be frozen, carry risky extensions or cannot be sold back. Every swap
+  is simulated and its balance changes are checked before anything is signed.
+- **What it does not control:** whether a trade makes money. A token can lose its value inside the
+  limits. The tool descriptions say so and never speak of returns.
+- **Approval:** a buy at or above the approval threshold waits for the owner, and so does any buy
+  with a flag: `NEW_TOKEN` for the first buy of a token, `MINT_AUTHORITY` when the issuer can still
+  create more of it. A sell never waits. Poll `check_intent` as for a payment.
 
 ### Handling `pending_approval`
 
@@ -307,6 +335,11 @@ a reason to retry the same payment; only `MANDATE_REQUIRED` asks for it again, w
 | `MANDATE_EXCEEDED`                                                                                                                 | The payment does not fit the task budget: too little left, or a website or recipient it does not cover | Stop and tell the user; open another budget only if they agree           |
 | `MANDATE_EXPIRED`                                                                                                                  | The task budget expired, or the owner closed it                                                        | Stop and tell the user; open a new budget only if they still want it     |
 | `BREAKER_TRIPPED`                                                                                                                  | Too many payments in one minute, so DefiMind paused the agent                                          | Stop paying and tell the user; the owner must resume the agent           |
+| `TRADING_DISABLED`, `VENUE_NOT_ALLOWED`, `TOKEN_NOT_TRADABLE`                                                                      | Trading is off, not available here, or the token is not allowed                                        | Tell the user; the owner has to change the policy                        |
+| `TRADE_EXCEEDED`, `TRADE_DAILY_EXCEEDED`, `POSITION_EXCEEDED`                                                                      | Over the per-trade, daily trading or per-token limit                                                   | Tell the user; never split a trade to get under a limit                  |
+| `SLIPPAGE_TOO_HIGH`, `PRICE_IMPACT_TOO_HIGH`                                                                                       | The trade would accept or move the price more than the owner allows                                    | Leave `maxSlippageBps` to the owner; do not split the trade              |
+| `NO_EXIT_ROUTE`, `TOKEN_FREEZABLE`, `TOKEN_EXTENSION_RISK`                                                                         | The token cannot be sold back, can be frozen, or carries a risky extension                             | Do not buy it; tell the user why                                         |
+| `QUOTE_STALE`                                                                                                                      | The price moved on before the swap was checked                                                         | The same swap may be tried once more                                     |
 | `APPROVAL_TIMEOUT`                                                                                                                 | The owner did not answer, or the approval was not redeemed                                             | Ask the user before trying again                                         |
 | `INVALID_402`                                                                                                                      | The website's payment request was malformed or unsafe                                                  | Do not pay this site; tell the user                                      |
 | `SIM_FAILED`, `SIM_UNEXPECTED_EFFECT`                                                                                              | In simulation the transaction failed, or did more than pay                                             | Do not retry; tell the user                                              |
