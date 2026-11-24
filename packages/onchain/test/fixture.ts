@@ -137,10 +137,11 @@ export function plantSpendingLimit(
   remaining: bigint,
   lastReset: number,
   overrides: Partial<multisig.accounts.SpendingLimitArgs> = {},
+  hot: PublicKey = c.hotWallet.publicKey,
 ) {
   const data = multisig.accounts.SpendingLimit.fromArgs({
     multisig: c.multisigPda,
-    createKey: c.hotWallet.publicKey,
+    createKey: hot,
     vaultIndex: VAULT_INDEX,
     mint: c.mint,
     amount: Number(cap),
@@ -148,11 +149,11 @@ export function plantSpendingLimit(
     remainingAmount: Number(remaining),
     lastReset,
     bump: 255,
-    members: [c.hotWallet.publicKey],
-    destinations: [c.hotWallet.publicKey],
+    members: [hot],
+    destinations: [hot],
     ...overrides,
   }).serialize()[0]
-  plant(c, spendingLimitPda(c.multisigPda, c.hotWallet.publicKey), data)
+  plant(c, spendingLimitPda(c.multisigPda, hot), data)
 }
 
 function plant(c: Chain, address: PublicKey, data: Buffer) {

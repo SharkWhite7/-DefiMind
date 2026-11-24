@@ -15,6 +15,8 @@ export interface PageConfig {
   rpc: Record<string, string>
   usdc: Record<string, string>
   hot: Record<string, string>
+  /** Per cluster, the agents' own hot wallets (CR-022): never the hosted build's. */
+  agents: Record<string, string[]>
   maxDailyCap: string
   evm: Record<string, EvmCluster>
 }
@@ -25,6 +27,7 @@ export interface EvmCluster {
   usd: string
   symbol: string
   hot?: string
+  agents?: string[]
 }
 
 /** The built app.js and style.css, which guard-core serves next to the page at /sign. */
@@ -64,12 +67,13 @@ export function evmChains(env: NodeJS.ProcessEnv = process.env) {
   }
 }
 
-const evmCluster = (id: ChainId, hot: string | undefined): EvmCluster => ({
+const evmCluster = (id: ChainId, hot: string | undefined, agents: string[] = []): EvmCluster => ({
   chainId: Number(id.split(':')[1]),
   module: getAddress(id, 'allowanceModule')!,
   usd: getAddress(id, 'usd')!,
   symbol: usdSymbol(id)!,
   ...(hot ? { hot } : {}),
+  ...(agents.length > 0 ? { agents } : {}),
 })
 
 /** USDC for each cluster, from the verified addresses in shared, so no link can name another mint. */
@@ -135,6 +139,7 @@ export const configFromEnv = (env: NodeJS.ProcessEnv = process.env): PageConfig 
   rpc: rpcUrls(env),
   usdc: usdcMints(env),
   hot: hotWallets(env),
+  agents: {},
   maxDailyCap: maxDailyCap(env),
   evm: evmChains(env),
 })
@@ -146,11 +151,14 @@ const rpcUrl = z.url({ protocol: /^https?$/ })
 const cluster = <K extends string, T extends z.ZodType>(names: Record<K, string>, hot: T) =>
   z.partialRecord(
     z.enum(Object.keys(names) as [K, ...K[]]),
-    z.object({ rpc: rpcUrl, hot: hot.optional() }).strict(),
+    z
+      .object({ rpc: rpcUrl, hot: hot.optional(), agents: z.array(hot).max(100).default([]) })
+      .strict(),
   )
 
 /**
- * What guard-core passes for its own /sign: per cluster, the RPC and its own hot wallet. Tokens and
+ * What guard-core passes for its own /sign: per cluster, the RPC, its shared hot wallet and every
+ * agent's own (CR-022). Tokens and
  * modules always come from the verified addresses in shared, never from the caller.
  */
 export const signPageConfig = z
@@ -167,15 +175,16 @@ export type SignPageConfig = z.input<typeof signPageConfig>
 
 export function fromSignPage(input: SignPageConfig): PageConfig {
   const { solana, evm, maxDailyCap } = signPageConfig.parse(input)
-  const config: PageConfig = { rpc: {}, usdc: {}, hot: {}, maxDailyCap, evm: {} }
-  for (const [name, { rpc, hot }] of entries(solana)) {
+  const config: PageConfig = { rpc: {}, usdc: {}, hot: {}, agents: {}, maxDailyCap, evm: {} }
+  for (const [name, { rpc, hot, agents }] of entries(solana)) {
     config.rpc[name] = rpc
     config.usdc[name] = getAddress(SOLANA[name], 'usd')!
     if (hot) config.hot[name] = hot
+    if (agents.length > 0) config.agents[name] = agents
   }
-  for (const [name, { rpc, hot }] of entries(evm)) {
+  for (const [name, { rpc, hot, agents }] of entries(evm)) {
     config.rpc[name] = rpc
-    config.evm[name] = evmCluster(EVM[name], hot)
+    config.evm[name] = evmCluster(EVM[name], hot, agents)
   }
   return config
 }

@@ -5,6 +5,9 @@ interface PageVm {
     function createSelectFork(string calldata url, uint256 blockNumber) external returns (uint256);
     function envOr(string calldata name, string calldata fallbackValue) external view returns (string memory);
     function envOr(string calldata name, uint256 fallbackValue) external view returns (uint256);
+    function rpc(string calldata urlOrAlias, string calldata method, string calldata params)
+        external
+        returns (bytes memory);
     function readFile(string calldata path) external view returns (string memory);
     function parseJsonAddress(string calldata json, string calldata key) external pure returns (address);
     function parseJsonBytes(string calldata json, string calldata key) external pure returns (bytes memory);
@@ -64,10 +67,22 @@ abstract contract SigningPageFlows {
     PageModule private module;
     PageSafe private safe;
 
-    /// The fork's RPC, its block and the fixture for its cluster. A pinned block lets every test share
-    /// one fork and forge keep its state on disk, so CI asks the RPC for little, and seldom: Robinhood's
-    /// mainnet RPC answers a burst from a CI runner with a Cloudflare challenge.
-    function chain() internal view virtual returns (string memory rpc, uint256 forkBlock, string memory cluster);
+    /// The fork's RPC, its block and the fixture for its cluster.
+    function chain() internal virtual returns (string memory rpc, uint256 forkBlock, string memory cluster);
+
+    /// A block every test of a run shares, so they share one fork: a fork of "latest" per test was a
+    /// burst Robinhood's mainnet RPC answered with a Cloudflare challenge on CI. Not a constant, as
+    /// that RPC keeps state for only a few thousand blocks: the latest, rounded down to 1000 blocks.
+    function recent(string memory url, string memory pinned) internal returns (uint256) {
+        uint256 fixed_ = vm.envOr(pinned, uint256(0));
+        if (fixed_ != 0) return fixed_;
+        bytes memory latest = vm.rpc(url, "eth_blockNumber", "[]");
+        uint256 number;
+        for (uint256 i = 0; i < latest.length; i++) {
+            number = (number << 8) | uint8(latest[i]);
+        }
+        return number - (number % 1000);
+    }
 
     function setUp() public {
         (string memory rpc, uint256 forkBlock, string memory cluster) = chain();
@@ -197,22 +212,16 @@ abstract contract SigningPageFlows {
 }
 
 contract SigningPageTestnetTest is SigningPageFlows {
-    function chain() internal view override returns (string memory, uint256, string memory) {
-        return (
-            vm.envOr("ROBINHOOD_TESTNET_RPC_URL", string("https://rpc.testnet.chain.robinhood.com")),
-            vm.envOr("ROBINHOOD_TESTNET_FORK_BLOCK", uint256(157_450_590)),
-            "robinhood-testnet"
-        );
+    function chain() internal override returns (string memory, uint256, string memory) {
+        string memory url = vm.envOr("ROBINHOOD_TESTNET_RPC_URL", string("https://rpc.testnet.chain.robinhood.com"));
+        return (url, recent(url, "ROBINHOOD_TESTNET_FORK_BLOCK"), "robinhood-testnet");
     }
 }
 
 /// The mainnet pilot's Safe, enabled and killed before the owner signs any of it for real.
 contract SigningPageMainnetTest is SigningPageFlows {
-    function chain() internal view override returns (string memory, uint256, string memory) {
-        return (
-            vm.envOr("ROBINHOOD_MAINNET_RPC_URL", string("https://rpc.mainnet.chain.robinhood.com")),
-            vm.envOr("ROBINHOOD_MAINNET_FORK_BLOCK", uint256(122_375_249)),
-            "robinhood"
-        );
+    function chain() internal override returns (string memory, uint256, string memory) {
+        string memory url = vm.envOr("ROBINHOOD_MAINNET_RPC_URL", string("https://rpc.mainnet.chain.robinhood.com"));
+        return (url, recent(url, "ROBINHOOD_MAINNET_FORK_BLOCK"), "robinhood");
     }
 }
