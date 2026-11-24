@@ -146,4 +146,21 @@ describe.each([390, 1280])('owner trading tools at %i px (CR-025)', (width) => {
     expect(await page.getByRole('button', { name: 'Get quote' }).count()).toBe(0)
     await close()
   })
+
+  it('shows neither search nor trade where guard-core has no owner trading routes', async () => {
+    const { guard, page, violations, close } = await openDevice(browser, dist, width)
+    guard.state.policy['chains'] = [chain]
+    guard.state.policy['trading'] = trading([MINT])
+    await signIn(page, guard.origin)
+    await page.goto(`${guard.origin}/panel/agents/research-bot`)
+    await page.getByRole('button', { name: 'Save trading' }).waitFor()
+    expect(await page.getByRole('heading', { name: 'Find a token' }).count()).toBe(0)
+    expect(await page.getByRole('link', { name: 'Trade by hand' }).count()).toBe(0)
+    await page.goto(`${guard.origin}/panel/agents/research-bot/trade`)
+    await page.getByText('Trading by hand is not available on this DefiMind yet.').waitFor()
+    expect(await page.getByRole('button', { name: 'Get quote' }).count()).toBe(0)
+    expect(await status(page).textContent()).toBe('')
+    expect(violations).toEqual([])
+    await close()
+  })
 })

@@ -38,6 +38,16 @@ function result(ctx: Context, policy: PolicyView, token: TokenInfo, save: Save) 
   )
 }
 
+/**
+ * Whether this guard-core serves CR-025's owner trading routes (GC-69). One search, cached by
+ * guard-core for a minute, rather than a broken card and a screen that 404s on an older one.
+ */
+export const ownerTrading = (ctx: Context, chain: string) =>
+  ctx.api
+    .searchTokens('USDC', chain)
+    .then(() => true)
+    .catch(() => false)
+
 /** CR-025: find a token by name, symbol or mint through guard-core, verified ones first. */
 export function tokenSearch(ctx: Context, policy: PolicyView, chain: string, save: Save) {
   const query = el('input', { id: 'token-q', autocomplete: 'off', spellcheck: 'false' })

@@ -10,6 +10,7 @@ import { getAddress } from '@defimind/shared'
 import type { Context, Screen } from './context.js'
 import { button, card, el, row, when } from './dom.js'
 import { tokenIcon } from './risk.js'
+import { ownerTrading } from './token-search.js'
 
 const mono = (text: string) => el('span', { class: 'mono' }, text)
 
@@ -87,6 +88,9 @@ export async function manualTrade(ctx: Context, agentId: string): Screen {
     el('h1', {}, `Trade for ${agentId}`),
     el('a', { href: href({ name: 'agent', id: agentId }) }, `Back to ${agentId}`),
   ]
+  if (chain !== undefined && !(await ownerTrading(ctx, chain))) {
+    return [...head, card(el('p', {}, 'Trading by hand is not available on this DefiMind yet.'))]
+  }
   if (chain === undefined || usd === undefined || tokens.length === 0) {
     return [
       ...head,
