@@ -1,6 +1,6 @@
 import { chainName } from '../domain/chains.js'
 import { amountText, formatUsd } from '../domain/money.js'
-import { FLAGS, isBuy, percent, swapTitle, units } from '../domain/trading.js'
+import { FLAGS, isBuy, percent, spent, swapTitle, units } from '../domain/trading.js'
 import type { ApprovalView } from '../adapters/schemas.js'
 import type { Context, Screen } from './context.js'
 import { button, card, el, row, when } from './dom.js'
@@ -41,18 +41,25 @@ function decide(ctx: Context, approve: () => Promise<unknown>, reject: () => Pro
 const mono = (text: string) => el('span', { class: 'mono' }, text)
 
 /** Both sides of a swap in full, and the limits its quote must keep to. */
-function swapRows({ chain, token, amount, swap }: ApprovalView['intent']) {
+function swapRows(intent: ApprovalView['intent']) {
+  const { chain, token, amount, swap } = intent
   if (swap === undefined) {
     return []
   }
-  const buy = isBuy({ chain, token })
+  const buy = isBuy(intent)
+  const out = {
+    amount: swap.minAmountOut,
+    token: swap.tokenOut,
+    decimals: swap.decimalsOut,
+    symbol: swap.symbolOut,
+  }
   return [
     row(
       buy ? 'Spends' : 'Sells',
-      buy ? amountText({ chain, token, amount }) : mono(units(amount, token)),
+      buy ? amountText({ chain, token, amount }) : mono(units(spent(intent))),
     ),
     row(buy ? 'Buys' : 'For', mono(swap.tokenOut)),
-    row('Receives at least', mono(units(swap.minAmountOut, swap.tokenOut))),
+    row('Receives at least', mono(units(out))),
     row('Slippage', `up to ${percent(swap.slippageBps)}`),
     row('Price impact', percent(swap.priceImpactBps)),
     row('Venue', swap.venue),

@@ -40,7 +40,7 @@ describe.each([390, 1280])('trading at %i px', (width) => {
 
     const app = page.locator('#app')
     await app.getByText(MINT, { exact: true }).waitFor()
-    await app.getByText(`1843920113 base units of ${MINT}`).waitFor()
+    await app.getByText(`1,843.920113 JUP (mint ${MINT})`).waitFor()
     await app.getByText('up to 0.50%').waitFor()
     await app.getByText('0.12%').waitFor()
     expect(await page.locator('.flag').allTextContents()).toEqual([
@@ -69,7 +69,7 @@ describe.each([390, 1280])('trading at %i px', (width) => {
     await signIn(page, guard.origin)
     await page.getByRole('link', { name: 'Portfolio' }).click()
     await page.getByRole('heading', { name: 'Portfolio' }).waitFor()
-    await page.getByText(`1843920113 base units of ${MINT}`).waitFor()
+    await page.getByText(`1,843.920113 JUP (mint ${MINT})`).waitFor()
     await page.getByText('$25.00 on Solana Devnet', { exact: false }).waitFor()
     await page.getByText('$35.00 of $100.00').waitFor()
     expect(await fits(page)).toBeLessThanOrEqual(width)
@@ -123,7 +123,8 @@ describe.each([390, 1280])('trading at %i px', (width) => {
     await page.getByRole('button', { name: 'Close positions with passkey' }).click()
     await expect.poll(() => status(page).textContent()).toBe('Selling 2 tokens.')
     expect(guard.trading!.state.closes).toEqual([{ action: 'close_positions', body: {} }])
-    await page.getByText(`1843920113 base units of ${MINT}`).waitFor()
+    await page.getByText(`1,843.920113 JUP (mint ${MINT})`).waitFor()
+    await page.getByText(/^9,120,000 tokens \(mint /).waitFor()
     expect(violations).toEqual([])
     await close()
   })

@@ -8,6 +8,7 @@ import {
   parsePercent,
   percent,
   swapTitle,
+  tokenAmount,
   toTradingForm,
   type Trading,
   tradingLoosens,
@@ -95,10 +96,29 @@ describe('swaps', () => {
     expect(isBuy({ chain, token: mint })).toBe(false)
   })
 
-  it('titles a buy in dollars and a sell in base units with the whole mint', () => {
+  it('titles a buy in dollars and a sell in the token, with the whole mint', () => {
     expect(swapTitle({ chain, token: usd, amount: '25000000' })).toBe('Buy with $25.00 USDC')
-    expect(swapTitle({ chain, token: mint, amount: '7' })).toBe(`Sell ${units('7', mint)}`)
-    expect(units('7', mint)).toBe(`7 base units of ${mint}`)
+    const sell = { chain, token: mint, amount: '1500000000', swap: { decimalsIn: 9 } }
+    expect(swapTitle(sell)).toBe(`Sell 1.5 tokens (mint ${mint})`)
+    expect(swapTitle({ ...sell, swap: { decimalsIn: 9, symbolIn: 'SOL' } })).toBe(
+      `Sell 1.5 SOL (mint ${mint})`,
+    )
+  })
+
+  it('never names a token by its symbol alone', () => {
+    expect(units({ amount: '7', token: mint })).toBe(`7 base units of ${mint}`)
+    expect(units({ amount: '7', token: mint, decimals: 0, symbol: 'USDC' })).toBe(
+      `7 USDC (mint ${mint})`,
+    )
+  })
+
+  it('places the decimal point with bigint', () => {
+    expect(tokenAmount('1843920113', 6)).toBe('1,843.920113')
+    expect(tokenAmount('912000000000', 5)).toBe('9,120,000')
+    expect(tokenAmount('5', 9)).toBe('0.000000005')
+    expect(tokenAmount('123456789012345678901234567890', 18)).toBe(
+      '123,456,789,012.34567890123456789',
+    )
   })
 })
 

@@ -67,17 +67,51 @@ export function parsePercent(text: string): number | undefined {
 export const isBuy = (intent: { chain: string; token: string }) =>
   getAddress(intent.chain, 'usd') === intent.token
 
+/** Base units to a decimal string, in bigint: thousands separated, trailing zeros dropped. */
+export function tokenAmount(amount: string, decimals: number): string {
+  const value = BigInt(amount)
+  const unit = 10n ** BigInt(decimals)
+  const whole = (value / unit).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  const fraction = (value % unit).toString().padStart(decimals, '0').replace(/0+$/, '')
+  return fraction === '' ? whole : `${whole}.${fraction}`
+}
+
+export interface Held {
+  amount: string
+  token: string
+  decimals?: number | undefined
+  symbol?: string | undefined
+}
+
 /**
- * A token amount in base units, with the whole mint: no decimals or symbol come from guard-core,
- * and a symbol alone could name any token.
+ * A token amount with the whole mint beside it, always: the symbol is the venue's or the token's own
+ * claim, and any token can call itself anything. Without decimals, the base units as they are.
  */
-export const units = (amount: string, token: string) => `${amount} base units of ${token}`
+export function units({ amount, token, decimals, symbol }: Held): string {
+  if (decimals === undefined) {
+    return `${amount} base units of ${token}`
+  }
+  return `${tokenAmount(amount, decimals)} ${symbol ?? 'tokens'} (mint ${token})`
+}
+
+type Swapped = {
+  chain: string
+  token: string
+  amount: string
+  swap?: { decimalsIn: number; symbolIn?: string | undefined } | undefined
+}
+
+/** What a swap spends: the chain's dollar for a buy, the token held for a sell. */
+export const spent = (intent: Swapped): Held => ({
+  amount: intent.amount,
+  token: intent.token,
+  decimals: intent.swap?.decimalsIn,
+  symbol: intent.swap?.symbolIn,
+})
 
 /** The headline of a swap: what it spends, in dollars for a buy. */
-export function swapTitle(intent: { chain: string; token: string; amount: string }): string {
-  return isBuy(intent)
-    ? `Buy with ${amountText(intent)}`
-    : `Sell ${units(intent.amount, intent.token)}`
+export function swapTitle(intent: Swapped): string {
+  return isBuy(intent) ? `Buy with ${amountText(intent)}` : `Sell ${units(spent(intent))}`
 }
 
 /** What each approval flag means, said plainly: why this swap waits for the owner. */

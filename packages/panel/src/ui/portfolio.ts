@@ -21,7 +21,7 @@ function holdings(agent: PortfolioView) {
       el(
         'div',
         { class: 'item' },
-        el('strong', { class: 'mono' }, units(position.amount, position.token)),
+        el('strong', { class: 'mono' }, units(position)),
         el('span', {}, `Cost ${formatUsd(position.cost)} on ${chainName(position.chain)}`),
       ),
     ),

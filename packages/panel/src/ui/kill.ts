@@ -1,7 +1,7 @@
 import type { KillView } from '../adapters/schemas.js'
 import { chainName } from '../domain/chains.js'
 import { isSolana } from '../domain/guide.js'
-import { units } from '../domain/trading.js'
+import { spent, units } from '../domain/trading.js'
 import type { Context, Screen } from './context.js'
 import { button, card, el } from './dom.js'
 
@@ -82,7 +82,7 @@ function closePositions(ctx: Context) {
             el(
               'div',
               { class: 'item' },
-              el('strong', { class: 'mono' }, units(intent.amount, intent.token)),
+              el('strong', { class: 'mono' }, units(spent(intent))),
               el('span', {}, `${chainName(intent.chain)}: ${intent.status}`),
             ),
           ),

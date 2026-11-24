@@ -10,6 +10,8 @@ const isoTime = z.iso.datetime({ offset: true })
 const text = (max: number) => z.string().max(max)
 const agentId = z.string().min(1).max(64)
 const bps = z.number().int().min(0).max(10_000)
+/** A mint's decimals, read onchain: an SPL mint stores them in one byte. */
+const decimals = z.number().int().min(0).max(255)
 
 export const allowance = z
   .discriminatedUnion('status', [
@@ -43,6 +45,10 @@ export const intent = z.object({
       slippageBps: bps,
       priceImpactBps: bps,
       quotedAt: isoTime,
+      decimalsIn: decimals,
+      decimalsOut: decimals,
+      symbolIn: text(32).optional(),
+      symbolOut: text(32).optional(),
     })
     .optional(),
   expiresAt: isoTime,
@@ -117,7 +123,16 @@ export const portfolio = z.object({
       z.object({
         agentId,
         positions: z
-          .array(z.object({ chain: text(64), token: text(128), amount: atomic, cost: atomic }))
+          .array(
+            z.object({
+              chain: text(64),
+              token: text(128),
+              amount: atomic,
+              cost: atomic,
+              decimals,
+              symbol: text(32).optional(),
+            }),
+          )
           .max(256),
         tradedToday: atomic,
         dailyTradeMax: atomic,
