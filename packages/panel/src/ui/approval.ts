@@ -38,12 +38,8 @@ function decide(ctx: Context, approve: () => Promise<unknown>, reject: () => Pro
   )
 }
 
-/**
- * guard-core tops up the spending wallet before a buy waits for the owner (until GC-66), so today's
- * spend already counts it. Said so that "Spent today" holds no surprise.
- */
-const DRAWN =
-  "Its dollars are already in the spending wallet, drawn within today's limit. Nothing leaves that wallet until you approve; if you reject it, they stay there for the next payment."
+/** GC-66: a waiting buy draws from the vault only once the owner approves it. */
+const VAULT_UNTOUCHED = 'Nothing leaves your vault until you approve.'
 
 const mono = (text: string) => el('span', { class: 'mono' }, text)
 
@@ -102,7 +98,7 @@ export async function approval(ctx: Context, id: string): Screen {
         row('Decide before', when(approveBefore)),
       ),
       ...flags.map((flag) => el('p', { class: 'flag' }, flagText(flag))),
-      swap && isBuy(intent) && el('p', { class: 'muted' }, DRAWN),
+      swap && isBuy(intent) && el('p', { class: 'muted' }, VAULT_UNTOUCHED),
     ),
     decide(
       ctx,
