@@ -1121,7 +1121,9 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
 - **Date:** 2026-11-24
 - **Status:** approved by the owner on 2026-11-24 ("cr021 aprovado", after the five risks below were
   shown to him; he had asked for it with "Agentes que fazem trade, não só pagam… vamos fazer isso").
-  Applied to SPEC v0.16 on 2026-11-24.
+  Applied to SPEC v0.16 on 2026-11-24. Clarified the same day for PANEL-19, within the approved
+  scope: an owner portfolio route, the `close_positions` step-up action, and token decimals read from
+  the mint onchain with an untrusted display symbol.
 - **What breaks today:** nothing. An agent can only pay an x402 API or transfer the chain's dollar.
   It cannot buy or sell a token, which is what most onchain agents are built to do.
 - **The idea:** a third intent kind, `swap`, checked like a payment: policy, then a test run of the
