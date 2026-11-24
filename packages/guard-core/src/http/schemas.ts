@@ -81,6 +81,19 @@ export const newAgentRequest = z.object({ agentId: newAgentId })
 export const agentRouteParam = z.object({ id: agentId })
 export const intentIdParam = z.object({ id: z.uuid() })
 
+/** CR-021. The two bps limits default as SPEC says; every other field must be given. */
+const tradingBody = z.object({
+  enabled: z.boolean(),
+  venues: z.array(z.string().min(1).max(32)).max(8),
+  tokens: z.array(address).max(64),
+  allowAnyToken: z.boolean().default(false),
+  maxTradeUsd: atomicAmount,
+  dailyTradeMax: atomicAmount,
+  maxPositionUsd: atomicAmount,
+  maxSlippageBps: z.number().int().min(0).max(10_000).default(100),
+  maxPriceImpactBps: z.number().int().min(0).max(10_000).default(300),
+})
+
 export const policyBody = z.object({
   chains: z.array(caip2).max(16),
   tokens: z.array(address).max(32),
@@ -95,6 +108,7 @@ export const policyBody = z.object({
   priceIncreaseMaxPct: z.number().int().min(0).max(10_000).optional(),
   maxPaymentsPerMinute: z.number().int().min(1).max(1_000).optional(),
   requireMandate: z.boolean().optional(),
+  trading: tradingBody.optional(),
 })
 
 export type X402FetchRequest = z.infer<typeof x402FetchRequest>

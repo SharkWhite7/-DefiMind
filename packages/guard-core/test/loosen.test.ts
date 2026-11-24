@@ -81,3 +81,47 @@ describe('loosened', () => {
     ])
   })
 })
+
+describe('loosened trading (CR-021)', () => {
+  const trading = {
+    enabled: true,
+    venues: ['jupiter'],
+    tokens: ['BONK'],
+    allowAnyToken: false,
+    maxTradeUsd: '1000',
+    dailyTradeMax: '5000',
+    maxPositionUsd: '3000',
+    maxSlippageBps: 100,
+    maxPriceImpactBps: 300,
+  }
+  const trades = { ...before, trading }
+  const tradeChange = (patch: Partial<typeof trading>) =>
+    loosened(trades, { ...trades, trading: { ...trading, ...patch } })
+
+  it('flags turning trading on, from nothing or from off', () => {
+    expect(loosened(before, trades)).toEqual([
+      'trading.enabled',
+      'trading.venues',
+      'trading.tokens',
+      'trading.maxTradeUsd',
+      'trading.dailyTradeMax',
+      'trading.maxPositionUsd',
+      'trading.maxSlippageBps',
+      'trading.maxPriceImpactBps',
+    ])
+    const off = { ...before, trading: { ...trading, enabled: false } }
+    expect(loosened(off, trades)).toEqual(['trading.enabled'])
+  })
+
+  it('flags each loosening field, and none of the tightening ones', () => {
+    expect(tradeChange({ allowAnyToken: true })).toEqual(['trading.allowAnyToken'])
+    expect(tradeChange({ venues: ['jupiter', 'other'] })).toEqual(['trading.venues'])
+    expect(tradeChange({ tokens: ['WIF'] })).toEqual(['trading.tokens'])
+    expect(tradeChange({ dailyTradeMax: '5001' })).toEqual(['trading.dailyTradeMax'])
+    expect(tradeChange({ maxPriceImpactBps: 301 })).toEqual(['trading.maxPriceImpactBps'])
+    expect(
+      tradeChange({ enabled: false, tokens: [], maxTradeUsd: '1', maxSlippageBps: 10 }),
+    ).toEqual([])
+    expect(loosened(trades, before)).toEqual([])
+  })
+})

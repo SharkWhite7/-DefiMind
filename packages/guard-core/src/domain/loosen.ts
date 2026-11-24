@@ -1,4 +1,4 @@
-import type { Policy } from '@defimind/shared'
+import type { Policy, TradingPolicy } from '@defimind/shared'
 import { parseAmount } from './amount.js'
 import type { StoredPolicy } from './policy.js'
 
@@ -26,5 +26,34 @@ export function loosened(before: StoredPolicy, after: Policy): string[] {
     ...((after.priceIncreaseMaxPct ?? 0) > before.priceIncreaseMaxPct
       ? ['priceIncreaseMaxPct']
       : []),
+    ...tradingLoosened(before.trading, after.trading).map((field) => `trading.${field}`),
+  ]
+}
+
+const TRADE_LIMITS = ['maxTradeUsd', 'dailyTradeMax', 'maxPositionUsd'] as const
+const TRADE_BPS = ['maxSlippageBps', 'maxPriceImpactBps'] as const
+
+/** No trading policy trades nothing, so it compares as one that allows nothing (CR-021). */
+const CLOSED: TradingPolicy = {
+  enabled: false,
+  venues: [],
+  tokens: [],
+  allowAnyToken: false,
+  maxTradeUsd: '0',
+  dailyTradeMax: '0',
+  maxPositionUsd: '0',
+  maxSlippageBps: 0,
+  maxPriceImpactBps: 0,
+}
+
+function tradingLoosened(before: TradingPolicy = CLOSED, after: TradingPolicy = CLOSED): string[] {
+  return [
+    ...(after.enabled && !before.enabled ? ['enabled'] : []),
+    ...(after.allowAnyToken && !before.allowAnyToken ? ['allowAnyToken'] : []),
+    ...(['venues', 'tokens'] as const).filter((list) =>
+      after[list].some((item) => !before[list].includes(item)),
+    ),
+    ...TRADE_LIMITS.filter((limit) => parseAmount(after[limit]) > parseAmount(before[limit])),
+    ...TRADE_BPS.filter((limit) => after[limit] > before[limit]),
   ]
 }

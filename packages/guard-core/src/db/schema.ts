@@ -8,6 +8,8 @@ import type {
   PayIntentKind,
   PolicyDecision,
   RejectCode,
+  SwapDetails,
+  TradingPolicy,
 } from '@defimind/shared'
 import { sql } from 'drizzle-orm'
 import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
@@ -45,6 +47,8 @@ export const policies = sqliteTable('policies', {
   priceIncreaseMaxPct: integer('price_increase_max_pct').notNull().default(100),
   maxPaymentsPerMinute: integer('max_payments_per_minute').notNull().default(10),
   requireMandate: integer('require_mandate', { mode: 'boolean' }).notNull().default(false),
+  /** CR-021. Null trades nothing. */
+  trading: text('trading', { mode: 'json' }).$type<TradingPolicy>(),
   updatedAt: text('updated_at').notNull(),
 })
 
@@ -89,6 +93,8 @@ export const intents = sqliteTable(
     txId: text('tx_id'),
     /** The task budget this payment counts against, if any. */
     mandateId: text('mandate_id'),
+    /** CR-021, kind swap only. */
+    swap: text('swap', { mode: 'json' }).$type<SwapDetails>(),
     createdAt: text('created_at').notNull(),
     expiresAt: text('expires_at').notNull(),
   },
@@ -334,3 +340,42 @@ export const chainSettings = sqliteTable('chain_settings', {
   vault: text('vault'),
   updatedAt: text('updated_at').notNull(),
 })
+
+/**
+ * CR-021: a day's buys per agent, counted against dailyTradeMax and never against dailyMax.
+ * Counted when the swap is signed, as payments are.
+ */
+export const dailyTrades = sqliteTable(
+  'daily_trades',
+  {
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id),
+    chain: text('chain').$type<ChainId>().notNull(),
+    day: text('day').notNull(),
+    bought: text('bought')
+      .$type<Amount>()
+      .notNull()
+      .default(sql`'0'`),
+  },
+  (t) => [primaryKey({ columns: [t.agentId, t.chain, t.day] })],
+)
+
+/**
+ * CR-021: what each agent holds of a token, from its executed swaps, and what it paid, in the
+ * chain's dollar. A sell takes the cost down in proportion to the amount sold.
+ */
+export const positions = sqliteTable(
+  'positions',
+  {
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id),
+    chain: text('chain').$type<ChainId>().notNull(),
+    token: text('token').$type<Address>().notNull(),
+    amount: text('amount').$type<Amount>().notNull(),
+    cost: text('cost').$type<Amount>().notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.agentId, t.chain, t.token] })],
+)
