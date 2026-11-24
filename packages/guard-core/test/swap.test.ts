@@ -1,7 +1,9 @@
 import type { TradingPolicy } from '@defimind/shared'
 import { describe, expect, it } from 'vitest'
-import { getPosition } from '../src/db/trades.js'
-import { addWallet } from '../src/db/wallets.js'
+import { schema } from '../src/db/client.js'
+import { hashToken } from '../src/domain/auth.js'
+import { applyTrade, getPosition } from '../src/db/trades.js'
+import { activateWallet, addWallet } from '../src/db/wallets.js'
 import { CHAIN, harness, MINT as USDC, NOW, wouldHave } from './harness.js'
 import { signedIn } from './owner.js'
 import { BONK, trading, Venue } from './venue.js'
@@ -111,13 +113,72 @@ describe('swaps (CR-021)', () => {
     expect(getPosition(h.db, 'agent-1', CHAIN, BONK)).toEqual({ amount: 0n, cost: 0n })
   })
 
-  it('leaves positions alone on a chain where an agent has its own wallet (CR-022)', async () => {
+  it('caps only the agents the sending wallet serves (CR-022)', async () => {
     const { h, chain } = await setup()
     await bought(h)
-    addWallet(h.db, { agentId: 'agent-1', chain: CHAIN, address: 'own' }, NOW)
+    h.db
+      .insert(schema.agents)
+      .values({
+        id: 'agent-2',
+        name: 'agent-2',
+        tokenHash: hashToken('b'.repeat(40)),
+        createdAt: NOW.toISOString(),
+      })
+      .run()
+    addWallet(h.db, { agentId: 'agent-2', chain: CHAIN, address: 'own' }, NOW)
+    activateWallet(h.db, 'agent-2', CHAIN)
+    const theirs = { chain: CHAIN, token: BONK, amount: 5n, cost: 1n, decimals: 5 }
+    applyTrade(h.db, { agentId: 'agent-2', side: 'buy', ...theirs }, NOW)
     chain.held.set(BONK, 0n)
     await h.agent('POST', '/v1/agent/swap', sell('1000000'))
-    expect(getPosition(h.db, 'agent-1', CHAIN, BONK).amount).toBe(994_000_000n)
+    expect(getPosition(h.db, 'agent-1', CHAIN, BONK).amount).toBe(0n)
+    expect(getPosition(h.db, 'agent-2', CHAIN, BONK).amount).toBe(5n)
+  })
+
+  describe('settled from what landed (CR-024)', () => {
+    const landedBuy = [
+      { token: USDC, delta: '-1000000' },
+      { token: BONK, delta: '1100000000' },
+    ]
+
+    it('books a fill better than the test run as it landed', async () => {
+      const { h, chain } = await setup()
+      Object.assign(chain, { getLandedChanges: async () => landedBuy })
+      await bought(h)
+      expect(getPosition(h.db, 'agent-1', CHAIN, BONK)).toEqual({
+        amount: 1_100_000_000n,
+        cost: 1_000_000n,
+      })
+    })
+
+    it('waits for an RPC that has not seen the transaction yet', async () => {
+      const { h, chain } = await setup()
+      let reads = 0
+      Object.assign(chain, {
+        getLandedChanges: async () => {
+          reads += 1
+          if (reads === 1) {
+            throw new Error('tx_not_found: x')
+          }
+          return landedBuy
+        },
+      })
+      await bought(h)
+      expect(reads).toBe(2)
+      expect(getPosition(h.db, 'agent-1', CHAIN, BONK).amount).toBe(1_100_000_000n)
+    })
+
+    it('falls back to the test run, capped at the wallet, when the read fails', async () => {
+      const { h, chain } = await setup()
+      chain.landed = 994_000_000n
+      Object.assign(chain, {
+        getLandedChanges: async () => {
+          throw new Error('tx_failed: x')
+        },
+      })
+      await bought(h)
+      expect(getPosition(h.db, 'agent-1', CHAIN, BONK).amount).toBe(994_000_000n)
+    })
   })
 
   it('tops the hot wallet up for a buy before the test run', async () => {
