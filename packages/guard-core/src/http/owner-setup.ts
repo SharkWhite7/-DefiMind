@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import type { PublicKeys } from '../adapters/public-keys.js'
 import { countPasskeys } from '../db/passkeys.js'
+import { listWallets } from '../db/wallets.js'
 import * as repo from '../db/repo.js'
 import { tokenMatches } from '../domain/auth.js'
 import { issueEnrolCode } from '../service/passkeys.js'
@@ -45,8 +46,15 @@ export function ownerSetupRoutes(deps: PaymentDeps, origin: string, setupCode?: 
 }
 
 /** Public halves only: no route ever answers a private key (ADR 006). */
-export function ownerKeysRoute(keys: PublicKeys) {
+export function ownerKeysRoute(keys: PublicKeys, db: PaymentDeps['db']) {
   return async (app: FastifyInstance) => {
-    app.get('/v1/owner/keys', async () => keys)
+    app.get('/v1/owner/keys', async () => ({
+      ...keys,
+      agentWallets: listWallets(db).map(({ agentId, chain, address }) => ({
+        agentId,
+        chain,
+        address,
+      })),
+    }))
   }
 }

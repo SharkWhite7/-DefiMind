@@ -36,6 +36,8 @@ import { ownerSetupRoutes } from './owner-setup.js'
 import { clientIp } from './client-ip.js'
 import { allowedHosts, hostCheck } from './host-check.js'
 import { DEFAULT_SIGN_DIR, signRoutes } from './sign.js'
+import { listWallets } from '../db/wallets.js'
+import type { Wallets } from '../service/wallets.js'
 import type { PublicKeys } from '../adapters/public-keys.js'
 import type { ChainHost } from './owner-settings.js'
 
@@ -66,6 +68,8 @@ export interface ServerDeps {
   keys?: PublicKeys
   /** Rebuilds the chains when the owner changes a setting (CR-019); settings are off without it. */
   host?: ChainHost
+  /** The agents' own hot wallets (CR-022). */
+  wallets?: Wallets
 }
 
 /**
@@ -152,6 +156,7 @@ function paymentDeps(options: ServerDeps, log: FastifyBaseLogger): X402Deps {
     serial: serial(),
     log,
     ...(options.receiptKey === undefined ? {} : { receiptKey: options.receiptKey }),
+    ...(options.wallets === undefined ? {} : { wallets: options.wallets }),
     ...(passkeySetup(options.config) ?? {}),
     ...(options.push === undefined
       ? {}
@@ -212,7 +217,8 @@ async function serve(
     app.register(ownerRoutes(deps, rp))
     app.register(panelRoutes(config.PANEL_DIR ?? DEFAULT_PANEL_DIR))
     if (keys !== undefined) {
-      app.register(signRoutes(keys, config.SIGN_DIR ?? DEFAULT_SIGN_DIR))
+      const agents = () => listWallets(deps.db)
+      app.register(signRoutes(keys, config.SIGN_DIR ?? DEFAULT_SIGN_DIR, agents))
     }
     if (rp !== undefined) {
       app.register(ownerSetupRoutes(deps, rp.origin, config.SETUP_CODE))

@@ -56,13 +56,10 @@ export function ownerGuideRoutes(deps: X402Deps, host: ChainHost, signPage?: str
 
   /** The page's deposit action names the multisig or the Safe; it derives the vault itself. */
   function depositPage(chain: ChainId): string | undefined {
-    const keys = settingKeys(host.env).find((k) => k.chain === chain)
-    const vault = keys && applySettings(host.env, readSettings(db))[keys.vault]
-    if (signPage === undefined || typeof vault !== 'string') {
-      return undefined
-    }
-    const ref = { [chain.startsWith('solana:') ? 'multisig' : 'safe']: vault }
-    return signPageUrl(signPage, chain, { action: 'deposit', ...ref })
+    const ref = vaultRef(db, host, chain)
+    return signPage === undefined || ref === undefined
+      ? undefined
+      : signPageUrl(signPage, chain, { action: 'deposit', ...ref })
   }
 
   return async (app: FastifyInstance) => {
@@ -92,4 +89,17 @@ export function ownerGuideRoutes(deps: X402Deps, host: ChainHost, signPage?: str
       return { chains: rows.filter((row) => row !== undefined) }
     })
   }
+}
+
+/** How the signing page names a chain's vault: the Squads multisig, or the Safe. */
+export function vaultRef(
+  db: X402Deps['db'],
+  host: Pick<ChainHost, 'env'>,
+  chain: ChainId,
+): Record<string, string> | undefined {
+  const keys = settingKeys(host.env).find((k) => k.chain === chain)
+  const vault = keys && applySettings(host.env, readSettings(db))[keys.vault]
+  return typeof vault === 'string'
+    ? { [chain.startsWith('solana:') ? 'multisig' : 'safe']: vault }
+    : undefined
 }

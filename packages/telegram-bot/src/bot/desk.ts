@@ -4,7 +4,13 @@ import type { Logger } from 'pino'
 import type { Decision, GuardClient, Settled } from '../adapters/guard.js'
 import { Alerts } from '../domain/alerts.js'
 import { mandateSettledText, mandateText } from '../domain/mandate.js'
-import { adminLoosenText, breakerText, chainBrokenText, passkeyText } from '../domain/notices.js'
+import {
+  adminLoosenText,
+  backupFailedText,
+  breakerText,
+  chainBrokenText,
+  passkeyText,
+} from '../domain/notices.js'
 import {
   type Admission,
   ApprovalBook,
@@ -75,6 +81,7 @@ const NOTICES = {
   passkey_enrolled: passkeyText,
   chain_broken: chainBrokenText,
   admin_loosen_refused: adminLoosenText,
+  backup_failed: backupFailedText,
 } as const
 
 export class Desk {

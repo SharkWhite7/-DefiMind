@@ -13,7 +13,7 @@ export interface PublicKeys {
 }
 
 /** A Solana keypair file holds the secret key, then the public key: the last 32 bytes. */
-async function solanaAddress(path: string): Promise<string> {
+export async function solanaAddress(path: string): Promise<string> {
   return base58((await readKeypairFile(path)).slice(32))
 }
 

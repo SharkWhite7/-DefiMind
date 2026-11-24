@@ -101,6 +101,34 @@ export async function buildChains(
 }
 
 /**
+ * An agent's own wallet (CR-022): the chain's adapter on the same vault, with the agent's key as
+ * its hot wallet. Built from a config holding that chain alone, so no other chain is checked.
+ */
+export async function buildAgentChain(
+  config: Config,
+  chain: ChainId,
+  keyFile: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ChainAdapter> {
+  const only = (id: ChainId | undefined, value: string | undefined) =>
+    id === chain ? value : undefined
+  const solo: Config = {
+    ...config,
+    SQUADS_MULTISIG: only(config.SOLANA_CHAIN, config.SQUADS_MULTISIG),
+    SOLANA_HOT_WALLET_KEYPAIR: keyFile,
+    SAFE_ADDRESS: only(config.BASE_CHAIN, config.SAFE_ADDRESS),
+    BASE_HOT_WALLET_KEY_FILE: keyFile,
+    ROBINHOOD_SAFE_ADDRESS: only(config.ROBINHOOD_CHAIN, config.ROBINHOOD_SAFE_ADDRESS),
+    ROBINHOOD_HOT_WALLET_KEY_FILE: keyFile,
+  }
+  const adapter = (await buildChains(solo, fetchImpl)).get(chain)
+  if (adapter === undefined) {
+    throw new Error(`no vault on ${chain} for an agent wallet`)
+  }
+  return adapter
+}
+
+/**
  * The cluster's public RPC, the one /sign uses, for a chain whose RPC neither the env nor the panel
  * sets (CR-019): a one-click owner need not know what an RPC is. It is rate-limited, so a busy
  * deployment sets its own. Base has none.

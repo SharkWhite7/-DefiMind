@@ -30,6 +30,14 @@ function byHand(chain: string, paused: string) {
   ]
 }
 
+/** guard-core prefixes an own wallet's description with whose it is: said once, above, in full. */
+function described({ description, wallet }: KillView['ownerTransactions'][number]) {
+  const whose = wallet === undefined ? '' : `${wallet.agentId}'s own wallet: `
+  return whose !== '' && description.startsWith(whose)
+    ? description.slice(whose.length)
+    : description
+}
+
 export function onchain(
   tx: KillView['ownerTransactions'][number],
   paused = 'Your agents are paused.',
@@ -38,7 +46,15 @@ export function onchain(
   const linked = tx.link !== undefined || tx.pageLink !== undefined
   return card(
     el('h2', {}, chainName(tx.chain)),
-    el('p', { class: built ? '' : 'flag' }, tx.description),
+    // An agent's own wallet, in full: the limit to remove is that address's, not the shared one's.
+    tx.wallet !== undefined &&
+      el(
+        'p',
+        {},
+        `${tx.wallet.agentId}'s own wallet: `,
+        el('span', { class: 'mono' }, tx.wallet.address),
+      ),
+    el('p', { class: built ? '' : 'flag' }, described(tx)),
     tx.link !== undefined && el('a', { href: tx.link, class: 'button primary' }, 'Open in Phantom'),
     tx.pageLink !== undefined &&
       el('a', { href: tx.pageLink, class: 'button' }, 'Open on this computer'),

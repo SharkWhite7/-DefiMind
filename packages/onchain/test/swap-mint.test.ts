@@ -74,7 +74,13 @@ function mint(
 
 describe('what a mint says about the token', () => {
   it('reads a plain mint: its decimals, no risk', () => {
-    expect(mint()).toEqual({ decimals: 9, risks: [], mintAuthority: true })
+    expect(mint()).toEqual({
+      decimals: 9,
+      freezeAuthority: false,
+      extensions: [],
+      risks: [],
+      mintAuthority: true,
+    })
   })
 
   it('flags a freeze authority, which could lock the tokens', () => {

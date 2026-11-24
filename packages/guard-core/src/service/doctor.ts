@@ -9,6 +9,7 @@ import { auditLog } from '../db/schema.js'
 import { formatDollars, parseAmount } from '../domain/amount.js'
 import { chainName } from '../domain/chains.js'
 import { BACKUP_NAME, backupsDir, UPLOADED } from './backup.js'
+import type { Wallets } from './wallets.js'
 
 const BACKUP_MAX_AGE_MS = 26 * 3_600_000
 const READ_TIMEOUT_MS = 5_000
@@ -29,6 +30,7 @@ export interface DoctorDeps {
   publicAdmin?: boolean
   /** A bucket is set for the backups: the check names the last upload. */
   bucket?: boolean
+  wallets?: Wallets | undefined
 }
 
 /**
@@ -36,9 +38,11 @@ export interface DoctorDeps {
  * names no URL, key or token: the answer is shown in Telegram, which is not a safe place for them.
  */
 export async function doctor(deps: DoctorDeps): Promise<DoctorCheck[]> {
-  const chains = await Promise.all(
-    [...deps.chains.values()].map((adapter) => chainChecks(deps, adapter)),
-  )
+  const own = (await deps.wallets?.all().catch(() => [])) ?? []
+  const chains = await Promise.all([
+    ...[...deps.chains.values()].map((adapter) => chainChecks(deps, adapter)),
+    ...own.map(({ adapter, agentId }) => chainChecks(deps, adapter, agentId)),
+  ])
   return [
     database(deps),
     ...chains.flat(),
@@ -71,20 +75,28 @@ function database({ db, now }: { db: Db; now: () => Date }): DoctorCheck {
   }
 }
 
-async function chainChecks(deps: DoctorDeps, adapter: ChainAdapter): Promise<DoctorCheck[]> {
+/** The shared hot wallet's checks, or with `agentId` those of that agent's own (CR-022). */
+async function chainChecks(
+  deps: DoctorDeps,
+  adapter: ChainAdapter,
+  agentId?: string,
+): Promise<DoctorCheck[]> {
   const id = adapter.chain
   const chain = chainName(id)
+  const wallet = agentId === undefined ? 'the hot wallet' : `${agentId}'s own wallet`
+  const Wallet = agentId === undefined ? 'The hot wallet' : wallet
+  const prefix = agentId === undefined ? id : `${id}:${agentId}`
   const attempt = (check: string, read: () => Promise<Omit<DoctorCheck, 'id'> | undefined>) =>
-    within(`${id}:${check}`, chain, read)
+    within(`${prefix}:${check}`, chain, read)
   // Side by side, so a chain whose RPC hangs costs one timeout, not four.
   const checks = await Promise.all([
     attempt('allowance', async () => {
       const allowance = await adapter.getAllowanceState()
       return allowance.status === 'active'
-        ? { status: 'ok', message: `The onchain daily limit on ${chain} is in place.` }
+        ? { status: 'ok', message: `The onchain daily limit of ${wallet} on ${chain} is in place.` }
         : {
             status: 'warn',
-            message: `There is no onchain limit on ${chain}, so the hot wallet can draw nothing.`,
+            message: `There is no onchain limit on ${chain}, so ${wallet} can draw nothing.`,
             fix: 'If this follows a kill, set the limit up again before paying on this chain.',
           }
     }),
@@ -93,10 +105,10 @@ async function chainChecks(deps: DoctorDeps, adapter: ChainAdapter): Promise<Doc
       return parseAmount(gas.balance) < parseAmount(gas.minimum)
         ? {
             status: 'warn',
-            message: `The hot wallet on ${chain} is low on ${gas.symbol} for fees.`,
-            fix: `Send some ${gas.symbol} to the hot wallet's address.`,
+            message: `${Wallet} on ${chain} is low on ${gas.symbol} for fees.`,
+            fix: `Send some ${gas.symbol} to the address of ${wallet}.`,
           }
-        : { status: 'ok', message: `The hot wallet on ${chain} has enough ${gas.symbol} for fees.` }
+        : { status: 'ok', message: `${Wallet} on ${chain} has enough ${gas.symbol} for fees.` }
     }),
     attempt('balance', async () => {
       const token = deps.usdc.get(id)
@@ -105,9 +117,16 @@ async function chainChecks(deps: DoctorDeps, adapter: ChainAdapter): Promise<Doc
         return { status: 'warn', message: `No dollar token is configured for ${chain}.` }
       }
       const balance = formatDollars(await adapter.getHotWalletBalance(token))
-      return { status: 'ok', message: `The hot wallet on ${chain} holds ${balance} ${symbol}.` }
+      return { status: 'ok', message: `${Wallet} on ${chain} holds ${balance} ${symbol}.` }
     }),
-    attempt('control', async () => vaultControl(id, chain, (await adapter.getVault()).control)),
+    // The vault is the same for every wallet on a chain: said once, with the shared wallet.
+    ...(agentId === undefined
+      ? [
+          attempt('control', async () =>
+            vaultControl(id, chain, (await adapter.getVault()).control),
+          ),
+        ]
+      : []),
   ])
   return checks.filter((check) => check !== undefined)
 }
