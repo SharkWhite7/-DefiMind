@@ -83,7 +83,7 @@ export interface Mandate {
 }
 
 /** CR-010: why a payment goes to the owner even below the threshold. */
-export type ApprovalFlag = 'RECIPIENT_CHANGED' | 'PRICE_JUMP'
+export type ApprovalFlag = 'RECIPIENT_CHANGED' | 'PRICE_JUMP' | TradingFlag
 
 /** CR-010: one per executed intent, signed by RECEIPT_SIGNING_KEY. */
 export interface Receipt {
