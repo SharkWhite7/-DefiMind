@@ -392,6 +392,30 @@ policy without `trading` trades nothing, and an adapter without `quoteSwap` refu
 - **Loosening needs the step-up.** Turning trading on, a new venue or token, `allowAnyToken`, or a
   raised limit is a loosening, so it needs the passkey step-up (CR-015). The bot can only tighten.
 
+### Agent wallets (CR-022)
+
+Opt-in, per agent and chain. `POST /v1/owner/agents/:id/wallets { chain, assertion }` (step-up
+`agent_wallet` over `{ agentId, chain }`) makes the agent's own hot wallet under
+`KEYS_DIR/agents/<agentId>/<chain>` (0600), or takes the file `AGENT_WALLET_<AGENT>_<CHAIN>_FILE`
+names, for example `AGENT_WALLET_FLY_AGENT_SOLANA_MAINNET_FILE`. A second call returns the same
+wallet. It answers the wallet's address, its gas and the `/sign` add-limit page that names it.
+
+- **Pending, then active.** Until guard-core reads the wallet's limit onchain, the agent keeps paying
+  from the shared wallet. The wallet turns active on the next `GET /v1/owner/agents/:id/wallets`
+  after the limit is signed. From then on every payment, top-up and swap of that agent on that chain
+  goes through its own wallet only. If its adapter cannot be built, the payment is refused, never
+  sent from the shared wallet.
+- **A key that changed stops the start.** guard-core refuses to start when a wallet's key file no
+  longer gives the stored address, since that limit names the old key.
+- **Kill.** `POST /v1/owner/kill` returns one transaction per chain and wallet. Each link names its
+  own hot wallet. `POST /v1/owner/agents/:id/kill` pauses that agent alone and returns its own
+  wallets' transactions. A revoke returns them too, with a note that the limit stays live until
+  they are signed.
+- **Doctor.** Each own wallet gets its allowance, gas and balance lines, with ids
+  `<chain>:<agentId>:<check>`.
+- **Close positions.** It also sells what each agent's own wallet holds, as that agent.
+- **`/sign`.** It is filled with every agent wallet when it is served.
+
 ### Guided setup (CR-019)
 
 A one-click deployment starts with only `ADMIN_TOKEN` and `SETUP_CODE`, and a disk at `/data`.

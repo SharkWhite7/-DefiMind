@@ -17,10 +17,11 @@ import type { SimulationOutcome } from '../../ChainAdapter.js'
 import { confirm } from '../squads.js'
 import { swapEffects, type Holding } from './effects.js'
 import { inspectSwap, MAX_PRIORITY_LAMPORTS } from './inspect.js'
-import { SwapUnavailable, type Venue } from './jupiter.js'
+import type { Venue } from './jupiter.js'
 import { expand } from './lookup.js'
 import { mintFacts } from './mint.js'
 import { checkQuote } from './quote.js'
+import { exitImpact } from './risk.js'
 
 export interface SwapDeps {
   connection: Connection
@@ -70,7 +71,13 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
     let exitImpactBps: number | null = null
     if (buy) {
       risks.push(...factsOut.risks)
-      exitImpactBps = await exit(request.outputMint, quote.expectedOut, request.slippageBps)
+      exitImpactBps = await exitImpact(
+        venue,
+        dollar,
+        request.outputMint,
+        quote.expectedOut,
+        request.slippageBps,
+      )
       if (exitImpactBps === null) risks.push('NO_EXIT_ROUTE')
     }
     return {
@@ -88,17 +95,6 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
       decimalsIn: factsIn.decimals,
       decimalsOut: factsOut.decimals,
       quotedAt: new Date().toISOString(),
-    }
-  }
-
-  /** A sell quote for what the buy would bring: the price impact of getting out, or null. */
-  async function exit(token: string, amount: bigint, slippageBps: number) {
-    const request = { inputMint: token, outputMint: dollar.toBase58(), amount, slippageBps }
-    try {
-      return checkQuote(await venue.quote(request), request).priceImpactBps
-    } catch (error) {
-      if (error instanceof SwapUnavailable && error.code === 'no_route') return null
-      throw error
     }
   }
 

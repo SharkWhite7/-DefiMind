@@ -1,4 +1,3 @@
-import { type KillTarget, killPageUrl, phantomKillUrl } from '@defimind/shared'
 import type { FastifyInstance } from 'fastify'
 import { listAgents } from '../db/agents.js'
 import { subscribe, unsubscribe } from '../db/push.js'
@@ -18,6 +17,7 @@ import { HttpError } from './errors.js'
 import { ownerKeysRoute } from './owner-setup.js'
 import { type ChainHost, ownerSettingsRoutes } from './owner-settings.js'
 import { ownerGuideRoutes } from './owner-guide.js'
+import { ownerWalletRoutes, type Signing, withLinks } from './owner-wallets.js'
 import type { PublicKeys } from '../adapters/public-keys.js'
 import {
   agentIdParam,
@@ -49,7 +49,7 @@ export function ownerPanelRoutes(
     publicAdmin?: boolean
     /** The VAPID public key; push is off without it. */
     pushKey?: string
-    signing?: { page: string; targets: KillTarget[] }
+    signing?: Signing
     keys?: PublicKeys
     host?: ChainHost
   },
@@ -73,11 +73,12 @@ export function ownerPanelRoutes(
   return async (app: FastifyInstance) => {
     await app.register(ownerExecutions(deps))
     if (setup.keys !== undefined) {
-      await app.register(ownerKeysRoute(setup.keys))
+      await app.register(ownerKeysRoute(setup.keys, db))
     }
     if (setup.host !== undefined) {
       await app.register(ownerSettingsRoutes(deps, setup.host, stepUp))
       await app.register(ownerGuideRoutes(deps, setup.host, setup.signing?.page))
+      await app.register(ownerWalletRoutes(deps, rp.origin, setup.host, stepUp, setup.signing))
     }
 
     app.post('/v1/owner/challenge', async (request) => {
@@ -135,7 +136,7 @@ export function ownerPanelRoutes(
       return control.addAgent(agentId)
     })
     app.post('/v1/owner/agents/:id/revoke', async (request) =>
-      control.revokeAgent(agentRouteParam.parse(request.params).id),
+      control.revokeAgent(agentRouteParam.parse(request.params).id, request.log),
     )
 
     app.get('/v1/owner/policy/:agentId', async (request) =>
@@ -190,23 +191,10 @@ export function ownerPanelRoutes(
 
     app.post('/v1/owner/kill', async (request) => {
       const killed = await control.kill(request.log)
-      const { signing } = setup
-      if (signing === undefined) {
-        return killed
+      return {
+        ...killed,
+        ownerTransactions: withLinks(killed.ownerTransactions, setup.signing, now()),
       }
-      // Stamped now: the signing page refuses a link more than 15 minutes old.
-      const issued = now()
-      const ownerTransactions = killed.ownerTransactions.map((tx) => {
-        const target = signing.targets.find((t) => t.chain === tx.chain)
-        return target === undefined
-          ? tx
-          : {
-              ...tx,
-              link: phantomKillUrl(signing.page, target, issued),
-              pageLink: killPageUrl(signing.page, target, issued),
-            }
-      })
-      return { ...killed, ownerTransactions }
     })
   }
 }

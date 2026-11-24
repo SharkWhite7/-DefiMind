@@ -26,6 +26,9 @@ const HARMLESS = new Set<ExtensionType>([
 
 export interface MintFacts {
   decimals: number
+  freezeAuthority: boolean
+  /** The Token-2022 extensions by name, harmless ones included. */
+  extensions: string[]
   /** TOKEN_FREEZABLE and TOKEN_EXTENSION_RISK: each rejects a buy. */
   risks: RejectCode[]
   /** The mint can still be inflated: the buy goes to the owner. */
@@ -40,10 +43,15 @@ export function mintFacts(address: PublicKey, info: AccountInfo<Buffer> | null):
     throw new Error(`not_a_mint: ${address.toBase58()} is owned by ${program.toBase58()}`)
   }
   const mint = unpackMint(address, info, program)
+  const types = getExtensionTypes(mint.tlvData)
   const risks: RejectCode[] = []
   if (mint.freezeAuthority) risks.push('TOKEN_FREEZABLE')
-  if (getExtensionTypes(mint.tlvData).some((type) => !HARMLESS.has(type))) {
-    risks.push('TOKEN_EXTENSION_RISK')
+  if (types.some((type) => !HARMLESS.has(type))) risks.push('TOKEN_EXTENSION_RISK')
+  return {
+    decimals: mint.decimals,
+    freezeAuthority: mint.freezeAuthority !== null,
+    extensions: types.map((type) => ExtensionType[type] ?? `Unknown${type}`),
+    risks,
+    mintAuthority: mint.mintAuthority !== null,
   }
-  return { decimals: mint.decimals, risks, mintAuthority: mint.mintAuthority !== null }
 }

@@ -15,6 +15,7 @@ import { loadConfig } from '../src/config.js'
 import { openDb, schema, type Db } from '../src/db/client.js'
 import { hashToken } from '../src/domain/auth.js'
 import { buildServer, type Server } from '../src/http/server.js'
+import { Wallets, type WalletKeys } from '../src/service/wallets.js'
 
 export const CHAIN = CHAINS.solanaDevnet
 export const MINT = '4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU'
@@ -70,6 +71,8 @@ export async function harness(
     build?: ChainHost['build']
     /** The chain the agent pays on; a plain StubChain by default. */
     chain?: StubChain
+    /** Turns the agents' own wallets on (CR-022), with these keys and adapters. */
+    walletKeys?: WalletKeys
   } = {},
 ): Promise<Harness> {
   const db = openDb(':memory:')
@@ -127,6 +130,7 @@ export async function harness(
     ...(options.push === undefined ? {} : { push: options.push }),
     ...(options.keys === undefined ? {} : { keys: options.keys }),
     ...(options.build === undefined ? {} : { host: { env: config, build: options.build } }),
+    ...(options.walletKeys === undefined ? {} : { wallets: new Wallets(db, options.walletKeys) }),
   })
 
   return {

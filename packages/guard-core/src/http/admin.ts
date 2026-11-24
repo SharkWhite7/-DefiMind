@@ -84,7 +84,7 @@ export function adminRoutes(
     app.get('/agents', async () => control.agents())
 
     app.post('/agents/:id/revoke', async (request) =>
-      control.revokeAgent(agentRouteParam.parse(request.params).id),
+      control.revokeAgent(agentRouteParam.parse(request.params).id, request.log),
     )
 
     // The passkey is bound to guard-core's public address, so enrolment needs it configured.
