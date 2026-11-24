@@ -336,6 +336,15 @@ With all three set, everything is as before.
   `HOST` on loopback, set `ADMIN_ROUTES=false`, or set `ALLOW_PUBLIC_ADMIN=true`, which starts with
   a warning.
 - The start-up log names each listener's address and its route groups (`listener layout`).
+- With `SETUP_CODE` set, only the setup code enrols the first passkey. The admin token's passkey
+  routes answer 403 `use_setup_code` while no passkey exists, audited (`admin_enrol_refused`)
+  and alerted like a loosening. Without `SETUP_CODE`, as in a local run, the admin token still can,
+  and the start-up log warns about it.
+- An x402 approval is redeemed only by the same request: the SHA-256 of its method, full URL with
+  query and body. Another request is a new intent.
+- With `PUBLIC_URL` or `PASSKEY_ORIGIN` set, the public listener answers 421 `misdirected` to a Host
+  header naming another host. A single loopback listener also takes `localhost`, `127.0.0.1`,
+  `[::1]` and its `HOST`. `/health` answers any Host.
 
 ### Guarded trading (CR-021)
 

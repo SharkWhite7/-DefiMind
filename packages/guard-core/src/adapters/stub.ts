@@ -1,4 +1,4 @@
-import type { ChainAdapter, KillTx, SimulationOutcome } from '@defimind/onchain'
+import type { ChainAdapter, KillTx, SimulationOutcome, Vault } from '@defimind/onchain'
 import type { AllowanceState, Amount, ChainId, PayIntent } from '@defimind/shared'
 import type { PaymentRequirements, SchemeNetworkClient } from '@x402/core/types'
 
@@ -30,7 +30,7 @@ export class StubChain implements ChainAdapter {
     }
   }
 
-  async getVault(): Promise<{ address: string; token: string; balance: Amount }> {
+  async getVault(): Promise<Vault> {
     return {
       address: `stub-vault-${this.chain}`,
       token: 'stub-usd',

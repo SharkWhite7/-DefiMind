@@ -3,7 +3,9 @@ import type { IntentStatus, PayIntent, Policy, RejectCode } from '@defimind/shar
 import { x402Client } from '@x402/core/client'
 import { encodePaymentSignatureHeader } from '@x402/core/http'
 import type { PaymentPayload, PaymentRequired, PaymentRequirements } from '@x402/core/types'
+import { createHash } from 'node:crypto'
 import { pin } from '../db/pins.js'
+import { canonicalJson } from '../domain/canonical.js'
 import * as repo from '../db/repo.js'
 import { chooseAccept, refusedTerms, requirementsChanged } from '../domain/x402.js'
 import { call, decode402, settledTx, type Upstream } from '../adapters/upstream.js'
@@ -95,6 +97,13 @@ export async function paidFetch(
   return deps.serial(request.agentId, () => pay(deps, request, first, required, chosen, intent))
 }
 
+/** The method, the full URL with its query, and the body: what the owner's approval covers. */
+export function requestHash(request: Pick<X402FetchRequest, 'method' | 'url' | 'body'>): string {
+  return createHash('sha256')
+    .update(canonicalJson({ method: request.method, url: request.url, body: request.body ?? '' }))
+    .digest('hex')
+}
+
 async function pay(
   deps: X402Deps,
   request: X402FetchRequest,
@@ -103,8 +112,13 @@ async function pay(
   chosen: PaymentRequirements,
   fresh: PayIntent,
 ): Promise<FetchOutcome> {
-  // An approval the owner already gave for exactly these terms is redeemed here, once.
-  const approved = repo.findApprovedX402(deps.db, fresh, deps.now())
+  // An approval the owner already gave for exactly these terms, and this very request, is
+  // redeemed here, once (CR-022).
+  const hash = requestHash(request)
+  const approved = repo.findApprovedX402(deps.db, fresh, hash, deps.now())
+  if (approved === undefined) {
+    repo.bindRequest(deps.db, fresh.id, hash)
+  }
   const clearance = await clear(deps, approved ?? fresh, approved !== undefined)
   if (!clearance.cleared) {
     // Shadow mode pays nothing, so the agent gets the unpaid 402 it would have had to pay.
