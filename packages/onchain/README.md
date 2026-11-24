@@ -175,6 +175,14 @@ and by the slot its code was deployed at. The test reads that code from mainnet 
 
 To refresh the fixtures, run `pnpm record:swap` again.
 
+### Landed changes (ON-32)
+
+`getLandedChanges(txId)` (Solana) returns what a confirmed transaction really moved for the hot
+wallet: `{ token, delta }[]`, signed atomic deltas netted per mint from the transaction's own pre and
+post token balances, none zero, SOL left out. A swap lands at its own price, never exactly the test
+run's, so positions are booked from this. A failed transaction throws `tx_failed`, one the RPC does
+not have yet `tx_not_found`. Tested against the owner's recorded mainnet buy, Close and top-up.
+
 ### Vault (CR-019)
 
 `getVault()` returns `{ address, token, balance }`. This is the vault deposits go to: the Squads
