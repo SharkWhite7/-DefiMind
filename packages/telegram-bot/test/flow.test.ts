@@ -422,6 +422,28 @@ describe('breaker alerts', () => {
   })
 })
 
+describe('admin loosening refused', () => {
+  it('warns every owner of an attack, the detail escaped', async () => {
+    const { calls, deliver } = await harness()
+    const refused = {
+      kind: 'admin_loosen_refused',
+      detail: 'PUT policy research-agent <b>',
+      sentAt: NOW.toISOString(),
+    }
+    expect((await deliver('/hooks/alert', refused)).statusCode).toBe(200)
+    expect((await deliver('/hooks/alert', refused)).statusCode).toBe(409)
+    const posted = sent(calls, 'sendMessage')
+    expect(posted.map((call) => call.payload['chat_id'])).toEqual([OWNER.id, OTHER_OWNER.id])
+    expect(posted[0]?.payload['text']).toBe(
+      '<b>Possible attack blocked</b>\n' +
+        "Someone with guard-core's admin token tried to give an agent more room. guard-core " +
+        'refused it: no rule changed. Only your passkey can do that, in the DefiMind panel.\n' +
+        'If it was not you, replace ADMIN_TOKEN on the server now, and consider /kill.\n' +
+        'guard-core says: <i>PUT policy research-agent &lt;b&gt;</i>',
+    )
+  })
+})
+
 describe('shadow mode events', () => {
   it('accepts a shadowed payment without messaging anyone', async () => {
     const { calls, deliver } = await harness()

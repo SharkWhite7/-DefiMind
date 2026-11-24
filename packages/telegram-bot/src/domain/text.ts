@@ -14,6 +14,7 @@ import {
 } from './codes.js'
 import { type ExplorerTarget, explorerUrl } from './explorer.js'
 import { formatUsd } from './money.js'
+import { isSwap, swapLines } from './swap.js'
 
 /**
  * Every message the owner reads, as Telegram HTML. Anything that came from an agent or a counterparty
@@ -182,15 +183,25 @@ export function settledFallback(original: string, outcome: Outcome): string {
   return `${outcomeLine(outcome)}\n${escapeHtml(original)}`
 }
 
-function details({ intent, simulation, approveBefore }: ApprovalRequest, full: boolean): string[] {
+/** What moves: a trade's both sides, or a payment's amount and where it goes. */
+function movement(intent: PayIntent, full: boolean): string[] {
+  if (isSwap(intent)) {
+    return swapLines(intent)
+  }
   const recipient = full ? intent.recipient : shortAddress(intent.recipient)
   return [
-    `Agent: <code>${escapeHtml(intent.agentId)}</code>`,
     `Amount: ${amountText(intent)}`,
-    `Chain: ${chainName(intent.chain)}`,
     `Recipient: <code>${escapeHtml(recipient)}</code>` +
       explorerLink(intent.chain, 'address', intent.recipient),
     destination(intent),
+  ]
+}
+
+function details({ intent, simulation, approveBefore }: ApprovalRequest, full: boolean): string[] {
+  return [
+    `Agent: <code>${escapeHtml(intent.agentId)}</code>`,
+    `Chain: ${chainName(intent.chain)}`,
+    ...movement(intent, full),
     `Simulation: ${escapeHtml(simulation.summary)}`,
     `Expires: ${utcTime(approveBefore)}`,
     '',
@@ -199,6 +210,9 @@ function details({ intent, simulation, approveBefore }: ApprovalRequest, full: b
 }
 
 function destination(intent: PayIntent): string {
+  if (intent.kind === 'swap') {
+    return 'Domain: none, a trade'
+  }
   return intent.kind === 'x402'
     ? `Domain: ${escapeHtml(intent.domain ?? '(none)')}`
     : 'Domain: none, direct transfer'
@@ -221,13 +235,10 @@ export function outcomeLine(outcome: Outcome): string {
 
 export function executedText(intent: PayIntent): string {
   return [
-    '<b>Payment executed</b>',
+    isSwap(intent) ? '<b>Trade executed</b>' : '<b>Payment executed</b>',
     `Agent: <code>${escapeHtml(intent.agentId)}</code>`,
-    `Amount: ${amountText(intent)}`,
     `Chain: ${chainName(intent.chain)}`,
-    `Recipient: <code>${escapeHtml(intent.recipient)}</code>` +
-      explorerLink(intent.chain, 'address', intent.recipient),
-    destination(intent),
+    ...movement(intent, true),
     `Transaction: <code>${escapeHtml(intent.txId ?? '(not reported)')}</code>` +
       explorerLink(intent.chain, 'tx', intent.txId ?? ''),
   ].join('\n')
