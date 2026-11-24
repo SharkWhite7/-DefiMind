@@ -103,6 +103,9 @@ More detail, including what an agent can and cannot do:
   [CHANGELOG](../CHANGELOG.md), then in Render click **Manual Deploy**, then **Deploy latest
   commit**.
 
+- **Trading.** Agents can buy and sell tokens on Solana, under limits you set. It is off until you
+  turn it on: [`trading.md`](./trading.md).
+
 ## If something goes wrong
 
 - **The setup code is refused.** Copy it again from Render's Environment tab, with no space before
