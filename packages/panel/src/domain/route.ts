@@ -9,6 +9,7 @@ export type Route =
   | { name: 'mandate'; id: string }
   | { name: 'agents' }
   | { name: 'agent'; id: string }
+  | { name: 'trade'; id: string }
   | { name: 'report' }
   | { name: 'doctor' }
   | { name: 'executions' }
@@ -58,7 +59,11 @@ export function parseRoute(pathname: string, hash = ''): Route {
   const parts = pathname.slice(BASE.length).split('/').filter(Boolean)
   const [first, second, ...rest] = parts
   if (rest.length > 0) {
-    return { name: 'missing' }
+    const id = second === undefined ? undefined : decode(second)
+    // CR-025: an agent's manual trade screen, the only three-part path.
+    return first === 'agents' && rest.join('/') === 'trade' && id !== undefined && AGENT_ID.test(id)
+      ? { name: 'trade', id }
+      : { name: 'missing' }
   }
   if (first === undefined) {
     return { name: 'overview' }
@@ -104,6 +109,8 @@ export function href(route: Route): string {
       return `${BASE}mandates/${route.id}`
     case 'agent':
       return `${BASE}agents/${encodeURIComponent(route.id)}`
+    case 'trade':
+      return `${BASE}agents/${encodeURIComponent(route.id)}/trade`
     case 'guide':
       return `${BASE}start${route.step === undefined ? '' : `/${route.step}`}`
     default:

@@ -356,7 +356,7 @@ export async function guardCore(
     if (setup.route(method, path, body, send, stepUp, { passkeys: state.passkeys, origin })) {
       return
     }
-    if (trades?.route(method, path, send, stepUp)) {
+    if (trades?.route(method, path, body, send, stepUp)) {
       return
     }
     if (agentWallets?.route(method, path, body, send, stepUp)) {
