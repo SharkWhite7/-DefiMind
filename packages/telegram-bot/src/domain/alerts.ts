@@ -1,5 +1,6 @@
 import type { PayIntent } from '@defimind/shared'
 import { type AttackCode, attackCodesIn } from './codes.js'
+import { dollarsMoved } from './swap.js'
 import { attackText, executedText, heldBackText } from './text.js'
 
 /** After an attack alert, the same agent and code stay quiet this long and are only counted. */
@@ -31,7 +32,7 @@ export class Alerts {
   for(intent: PayIntent, now: Date): string[] {
     // A window that ran out between timer ticks is reported before a new one replaces it.
     const alerts = this.flush(now)
-    if (intent.status === 'executed' && BigInt(intent.amount) >= this.#notifyAbove) {
+    if (intent.status === 'executed' && dollarsMoved(intent) >= this.#notifyAbove) {
       alerts.push(executedText(intent))
     }
     const fresh = attackCodesIn(intent.rejectReasons).filter((code) =>

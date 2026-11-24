@@ -13,7 +13,7 @@ export const PRESETS: Record<Preset, { perTx: string; daily: string; approval: s
 const min = (...values: bigint[]) => values.reduce((a, b) => (b < a ? b : a))
 
 /**
- * The first agent's policy: the preset, in shadow mode, paying no domain and no recipient until the
+ * The rules the wizard suggests for the first agent: the preset, in shadow mode, paying no domain and no recipient until the
  * owner allows one. The offchain day may not exceed the smallest onchain cap: above it a payment
  * passes the policy and then fails at the top-up, which tells the owner nothing.
  */
@@ -33,12 +33,6 @@ export function presetPolicy(answers: Answers): Omit<Policy, 'agentId'> {
     mode: 'shadow',
   }
 }
-
-/** What PUT /v1/admin/policy answers: a guard-core older than SPEC v0.6 drops `mode`. */
-export const policyResponse = z.object({
-  agentId: z.string(),
-  mode: z.enum(['live', 'shadow']).optional(),
-})
 
 export const createdAgent = z.object({
   agentId: z.string(),

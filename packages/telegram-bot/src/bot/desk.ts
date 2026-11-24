@@ -1,10 +1,10 @@
-import type { AlertEvent, IntentEvent } from '@defimind/shared'
+import type { IntentEvent } from '@defimind/shared'
 import type { Api, InlineKeyboard } from 'grammy'
 import type { Logger } from 'pino'
 import type { Decision, GuardClient, Settled } from '../adapters/guard.js'
 import { Alerts } from '../domain/alerts.js'
 import { mandateSettledText, mandateText } from '../domain/mandate.js'
-import { breakerText, chainBrokenText, passkeyText } from '../domain/notices.js'
+import { adminLoosenText, breakerText, chainBrokenText, passkeyText } from '../domain/notices.js'
 import {
   type Admission,
   ApprovalBook,
@@ -19,7 +19,7 @@ import {
   settledFallback,
   settledText,
 } from '../domain/text.js'
-import type { MandateRequest, ShadowedEvent } from '../http/schemas.js'
+import type { Alert, MandateRequest, ShadowedEvent } from '../http/schemas.js'
 import { approvalKeyboard, mandateKeyboard } from './keyboards.js'
 
 export interface DeskDeps {
@@ -70,6 +70,13 @@ interface Counter<R extends { approveBefore: string }> {
 }
 
 /** Everything that puts a message in front of the owners or takes one away. */
+/** The alerts that name no agent, by kind. */
+const NOTICES = {
+  passkey_enrolled: passkeyText,
+  chain_broken: chainBrokenText,
+  admin_loosen_refused: adminLoosenText,
+} as const
+
 export class Desk {
   readonly book = intentBook()
   readonly #mandates = new ApprovalBook<MandateRequest>((request) => request.mandate.id)
@@ -255,9 +262,10 @@ export class Desk {
 
   /**
    * Nothing to approve: a tripped breaker has already paused the agent, a passkey is already added,
+   * an admin loosening is already refused,
    * a broken receipt chain is already broken.
    */
-  async alert(event: AlertEvent) {
+  async alert(event: Alert) {
     const breaker = event.kind === 'breaker_tripped'
     const key = `${event.kind}:${breaker ? event.agentId : ''}:${event.sentAt}`
     const admission = this.#events.admit(key, event.sentAt, this.#now())
@@ -266,9 +274,7 @@ export class Desk {
     }
     const text = breaker
       ? breakerText(event.agentId, event.detail)
-      : event.kind === 'chain_broken'
-        ? chainBrokenText(event.detail)
-        : passkeyText(event.detail)
+      : NOTICES[event.kind](event.detail)
     const sent = await this.#broadcast(text)
     return sent.length > 0 ? admission : 'undelivered'
   }

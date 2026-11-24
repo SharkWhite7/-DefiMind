@@ -4,6 +4,7 @@ import { chainName } from '../domain/chains.js'
 import { changedSettings } from '../domain/settings.js'
 import type { Context, Screen } from './context.js'
 import { button, card, el, when } from './dom.js'
+import { ownerKeyCard } from './owner-key.js'
 
 function pushSwitch(ctx: Context, on: boolean) {
   const toggle = el('input', { id: 'push', type: 'checkbox', role: 'switch' })
@@ -88,6 +89,7 @@ export async function settings(ctx: Context): Screen {
   return [
     el('h1', {}, 'Settings'),
     chainsCard(ctx, chains),
+    chains.length > 0 && ownerKeyCard(chains.map((c) => c.chain)),
     card(el('h2', {}, 'Notifications'), pushSwitch(ctx, push)),
     card(
       el('h2', {}, 'Passkeys'),
