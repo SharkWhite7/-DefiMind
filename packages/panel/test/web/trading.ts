@@ -34,7 +34,7 @@ export function tradingMock(later: string) {
     name: 'Jupiter',
     decimals: 6,
     verified,
-    venue: verified ? { holders: 812000, liquidityUsd: '41250000000000', organicScore: 91 } : {},
+    venue: verified ? { holders: 812000, liquidityUsd: '41250000.00', organicScore: 91 } : {},
   })
   const risk = (mint: string) => ({
     chain,

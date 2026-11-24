@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { StubChain } from '@defimind/guard-core'
 import { SwapUnavailable, svmAdapter, type SimulationOutcome } from '@defimind/onchain'
-import { CHAINS, type PayIntent } from '@defimind/shared'
+import { CHAINS, type PayIntent, type TokenRisk } from '@defimind/shared'
 import {
   ACCOUNT_SIZE,
   AccountLayout,
@@ -183,9 +183,13 @@ export function fork() {
         const quote = sell
           ? { ...QUOTE, inputMint: request.inputMint, outputMint: request.outputMint }
           : QUOTE
+        const recordedBuy =
+          request.amount === BigInt(QUOTE.inAmount) && request.slippageBps === QUOTE.slippageBps
         const sized = sell
           ? { ...quote, inAmount: request.amount.toString(), slippageBps: request.slippageBps }
-          : quote
+          : recordedBuy
+            ? quote
+            : scaled(request.amount, request.slippageBps)
         return (hostile.quote ?? ((q) => q))(sized) as never
       },
       async swap() {
@@ -197,6 +201,18 @@ export function fork() {
   // A top-up stands in for the vault's spending-limit draw: the dollars arrive in the hot wallet.
   const chain = new ForkChain(real, (amount) => self.setUsdc(self.balance(USDC) + amount))
   return { ...self, chain }
+}
+
+/** The recorded route's price for another amount: only a quote, since only 1 USDC has a transaction. */
+function scaled(amount: bigint, slippageBps: number) {
+  const out = (BigInt(QUOTE.outAmount) * amount) / BigInt(QUOTE.inAmount)
+  return {
+    ...QUOTE,
+    inAmount: amount.toString(),
+    outAmount: out.toString(),
+    otherAmountThreshold: ((out * BigInt(10_000 - slippageBps)) / 10_000n).toString(),
+    slippageBps,
+  }
 }
 
 /** guard-core's view of the fork: swaps are real, everything else is the offline stub. */
@@ -219,6 +235,9 @@ class ForkChain extends StubChain {
     this.real.quoteSwap!(req)
 
   getPositions = () => this.real.getPositions!()
+
+  tokenRisk = (mint: string): Promise<Omit<TokenRisk, 'venue' | 'flags'>> =>
+    this.real.tokenRisk!(mint)
 
   override getHotWalletBalance(token?: string) {
     return this.real.getHotWalletBalance(token ?? USDC.toBase58())
