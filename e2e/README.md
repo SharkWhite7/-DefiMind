@@ -129,3 +129,38 @@ agent, an unknown scheme, payTo moved on the retry, and a host off the allowlist
 A Permit handed to the signer is refused as `PERMIT_DETECTED`. An approval is redeemed once, and the
 kill names the Base owner transaction. The cap itself and the real signing gate are proven in
 `packages/onchain` (the fork tests and `evm-gate`).
+
+## Guarded trading on a fork of mainnet, `test/cr021-trading.test.ts`
+
+An agent trades through MCP, guard-core decides, and onchain's real Solana adapter checks, test-runs
+and signs. Everything runs in LiteSVM at the slot onchain recorded a real 1 USDC → wSOL Whirlpool
+route (`packages/onchain/test/fixtures/jupiter-swap.json`), executed by the real Jupiter v6 and
+Whirlpool programs. Those programs are read from mainnet at test time into
+`packages/onchain/.cache/programs` and are never kept in the repository. Offline, the suite is skipped
+by name; CI sets `FORK_REQUIRED=1`, which turns a skip into a failure.
+
+The venue is the attacker. Each case must end with nothing signed and no balance moved:
+
+| Case                                                          | Expected                   |
+| ------------------------------------------------------------- | -------------------------- |
+| the route's own slippage opened to 100%                       | `SLIPPAGE_TOO_HIGH`        |
+| an SPL approve to a stranger added to the transaction         | `DELEGATE_DETECTED`        |
+| a SOL transfer out of the hot wallet added                    | `SIM_UNEXPECTED_EFFECT`    |
+| a lookup table extended in the last slots                     | `HIDDEN_ACCOUNTS_DETECTED` |
+| a minimum lower than the slippage allows, or another token    | refused, nothing signed    |
+| no route back out of the token                                | `NO_EXIT_ROUTE`            |
+| a freezable token                                             | `TOKEN_FREEZABLE`          |
+| a mintable token                                              | waits for the owner        |
+| the venue turns hostile after the owner was asked             | `SLIPPAGE_TOO_HIGH`        |
+| trade, daily, position, token and on/off limits of the policy | refused before the venue   |
+
+The honest route waits for the owner on a first buy, then lands exactly the balances its test run
+showed. In shadow mode it runs the real test run and signs nothing.
+
+Not covered here, and why:
+
+- Close positions: the recording holds only the buy, so a sell is covered by guard-core's tests
+  until a sell route is recorded.
+- A stale quote: guard-core's unit tests cover it.
+- A swap waiting for the owner does not reach Telegram yet, because the bot refuses swap intents.
+  The panel shows it. This is marked as a todo.
