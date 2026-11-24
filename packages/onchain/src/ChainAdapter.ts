@@ -7,6 +7,7 @@ import type {
   PayIntent,
   RejectCode,
   SimulationResult,
+  SwapQuote,
   TxId,
 } from '@defimind/shared'
 import type { PaymentRequirements, SchemeNetworkClient } from '@x402/core/types'
@@ -53,6 +54,20 @@ export interface ChainAdapter {
 
   simulate(intent: PayIntent): Promise<SimulationOutcome>
   send(intent: PayIntent): Promise<TxId>
+
+  /**
+   * CR-021: a checked quote from an untrusted venue. simulate() and send() take kind "swap" too;
+   * send() signs only the transaction whose test run matched the intent. An adapter without these
+   * trades nothing.
+   */
+  quoteSwap?(req: {
+    tokenIn: Address
+    tokenOut: Address
+    amountIn: Amount
+    slippageBps: number
+  }): Promise<SwapQuote>
+  /** CR-021: every token the hot wallet holds but the chain's dollar, decimals read from the mint. */
+  getPositions?(): Promise<{ token: Address; amount: Amount; decimals: number }[]>
 
   buildKillTx(): Promise<KillTx>
 

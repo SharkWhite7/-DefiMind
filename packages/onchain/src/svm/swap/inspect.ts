@@ -27,7 +27,7 @@ export interface SwapSides {
 // A route needs far more compute than a transfer. The priority fee is bounded in lamports rather
 // than per unit, so a high limit cannot multiply it: at the cap it costs 0.001 SOL.
 const MAX_COMPUTE_UNIT_LIMIT = 1_400_000
-const MAX_PRIORITY_LAMPORTS = 1_000_000n
+export const MAX_PRIORITY_LAMPORTS = 1_000_000n
 const CREATE_IDEMPOTENT = 1
 
 /**

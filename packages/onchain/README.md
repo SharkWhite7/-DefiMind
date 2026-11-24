@@ -110,6 +110,52 @@ payments need. guard-core's doctor warns below it.
 - **EVM:** four calls at 250,000 gas each, at the current max fee per gas. On Robinhood Chain the
   gas a transaction uses includes its L1 data cost, so this is well above an L1 draw's.
 
+### Swaps (CR-021, Solana through Jupiter)
+
+Swaps run only on Solana mainnet, where Jupiter routes. On any other cluster the adapter has no
+`quoteSwap` and refuses every swap with `VENUE_NOT_ALLOWED`. Jupiter is untrusted throughout, and any
+doubt is a rejection.
+
+- **`quoteSwap({ tokenIn, tokenOut, amountIn, slippageBps })`**
+  - One side must be the chain's dollar.
+  - Jupiter's quote is held to the request: same mints, amount and slippage, and a minimum no looser
+    than the slippage allows.
+  - Both mints are read from the chain, which gives `decimalsIn` and `decimalsOut`.
+  - On a buy, the token bought is also checked:
+    - a freeze authority is `TOKEN_FREEZABLE`;
+    - any Token-2022 extension outside a short harmless list (metadata, group, close authority) is
+      `TOKEN_EXTENSION_RISK`;
+    - a remaining mint authority adds the `MINT_AUTHORITY` flag;
+    - a sell quote for the amount bought sets `exitImpactBps`. When Jupiter has no route back, that
+      is `null` with `NO_EXIT_ROUTE`.
+  - It throws `SwapUnavailable` with `code` `venue_unavailable` (Jupiter down or malformed) or
+    `no_route`.
+- **`simulate(intent)` for `kind: "swap"`**
+  1. It re-quotes. A fresh quote below the intent's `minAmountOut` is `SLIPPAGE_TOO_HIGH`.
+  2. It takes Jupiter's transaction, with wrapped SOL left wrapped.
+  3. It reads its lookup tables from the chain. A table that is missing, closing or changed in the
+     last 150 slots is `HIDDEN_ACCOUNTS_DETECTED`.
+  4. It inspects the expanded message. It must have one Jupiter route, compute budget within limits,
+     a priority fee of at most 0.001 SOL, and only the hot wallet's own token accounts created. It
+     must have no other signer, no System instruction and no top-level token instruction. An
+     Approve, a SetAuthority or a CloseAccount gets its own code.
+  5. It runs the transaction and compares the hot wallet's token accounts before and after:
+     - `tokenIn` falls by at most `amountIn`;
+     - `tokenOut` rises by at least `minAmountOut`;
+     - no other account falls;
+     - SOL pays the fee, the priority fee and the rent of new accounts only;
+     - every account stays the hot wallet's alone: no delegate, no close authority, not frozen, not
+       closed.
+
+     Anything else is `SIM_UNEXPECTED_EFFECT`.
+
+  6. `balanceChanges` lists the net change per mint, with no SOL entry.
+- **`send(intent)`** signs only the transaction that passed `simulate`, once. Otherwise it throws
+  `swap_not_simulated`. After an owner's approval, call `simulate` again. A buy does not draw on the
+  vault, so guard-core tops up first.
+- **`getPositions()`** returns every token the hot wallet holds but the dollar, in Token and
+  Token-2022 accounts, with decimals read from the mint.
+
 ### Vault (CR-019)
 
 `getVault()` returns `{ address, token, balance }`. This is the vault deposits go to: the Squads
