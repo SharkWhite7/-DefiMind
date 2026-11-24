@@ -24,24 +24,6 @@ Live addresses, caps and the launch record are in [`LAUNCH.md`](../LAUNCH.md) an
 
 ---
 
-## ✖️ HUMAN-36 — Move vault control to a Ledger (CR-022 HIGH-3) — dropped, risk accepted
-
-The independent review's HIGH-3: one Phantom account, one recovery phrase, controls every vault. On
-2026-11-24 the owner first chose a Ledger, then decided the same day to keep Phantom as the vault's
-only key ("let's keep Phantom"). The risk is accepted, as in LAUNCH.md D4. A Ledger stays optional
-for every user, and the product side of HIGH-3 (doctor's `<chain>:control` warning, the panel's
-advice, `docs/owner-keys.md`) is unchanged.
-
-What the owner keeps doing instead:
-
-- keep in the vault only what the agents need for the coming weeks, the rest in cold storage;
-- keep the Phantom recovery phrase on paper only, never typed into a phone, computer or website.
-
-If he changes his mind, the hand-over plan is on BOARD (ON-34, deferred): the Ledger must replace the
-old key as config authority and member on Squads, and as owner on the Safe, in two signatures.
-
----
-
 ## ⏳ HUMAN-25 — Ask Phantom to review the signing page's domain
 
 When the owner created the Solana mainnet multisig, Phantom showed "This dApp could be malicious" and
@@ -94,25 +76,6 @@ can start. The runbook was `docs/migration.md` (Parts A to F, with a rollback), 
 
 ---
 
-## ⬜ HUMAN-35 — Decide when to launch publicly
-
-On 2026-11-23 the owner decided not to launch publicly yet. In his words: "eu nao quero lançar agora
-para o publico quero fazer o video para mostrar para os co fundadores". The demo video is private, for
-his co-founders. Until he decides to launch, no announcement, launch copy, release or tag goes out.
-The same day he chose to leave the repository's visibility as it is and only take the GitHub links
-off the site (SITE-5): "Deixa como está, so remove o github site eu nao vou por ainda para publico".
-
-What the public launch still needs, once he decides:
-
-1. SITE-4, copy fixes on the site. It still mentions Telegram's `/kill`, Base as live and SPEC v0.5.
-2. The site's Vercel project builds from the legacy repository. Reconnect it
-   to `SharkWhite7/-DefiMind` with Root Directory `site`.
-3. `defimind-sign.vercel.app` answered 404 at its root after HUMAN-34. Recheck the project's
-   deployments and domains, then the integrator verifies the files and merges GC-58 (#89).
-4. HUMAN-25, the Phantom review, now also for `defimind-sign.vercel.app`.
-
----
-
 ## ⬜ HUMAN-32 — Retire the Telegram bot
 
 The owner dropped Telegram on 2026-11-20: approvals and alerts go through the web panel only. At
@@ -130,8 +93,8 @@ is lost: the panel's push goes out first.
 ## ⬜ HUMAN-33 — Verify the one-click deploy on Render (CR-019) — risk accepted, run optional
 
 On 2026-11-20 the owner chose to ship the Deploy to Render button without a verified run, in his
-words: "o render tá testado vamos usar mesmo assim eu aceito o risco ja deixa implementado se der
-algum problema nos testamos novamente". The button is in the README (#73), and
+words: "Render is tested, let's use it anyway, I accept the risk; ship it, and if a problem comes up
+we test again". The button is in the README (#73), and
 `docs/getting-started.md` says the route is new and asks people to report a failing step. No
 complete run on Render has been recorded yet.
 
