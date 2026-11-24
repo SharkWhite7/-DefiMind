@@ -2,8 +2,9 @@
 pragma solidity 0.8.26;
 
 interface PageVm {
-    function createSelectFork(string calldata url) external returns (uint256);
+    function createSelectFork(string calldata url, uint256 blockNumber) external returns (uint256);
     function envOr(string calldata name, string calldata fallbackValue) external view returns (string memory);
+    function envOr(string calldata name, uint256 fallbackValue) external view returns (uint256);
     function readFile(string calldata path) external view returns (string memory);
     function parseJsonAddress(string calldata json, string calldata key) external pure returns (address);
     function parseJsonBytes(string calldata json, string calldata key) external pure returns (bytes memory);
@@ -63,12 +64,14 @@ abstract contract SigningPageFlows {
     PageModule private module;
     PageSafe private safe;
 
-    /// The fork's RPC and the fixture for its cluster.
-    function chain() internal view virtual returns (string memory rpc, string memory cluster);
+    /// The fork's RPC, its block and the fixture for its cluster. A pinned block lets every test share
+    /// one fork and forge keep its state on disk, so CI asks the RPC for little, and seldom: Robinhood's
+    /// mainnet RPC answers a burst from a CI runner with a Cloudflare challenge.
+    function chain() internal view virtual returns (string memory rpc, uint256 forkBlock, string memory cluster);
 
     function setUp() public {
-        (string memory rpc, string memory cluster) = chain();
-        vm.createSelectFork(rpc);
+        (string memory rpc, uint256 forkBlock, string memory cluster) = chain();
+        vm.createSelectFork(rpc, forkBlock);
         fixture = vm.readFile(string.concat("forge/fixtures/signing-page-", cluster, ".json"));
         require(block.chainid == vm.parseJsonUint(fixture, ".chainId"), "the RPC serves another chain");
         owner = vm.parseJsonAddress(fixture, ".owner");
@@ -194,14 +197,22 @@ abstract contract SigningPageFlows {
 }
 
 contract SigningPageTestnetTest is SigningPageFlows {
-    function chain() internal view override returns (string memory, string memory) {
-        return (vm.envOr("ROBINHOOD_TESTNET_RPC_URL", string("https://rpc.testnet.chain.robinhood.com")), "robinhood-testnet");
+    function chain() internal view override returns (string memory, uint256, string memory) {
+        return (
+            vm.envOr("ROBINHOOD_TESTNET_RPC_URL", string("https://rpc.testnet.chain.robinhood.com")),
+            vm.envOr("ROBINHOOD_TESTNET_FORK_BLOCK", uint256(157_450_590)),
+            "robinhood-testnet"
+        );
     }
 }
 
 /// The mainnet pilot's Safe, enabled and killed before the owner signs any of it for real.
 contract SigningPageMainnetTest is SigningPageFlows {
-    function chain() internal view override returns (string memory, string memory) {
-        return (vm.envOr("ROBINHOOD_MAINNET_RPC_URL", string("https://rpc.mainnet.chain.robinhood.com")), "robinhood");
+    function chain() internal view override returns (string memory, uint256, string memory) {
+        return (
+            vm.envOr("ROBINHOOD_MAINNET_RPC_URL", string("https://rpc.mainnet.chain.robinhood.com")),
+            vm.envOr("ROBINHOOD_MAINNET_FORK_BLOCK", uint256(122_375_249)),
+            "robinhood"
+        );
     }
 }

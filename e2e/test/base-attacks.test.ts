@@ -17,7 +17,7 @@ let api: PaidApi
 async function start(chain?: StubChain) {
   s = await stack({ net: BASE, ...(chain === undefined ? {} : { chain }) })
   api = await paidApi(BASE)
-  await s.setPolicy()
+  s.setPolicy()
 }
 
 afterEach(async () => {
@@ -86,7 +86,7 @@ describe('malicious 402 responses on Base', () => {
   })
 
   it('from a host the policy does not allow', async () => {
-    await s.setPolicy({ allowedDomains: ['api.example.com'] })
+    s.setPolicy({ allowedDomains: ['api.example.com'] })
     await refusedFetch(['DOMAIN_NOT_ALLOWED'])
     expect(api.requests).toBe(0)
   })

@@ -1245,18 +1245,24 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   policy with the admin token only. The reviewer used it to send 50M test units to a "Thief" address
   automatically; onchain, the loss stopped at the daily cap. Loosening is meant to need the owner's
   passkey (CR-012, CR-015), and the admin token is a machine credential that can leak.
-  - **Fix:** an admin write that loosens, as `loosened()` counts it, is refused with
-    403 `{ error: "loosen_in_panel" }` once any passkey is enrolled, and on any chain that is not a
-    testnet even before then. This covers `PUT /v1/admin/policy/:agentId`, `POST /v1/admin/resume`
-    and `POST /v1/admin/mandates`. Before the first passkey, admin may still loosen a policy whose
-    chains are all testnets, so local runs, devnet scripts and the e2e suite stay scriptable. Real
-    money always needs the passkey.
+  - **Fix:** the admin token only tightens, as the bot's does (CR-016). A `PUT /v1/admin/policy`
+    that loosens, as `loosened()` counts it, and every `POST /v1/admin/resume` are refused with
+    403 `{ error: "loosen_in_panel" }`. `POST /v1/admin/mandates` opens the mandate pending the
+    owner's approval in the panel. There is no exception for a new agent's first policy: it would
+    reopen the hole, since the token can create an agent. Tests and local tools write policies into
+    the database directly, and the setup wizard leaves the rules to the panel.
+  - An earlier draft let the admin loosen testnet-only policies before the first passkey. It was
+    dropped the same day, in favour of the simpler rule guard-core built (GC-60).
   - Every refusal is audited (`admin_loosen_refused`, via `admin`) and alerts the owner (webhook
     alert and Web Push `attack`): someone who has the admin token is trying to widen a policy.
   - Unchanged: admin reads, tightening, pause, kill, revoke, and creating an agent (deny-all, shadow).
-  - **Tests:** with a passkey enrolled, a raised perTxMax, an added recipient or domain, mode `live`,
-    resume and an admin mandate are each 403 and audited, with no policy changed. Without a passkey,
-    the same on a mainnet chain is 403, and on devnet it passes. Tightening still passes.
+  - **Tests:** a raised perTxMax, an added recipient or domain, mode `live` and resume are each 403
+    and audited, with no policy changed. An admin mandate waits for the owner. Tightening still
+    passes. The reviewer's own attack is a test.
+  - **First passkey.** While no passkey exists, the admin token could enrol one and take over a fresh
+    deployment. With SETUP_CODE set, only the setup code enrols the first passkey; the admin routes
+    refuse it, audited and alerted. Without SETUP_CODE, guard-core warns at every start until a
+    passkey exists. Built in GC-62/63.
 
 - **MEDIUM-1. One public listener can serve the admin API without a warning.** With PUBLIC_PORT
   unset, HOST=0.0.0.0 and ADMIN_ROUTES=true, `/v1/admin/*` faces whatever network the host faces.
@@ -1301,6 +1307,17 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   - The signing page today requires the sole owner of a Safe and the config authority of a multisig.
     Multi-signer vaults need the page to propose rather than execute, which is a follow-up in the
     same rows.
+  - **Known limit on Solana (found by onchain in ON-29).** Every DefiMind Solana vault is a
+    _controlled_ Squads multisig, because the instant kill uses its config authority. A config
+    authority can add itself a spending limit and empty the vault without any vote. Such a vault is
+    held by that one key whatever its member threshold says, so `getVault().control` reports
+    `{ threshold: 1, signers: 1 }`, and a 2-of-3 member threshold would not protect it.
+    - The concrete mitigation is to make the config authority a hardware wallet (a Ledger through
+      Phantom). Doctor and the panel say so on Solana. They never suggest raising the threshold,
+      which cannot help there.
+    - An autonomous vault with a proposal-based kill is CR-023 (proposed).
+    - On EVM, a Safe's threshold works as expected, and the advice there is a separate owner key or
+      a 2-of-3 with a hardware key.
 
 - **HIGH-2. One spending (hot) wallet per chain, shared by every agent.** Each agent has its own
   offchain policy, but onchain the daily cap is shared. A policy-engine bug for one agent could spend
@@ -1340,7 +1357,34 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     - PANEL-22: the "own wallet" step and per-agent kill.
     - INT-49: e2e, the shared types, and the migration guide.
 - **Risks for the owner to accept:**
-  - Scripts that loosened mainnet policies with the admin token stop working. The panel does it,
-    with the passkey.
+  - Scripts that loosened policies with the admin token stop working. The panel does it, with the
+    passkey.
   - A single-listener deployment that served the admin API publicly will not start until it chooses
     ADMIN_ROUTES=false, a split listener or ALLOW_PUBLIC_ADMIN=true.
+
+### CR-023 — An autonomous Squads vault with a proposal-based kill (option, not yet proposed)
+
+- **From:** integrator, after onchain's finding in ON-29
+- **Date:** 2026-11-24
+- **Status:** draft for the manager to put to the owner later. Not proposed yet.
+- **Problem:** every DefiMind Solana vault is a controlled Squads multisig. Its config authority
+  removes the agent's spending limit in one signature, which is what makes the kill instant. But that
+  same key can add itself a limit and empty the vault, so the vault is exactly as safe as one key.
+  Today the mitigation is a hardware wallet for that key (CR-022).
+- **The option:** an autonomous multisig, with no config authority: for example 2-of-3, with members
+  on a phone wallet, a hardware wallet and a recovery key. Every config change, including removing
+  the spending limit, is a proposal that reaches the threshold of votes before it executes.
+  - The kill becomes "propose and approve": the signing page creates the proposal and the owner's
+    first vote together, and a second member approves and executes it. Until then, guard-core's own
+    pause is the instant stop. It is already part of every kill, and it stops all signing at once;
+    the onchain limit stays live only for a key thief, not for the agents.
+  - The add-limit and deposit flows become proposals too.
+- **Trade-off:**
+  - **For:** no single key can empty the vault. A stolen phone or seed alone loses nothing.
+  - **Against:** the onchain kill needs two people or two devices and takes minutes instead of
+    seconds. Setup is longer. The owner must keep a quorum of keys reachable. Losing two of three
+    keys locks the vault.
+- **Scope if chosen:** onchain (proposal flows on the signing page and the hosted page, `control`
+  read from voters), guard-core (vault adoption for an autonomous multisig, a kill that reports
+  "proposed, waiting for a second approval"), panel (copy and the kill status), integrator (SPEC,
+  e2e, owner guide).

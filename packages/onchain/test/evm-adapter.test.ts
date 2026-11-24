@@ -17,6 +17,10 @@ import { evmAdapter } from '../src/evm/adapter.js'
 import { allowanceModuleAbi } from '../src/evm/safe.js'
 import { base, hot, intent, merchant, module, safe, uint, usdc } from './evm-fixture.js'
 
+const safeAbi = parseAbi([
+  'function getThreshold() view returns (uint256)',
+  'function getOwners() view returns (address[])',
+])
 const abis = parseAbi([
   'function transfer(address to, uint256 amount) returns (bool)',
   'event Transfer(address indexed from, address indexed to, uint256 value)',
@@ -55,14 +59,36 @@ describe('reads', () => {
     expect(await adapter.getHotWalletBalance(usdc)).toBe('7000000')
   })
 
-  it('the Safe as the vault, with its USDC balance', async () => {
+  /** The Safe answers its threshold and owners; the token answers the Safe's balance. */
+  function vault(threshold: bigint, owners: Address[]) {
     node.handlers['eth_call'] = ([call]) => {
-      const { to, data } = call as { to: string; data: string }
-      expect(getAddress(to)).toBe(usdc)
-      expect(data).toContain(safe.slice(2).toLowerCase())
-      return uint(42_000_000n)
+      const { to, data } = call as { to: string; data: Hex }
+      if (getAddress(to) === usdc) {
+        expect(data).toContain(safe.slice(2).toLowerCase())
+        return uint(42_000_000n)
+      }
+      expect(getAddress(to)).toBe(safe)
+      const { functionName } = decodeFunctionData({ abi: safeAbi, data })
+      return functionName === 'getThreshold'
+        ? uint(threshold)
+        : encodeAbiParameters([{ type: 'address[]' }], [owners])
     }
-    expect(await adapter.getVault()).toEqual({ address: safe, token: usdc, balance: '42000000' })
+  }
+  const owner = (n: number) => getAddress(`0x${n.toString(16).padStart(40, '0')}`)
+
+  it('the Safe as the vault, with its USDC balance and who controls it', async () => {
+    vault(1n, [owner(1)])
+    expect(await adapter.getVault()).toEqual({
+      address: safe,
+      token: usdc,
+      balance: '42000000',
+      control: { threshold: 1, signers: 1 },
+    })
+  })
+
+  it("reads a Safe's threshold out of its owners", async () => {
+    vault(2n, [owner(1), owner(2), owner(3)])
+    expect((await adapter.getVault()).control).toEqual({ threshold: 2, signers: 3 })
   })
 
   const minute = 29_896_000n
