@@ -1388,3 +1388,46 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   read from voters), guard-core (vault adoption for an autonomous multisig, a kill that reports
   "proposed, waiting for a second approval"), panel (copy and the kill status), integrator (SPEC,
   e2e, owner guide).
+
+### CR-024 — Fixes from the first live trade, and automatic backups
+
+- **From:** integrator, from the owner's first live trade (2026-11-24) and his doctor
+- **Date:** 2026-11-24
+- **Status:** approved by the owner on 2026-11-24 ("fix everything and deliver it all fixed",
+  relayed by the manager with this list). Applied to SPEC v0.18 on 2026-11-24.
+- **What the live trade showed:** the round trip was clean onchain: a 1 USDC top-up, a buy of
+  4.483276 JUP, and Close selling all of it for 1.003943 USDC, each through a single Jupiter route
+  signed by the hot wallet alone. Two things were not right:
+  - **A buy waiting for the owner had already drawn its dollars.** A second 1 USD buy that waited for
+    approval topped the hot wallet up first, so "spent today" read $2 for $1 traded.
+    - Fix: no top-up before the buy is decided. A waiting buy is asked with the policy, quote and
+      token checks done. Its top-up and test run follow the approval, just before signing, and a
+      failed test run rejects it.
+    - When the hot wallet already holds enough, the test run also runs before asking.
+    - Rows: guard-core (GC-66), panel (the pending view says "test run after your approval").
+  - **Positions came from the test run, not from what landed.** The Portfolio showed 4.484169 JUP
+    where 4.483276 landed; the market moved between the test run and the send.
+    - Fix: `ChainAdapter.getLandedChanges(txId)` reads the confirmed transaction's own pre- and
+      post-balances for the hot wallet. Positions, cost and proceeds settle from it.
+    - A position whose onchain balance is 0 after a sell is closed, dust included.
+    - Rows: onchain (ON-32), guard-core (GC-66).
+- **Shadow showed no approval.** A paper buy returned before asking, so the owner never saw that
+  NEW_TOKEN would have stopped it live.
+  - Fix: a shadowed swap records evaluateTrade's flags and its needs-approval verdict, and the panel
+    shows "Live would have asked you: …".
+  - Rows: guard-core (GC-68), panel.
+- **No backups unless someone runs one.** The owner's doctor says "No database backup was found".
+  `db:backup` exists, but only by hand.
+  - Fix: guard-core backs up daily at BACKUP_HOUR_UTC (default 3) to the data volume, with
+    `backups/guard-<date>.db` at mode 0600. It keeps 14, and never serves a backup over HTTP.
+  - With a bucket set, each backup is also uploaded, encrypted with AES-256-GCM under
+    BACKUP_ENCRYPTION_KEY. The bucket is BACKUP_BUCKET_URL, with its keys as secrets.
+  - Doctor reads the newest backup: ok under 26 hours, warn otherwise. A failure alerts the owner
+    once a day.
+  - The volume's own daily snapshots (Fly) stay as they are.
+  - Rows: guard-core (GC-67), integrator (restore drill in e2e, docs).
+- **Tests:**
+  - A waiting buy draws nothing until approved, and an approved one tops up, test-runs and signs.
+  - A landed amount that differs from the test run settles at the landed amount.
+  - A shadowed swap carries its would-have flags.
+  - A backup is written on schedule, pruned at 15, restored by the drill, and refused over HTTP.

@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.17 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.18 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -230,6 +230,8 @@ interface ChainAdapter {
     // DefiMind vault: the kill uses its config authority) is { 1, 1 }: that authority alone can
     // empty it. Doctor warns at threshold 1. On Solana, it names the config authority as the key
     // to protect (a hardware wallet); on EVM, it advises another owner or a 2-of-3.
+  getLandedChanges?(txId: TxId): Promise<BalanceChange[]>  // CR-024: the hot wallet's token deltas
+                                                   // in a confirmed transaction, for settlement
   buildKillTx(): Promise<{ description: string; payload: unknown }>  // owner signs this
   simulate(intent: PayIntent): Promise<SimulationOutcome>
   send(intent: PayIntent): Promise<string>         // returns txId
@@ -507,6 +509,15 @@ and not from the link or the server: the destination or delegate, and the amount
 with the same strict CSP as the panel, and each release publishes the SHA-256 of the signing-page
 build so a modified /sign can be detected.
 
+Backups (CR-024). guard-core backs up its own database every day at BACKUP_HOUR_UTC (default 3),
+with SQLite's online backup (the same as db:backup), to backups/guard-<UTC date>.db beside the
+database on the data volume, mode 0600. It keeps the newest 14 and deletes older ones, and never
+serves a backup over HTTP. With BACKUP_BUCKET_URL set (an S3-compatible bucket, with
+BACKUP_ACCESS_KEY_ID and BACKUP_SECRET_ACCESS_KEY as secrets), each backup is also uploaded,
+encrypted with AES-256-GCM under BACKUP_ENCRYPTION_KEY, which a bucket requires. The doctor's
+backup check reads the newest backup: ok under 26 hours old, warn otherwise, and it names the last
+upload when a bucket is set. A failed backup or upload alerts the owner once a day.
+
 Hosting behind one public listener. ADMIN_ROUTES=false leaves /v1/admin/* unregistered, as the
 one-click deployment does. With one listener (PUBLIC_PORT unset), guard-core refuses to start with
 ADMIN_ROUTES=true unless HOST is a loopback address or ALLOW_PUBLIC_ADMIN=true. The override logs a
@@ -549,9 +560,18 @@ Checks, in order, all default deny:
    minAmountOut, no other token account of the hot wallet loses anything, its SOL falls by fees and
    rent only, no delegate or authority changes. Anything else is SIM_UNEXPECTED_EFFECT.
 5. Decide: a buy at or above approvalThreshold, or with a flag, waits for the owner; a sell never
-   waits. Shadow mode simulates and signs nothing (paper trading).
+   waits. Shadow mode simulates and signs nothing (paper trading). A shadowed swap records the
+   flags and the needs-approval verdict live would have had (CR-024), and the owner's views show
+   "Live would have asked you: …".
 Buys count against dailyTradeMax, not dailyMax. A top-up for a buy draws the chain's dollar under the
-same onchain cap.
+same onchain cap, and never before the buy is decided (CR-024): a buy that waits for the owner is
+asked with steps 1 to 3 done, and its top-up and test run (step 4) follow the approval, just before
+signing. A failed test run then rejects the approved buy. When the hot wallet already holds enough,
+the test run also runs before asking, and the request shows its balance changes.
+Settlement (CR-024): positions, cost and proceeds come from what the confirmed transaction moved,
+read with ChainAdapter.getLandedChanges(txId) -> BalanceChange[] (the hot wallet's token deltas,
+from the transaction's own pre- and post-balances). The test run's deltas are only the check. A
+position whose onchain balance is 0 after a sell is closed, dust included.
 
 ## Agent wallets (CR-022, HIGH-2)
 Opt-in, per agent and chain. By default every agent spends from the chain's shared spending (hot)
@@ -649,6 +669,12 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.18 (2026-11-24): CR-024, approved by the owner. From the first live trade and the owner's
+  doctor:
+  - a buy that waits for the owner draws nothing until approved;
+  - positions settle from the landed transaction (ChainAdapter.getLandedChanges);
+  - shadowed swaps record what live would have asked;
+  - guard-core backs up its database daily, with an optional encrypted off-site copy.
 - v0.17 (2026-11-24): CR-022, approved by the owner. Fixes from an independent review:
   - the admin token only tightens: loosening, resuming and opening a mandate are the panel's;
   - with SETUP_CODE set, only the setup code enrols the first passkey;
