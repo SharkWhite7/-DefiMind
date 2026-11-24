@@ -3,7 +3,7 @@ import * as repo from '../db/repo.js'
 import { boughtToday, everHeld, getPosition } from '../db/trades.js'
 import { evaluateTrade } from '../domain/trading.js'
 import { reject, type PaymentDeps } from './payments.js'
-import { clearSwap, pairOf, type Trader } from './swap.js'
+import { clearSwap, pairOf } from './swap.js'
 
 /**
  * A swap the owner approved. The policy runs again, since the agent may have been paused or the
@@ -19,7 +19,7 @@ export async function sendApprovedSwap(deps: PaymentDeps, first: PayIntent): Pro
       return intent ?? first
     }
     const details = intent.swap
-    const adapter: Trader | undefined = deps.chains.get(intent.chain)
+    const adapter = deps.chains.get(intent.chain)
     const policy = repo.getPolicy(db, intent.agentId)
     const request = {
       agentId: intent.agentId,

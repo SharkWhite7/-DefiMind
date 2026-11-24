@@ -1,4 +1,4 @@
-import type { SimulationOutcome } from '@defimind/onchain'
+import { type SimulationOutcome, SwapUnavailable } from '@defimind/onchain'
 import type { PayIntent, SwapQuote, TradingPolicy } from '@defimind/shared'
 import { describe, expect, it } from 'vitest'
 import { StubChain } from '../src/adapters/stub.js'
@@ -33,7 +33,7 @@ class Venue extends StubChain {
   async quoteSwap(req: { tokenIn: string; tokenOut: string; amountIn: string }) {
     this.quotes += 1
     if (this.down !== undefined) {
-      throw Object.assign(new Error(this.down), { code: this.down })
+      throw new SwapUnavailable(this.down, 'test venue')
     }
     const buy = req.tokenIn === USDC
     const out = buy ? BigInt(req.amountIn) * 1000n : BigInt(req.amountIn) / 1000n

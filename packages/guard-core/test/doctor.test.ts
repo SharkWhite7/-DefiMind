@@ -161,6 +161,54 @@ describe('the doctor', () => {
 })
 
 describe('public admin routes (CR-022)', () => {
+  describe('vault control', () => {
+    const vault = { address: 'vault', token: MINT, balance: '0' }
+
+    it('says nothing when the adapter does not report who controls the vault', async () => {
+      expect((await byId(deps()))[`${CHAIN}:control`]).toBeUndefined()
+    })
+
+    it('is happy with a vault that takes two keys', async () => {
+      const d = deps()
+      vi.spyOn(d.chain, 'getVault').mockResolvedValue({
+        ...vault,
+        control: { threshold: 2, signers: 3 },
+      })
+      expect((await byId(d))[`${CHAIN}:control`]).toMatchObject({
+        status: 'ok',
+        message: 'The vault on Solana devnet needs 2 of 3 keys to move funds.',
+      })
+    })
+
+    it('on Solana names the config authority and a hardware wallet, never a higher threshold', async () => {
+      const d = deps()
+      vi.spyOn(d.chain, 'getVault').mockResolvedValue({
+        ...vault,
+        control: { threshold: 1, signers: 1 },
+      })
+      const check = (await byId(d))[`${CHAIN}:control`]
+      expect(check).toMatchObject({ status: 'warn' })
+      expect(check?.message).toContain('config authority')
+      expect(check?.fix).toContain('Ledger')
+      expect(check?.fix).not.toMatch(/threshold|2-of-3/)
+    })
+
+    it('on EVM advises another owner or a 2-of-3', async () => {
+      const base = 'eip155:8453'
+      const chain = new StubChain(base, 1_000_000n)
+      vi.spyOn(chain, 'getVault').mockResolvedValue({
+        ...vault,
+        control: { threshold: 1, signers: 2 },
+      })
+      const d = deps({ chains: new Map([[base, chain]]), usdc: new Map([[base, MINT]]) })
+      expect((await byId(d))[`${base}:control`]).toMatchObject({
+        status: 'warn',
+        message: 'One key can empty the vault on Base.',
+        fix: expect.stringContaining('2-of-3'),
+      })
+    })
+  })
+
   it('warns when ALLOW_PUBLIC_ADMIN let the admin routes face every interface', async () => {
     expect((await byId({ ...deps(), publicAdmin: true }))['public_admin']).toMatchObject({
       status: 'warn',
