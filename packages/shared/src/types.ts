@@ -197,6 +197,12 @@ export interface SwapDetails {
   minAmountOut: Amount
   slippageBps: number
   priceImpactBps: number
+  /** Read from each mint onchain by the adapter, never from a venue. */
+  decimalsIn: number
+  decimalsOut: number
+  /** Display only and untrusted: always shown beside the mint. */
+  symbolIn?: string
+  symbolOut?: string
   quotedAt: string
 }
 
@@ -226,6 +232,10 @@ export interface Position {
   amount: Amount
   /** At cost, in the chain's dollar. */
   cost: Amount
+  /** Read from the mint onchain by the adapter, never from a venue's token list. */
+  decimals: number
+  /** Display only and untrusted: always shown beside the mint. */
+  symbol?: string
 }
 
 /** Applies on every chain. */

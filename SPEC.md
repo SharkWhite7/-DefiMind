@@ -139,6 +139,10 @@ interface PayIntent {
     minAmountOut: Amount
     slippageBps: number
     priceImpactBps: number
+    decimalsIn: number             // read from each mint onchain by the adapter, never from a venue
+    decimalsOut: number
+    symbolIn?: string              // display only, untrusted: always shown beside the mint
+    symbolOut?: string
     quotedAt: string
   }
   createdAt: string; expiresAt: string
@@ -230,7 +234,7 @@ interface ChainAdapter {
   // transaction whose simulated balance deltas matched the intent.
   quoteSwap?(req: { tokenIn: string; tokenOut: string; amountIn: Amount; slippageBps: number })
     : Promise<SwapQuote>
-  getPositions?(): Promise<{ token: string; amount: Amount }[]>
+  getPositions?(): Promise<{ token: string; amount: Amount; decimals: number }[]>
 }
 
 interface SwapQuote {               // CR-021. Venues are untrusted: every field is checked again
@@ -344,7 +348,7 @@ POST /v1/owner/session/logout -> { ok: true }
 POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, single use, bound to
   sha256(canonical JSON of { action, body }); the step-up assertion for that exact action and body
   OwnerAction = "approve_intent" | "approve_mandate" | "loosen_policy" | "resume" | "create_agent"
-    | "change_settings" (CR-019)
+    | "change_settings" (CR-019) | "close_positions" (CR-021, body {})
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
 GET  /v1/owner/deposit -> { chains: { chain, vault, token, balance, dailyCap?, depositPage? }[] }
@@ -494,10 +498,15 @@ a sell returns to it. EVM chains need their own design (router approvals) in a l
 POST /v1/agent/quote { agentId, chain, tokenIn, tokenOut, amountIn, maxSlippageBps? } -> SwapQuote
 POST /v1/agent/swap  { agentId, chain, tokenIn, tokenOut, amountIn, maxSlippageBps?, reason, mandateId? }
   -> { intentId, status, txId?, rejectReasons }
-GET  /v1/agent/portfolio/:agentId -> { positions: { chain, token, amount, cost }[], tradedToday,
-                                       dailyTradeMax }
-POST /v1/owner/positions/close {} -> { intents: PayIntent[] }   step-up; sells every token the hot
-  wallets hold back to the chain's dollar, through the same checks. Works while agents are paused.
+GET  /v1/agent/portfolio/:agentId -> { positions: Position[], tradedToday, dailyTradeMax }
+GET  /v1/owner/portfolio -> { agents: { agentId, positions: Position[], tradedToday, dailyTradeMax }[] }
+  session only
+POST /v1/owner/positions/close { assertion } -> { intents: PayIntent[] }   step-up, OwnerAction
+  "close_positions" with body {}; sells every token the hot wallets hold back to the chain's dollar,
+  through the same checks. Works while agents are paused.
+Position = { chain, token, amount, cost, decimals, symbol? }: decimals read from the mint onchain by
+  the adapter, never from a venue's token list; symbol is display only and untrusted, so a client
+  always shows the mint beside it.
 
 Checks, in order, all default deny:
 1. Policy: trading enabled, the venue allowed, the token in tokens (or allowAnyToken), a buy within
@@ -568,7 +577,9 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - v0.16 (2026-11-24): CR-021, approved by the owner. Guarded trading, phase 1 on Solana through
   Jupiter: the swap intent kind, Policy.trading, the trading reject codes and approval flags,
   ChainAdapter.quoteSwap and getPositions, the agent quote, swap and portfolio routes, the owner's
-  close-positions route, and the swap, quote and get_portfolio MCP tools.
+  close-positions route, and the swap, quote and get_portfolio MCP tools. Clarified the same day
+  for the panel: GET /v1/owner/portfolio, the "close_positions" OwnerAction, and token decimals
+  (from the mint onchain) and an untrusted display symbol on positions and swaps.
 - v0.15 (2026-11-20): CR-020, approved by the owner. One hosted kill and deposit page for every
   deployment: HOSTED_SIGN_PAGE, kill links that name the hot wallet on both families, and a page
   that takes the vault and hot wallet from a kill link when it was built with none.
