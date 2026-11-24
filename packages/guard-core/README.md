@@ -392,6 +392,26 @@ policy without `trading` trades nothing, and an adapter without `quoteSwap` refu
 - **Loosening needs the step-up.** Turning trading on, a new venue or token, `allowAnyToken`, or a
   raised limit is a loosening, so it needs the passkey step-up (CR-015). The bot can only tighten.
 
+### Owner trading tools (CR-025)
+
+Every route needs the owner's session. These routes serve Solana mainnet through Jupiter only.
+
+- `GET /v1/owner/tokens/search?q=&chain=` proxies Jupiter's `tokens/v2` search.
+  - Limited to 30 a minute per session, and each query is cached for 60 seconds.
+  - The answer is untrusted: it is validated, strings are cut short, and every field outside
+    `TokenInfo` is dropped, images included. Verified tokens come first.
+- `GET /v1/owner/tokens/:mint/risk?chain=` returns the adapter's `tokenRisk` facts, read onchain.
+  guard-core adds the approval flags (`NEW_TOKEN`, `MINT_AUTHORITY`) and Jupiter's own claims,
+  labelled as `venue`.
+- `POST /v1/owner/quote` returns the quote the agent would get under its policy. It decides and
+  records nothing.
+- `POST /v1/owner/trade` always needs the step-up `manual_trade` over
+  `{ agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut }`. It runs the agent's own swap
+  pipeline and wallet, with the passkey as the owner's approval, so nothing waits.
+  - A fresh quote below the owner's `minAmountOut` is `SLIPPAGE_TOO_HIGH`.
+  - A paused agent is refused, and an agent in shadow is shadowed.
+  - It is audited as `owner_trade` and counts in the agent's day.
+
 ### Agent wallets (CR-022)
 
 Opt-in, per agent and chain. `POST /v1/owner/agents/:id/wallets { chain, assertion }` (step-up

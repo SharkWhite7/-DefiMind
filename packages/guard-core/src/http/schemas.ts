@@ -63,6 +63,11 @@ export const quoteRequest = z.object({
 })
 export const swapRequest = quoteRequest.extend({ reason })
 
+/** CR-025. The search goes to the venue as typed, so it is bounded here. */
+export const tokenSearch = z.object({ q: z.string().trim().min(1).max(64), chain: caip2 })
+export const tokenRiskParams = z.object({ mint: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/) })
+export const tokenRiskQuery = z.object({ chain: caip2 })
+
 /** A task budget. Its lists are bounded like the policy's, and it lives between a minute and a day. */
 export const mandateRequest = z.object({
   agentId,
@@ -176,6 +181,11 @@ export const ownerSettings = z.object({
 
 /** CR-021. The step-up is over the body {}: Close has nothing to choose. */
 export const ownerClose = z.object({ assertion: webAuthnResponse.optional() })
+/** CR-025. The passkey signs the trade as the owner saw it, minimum included. */
+export const ownerTrade = quoteRequest.extend({
+  minAmountOut: atomicAmount,
+  assertion: webAuthnResponse.optional(),
+})
 export const ownerAgentWallet = z.object({ chain: caip2, assertion: webAuthnResponse.optional() })
 
 export const ownerSetup = z.object({ setupCode: z.string().min(1).max(256) })
@@ -198,6 +208,7 @@ const OWNER_ACTIONS = [
   'change_settings',
   'close_positions',
   'agent_wallet',
+  'manual_trade',
 ] as const
 
 /** CR-012. `body` is hashed as sent, so it is only bounded here, never reshaped. */
