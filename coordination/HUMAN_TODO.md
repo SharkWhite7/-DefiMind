@@ -27,7 +27,7 @@ Live addresses, caps and the launch record are in [`LAUNCH.md`](../LAUNCH.md) an
 ## ⏳ HUMAN-36 — Move vault control to a Ledger (CR-022 HIGH-3)
 
 The independent review's HIGH-3: one Phantom account, one recovery phrase, controls every vault.
-On 2026-11-24 the owner chose the hardware wallet ("sim, vamos seguir com a ladger"), with an
+On 2026-11-24 the owner chose the hardware wallet ("yes, let us go with the Ledger"), with an
 autonomous vault (CR-023) left for later as an option. What changes and what does not:
 
 - Agents, payments, trades and passkey approvals in the panel work as today. The panel's Stop still

@@ -1367,7 +1367,8 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
 
 - **From:** integrator, after onchain's finding in ON-29
 - **Date:** 2026-11-24
-- **Status:** draft for the manager to put to the owner later. Not proposed yet.
+- **Status:** deferred by the owner on 2026-11-24 in favour of a Ledger as config authority
+  (HUMAN-36). An option for later, not now.
 - **Problem:** every DefiMind Solana vault is a controlled Squads multisig. Its config authority
   removes the agent's spending limit in one signature, which is what makes the kill instant. But that
   same key can add itself a limit and empty the vault, so the vault is exactly as safe as one key.

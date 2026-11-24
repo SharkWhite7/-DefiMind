@@ -30,8 +30,8 @@ So, on Solana:
   Phantom keeps the key off your phone and computer. Every vault change and every kill then needs the
   device in your hand.
 - A vault that no single key can empty, an _autonomous_ multisig with a kill by proposal and vote, is
-  an option under discussion (CR-023). Its price is a slower kill: two people or two devices, and
-  minutes instead of seconds. guard-core's own pause stays instant either way.
+  a possible later option (CR-023, deferred). Its price is a slower kill: two people or two devices,
+  and minutes instead of seconds. guard-core's own pause stays instant either way.
 
 ## Robinhood Chain and Base: the Safe's threshold works
 
