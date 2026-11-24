@@ -64,6 +64,8 @@ export async function stack(
     setupCode?: string
     /** CR-022: where agents' own wallets come from; without it every agent uses the shared one. */
     walletKeys?: WalletKeys
+    /** guard-core's outbound fetch, for a test that plays a venue's HTTP API. */
+    fetch?: typeof fetch
   } = {},
 ) {
   const net = options.net ?? SOLANA
@@ -108,6 +110,7 @@ export async function stack(
     chains: new Map([[chain.chain, chain]]),
     now,
     sweepMs: 20,
+    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     // The settings and agent-wallet routes come with a chain host; nothing here changes the chain.
     ...(wallets === undefined
       ? {}
