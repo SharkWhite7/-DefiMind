@@ -11,6 +11,7 @@ import { wholeTabs } from './ui/nav.js'
 import { deposit } from './ui/deposit.js'
 import { guide } from './ui/guide.js'
 import { enrol, login, setup } from './ui/login.js'
+import { manualTrade } from './ui/manual-trade.js'
 import { overview } from './ui/overview.js'
 import { portfolio } from './ui/portfolio.js'
 import { executions } from './ui/executions.js'
@@ -88,6 +89,8 @@ function screen(route: Route): Screen {
       return agents(ctx)
     case 'agent':
       return agent(ctx, route.id)
+    case 'trade':
+      return manualTrade(ctx, route.id)
     case 'report':
       return report(ctx)
     case 'doctor':

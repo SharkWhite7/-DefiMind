@@ -1,11 +1,14 @@
 import type { BudgetView, PolicyView } from '../adapters/schemas.js'
 import { chainName } from '../domain/chains.js'
+import { isSolana } from '../domain/guide.js'
+import { href } from '../domain/route.js'
 import { fromForm, toForm } from '../domain/form.js'
 import { formatUsd } from '../domain/money.js'
 import { chainRules, loosens } from '../domain/policy.js'
 import type { Context, Screen } from './context.js'
 import { button, card, el, row, when } from './dom.js'
 import { tradingForm } from './trading.js'
+import { tokenSearch } from './token-search.js'
 import { stopAgentCard, walletsCard } from './wallets.js'
 
 function field(id: string, label: string, value: string, multiline = false) {
@@ -123,6 +126,8 @@ export async function agent(ctx: Context, id: string): Screen {
       .catch(() => undefined),
   ])
   const shadow = policy.mode === 'shadow'
+  // CR-025: tokens are searched and traded on Solana only, as agents trade.
+  const solana = known.find(isSolana)
   return [
     el('h1', {}, id),
     card(
@@ -181,6 +186,10 @@ export async function agent(ctx: Context, id: string): Screen {
     ),
     policyForm(ctx, policy, known),
     tradingForm(ctx, policy, (after, message) => save(ctx, policy, after, message)),
+    solana !== undefined &&
+      tokenSearch(ctx, policy, solana, (after, message) => save(ctx, policy, after, message)),
+    policy.trading?.enabled === true &&
+      el('a', { href: href({ name: 'trade', id }), class: 'button' }, 'Trade by hand'),
     wallets !== undefined && walletsCard(ctx, id, known, wallets),
     wallets !== undefined && stopAgentCard(ctx, id),
     card(

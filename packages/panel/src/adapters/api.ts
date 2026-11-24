@@ -12,6 +12,17 @@ export type OwnerAction =
   | 'change_settings'
   | 'close_positions'
   | 'agent_wallet'
+  | 'manual_trade'
+
+/** A swap for one agent, as the owner set it up: amountIn in tokenIn's base units. */
+export interface Order {
+  agentId: string
+  chain: string
+  tokenIn: string
+  tokenOut: string
+  amountIn: string
+  maxSlippageBps?: number
+}
 
 /** An answer guard-core gave as an error: its status and the code in its body. */
 export class ApiError extends Error {
@@ -185,6 +196,24 @@ export function ownerApi(passkey: Authenticator, fetchImpl: typeof fetch = fetch
     kill: () => post(s.kill, '/v1/owner/kill'),
     /** CR-022: pauses one agent; the transactions remove its own wallets' limits only. */
     killAgent: (id: string) => post(s.kill, `/v1/owner/agents/${agent(id)}/kill`),
+
+    searchTokens: (q: string, chain: string) =>
+      get(s.tokens, `/v1/owner/tokens/search?${new URLSearchParams({ q, chain })}`),
+    tokenRisk: (mint: string, chain: string) =>
+      get(
+        s.tokenRisk,
+        `/v1/owner/tokens/${encodeURIComponent(mint)}/risk?${new URLSearchParams({ chain })}`,
+      ),
+    /** Read-only: the quote this agent's policy would get; it decides and records nothing. */
+    quote: (order: Order) => post(s.swapQuote, '/v1/owner/quote', order),
+    /** CR-025: always the passkey, over the exact amounts the owner confirmed. */
+    trade: (order: Order & { minAmountOut: string }) => {
+      const { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut } = order
+      const bound = { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut }
+      return stepUp('manual_trade', bound, (assertion) =>
+        post(s.tradeResult, '/v1/owner/trade', { ...order, assertion }),
+      )
+    },
 
     agentWallets: (id: string) => get(s.agentWallets, `/v1/owner/agents/${agent(id)}/wallets`),
     createAgentWallet: (agentId: string, chain: string) =>
