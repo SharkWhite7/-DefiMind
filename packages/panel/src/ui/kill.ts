@@ -94,9 +94,11 @@ function closePositions(ctx: Context) {
   )
 }
 
+/** Never waits on trading: the Stop button renders at once, Close positions joins when it can. */
 export async function kill(ctx: Context): Screen {
   const result = el('div')
-  const held = await holding(ctx)
+  const close = el('div')
+  void holding(ctx).then((held) => held && close.replaceChildren(closePositions(ctx)))
   return [
     el('h1', {}, 'Stop everything'),
     el(
@@ -115,6 +117,6 @@ export async function kill(ctx: Context): Screen {
       'kill',
     ),
     result,
-    held && closePositions(ctx),
+    close,
   ]
 }

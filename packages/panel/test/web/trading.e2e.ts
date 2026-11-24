@@ -170,4 +170,16 @@ describe.each([390, 1280])('trading at %i px', (width) => {
     }
     await close()
   })
+
+  it('shows Stop at once while the portfolio read hangs', async () => {
+    const { guard, page, close } = await openDevice(browser, dist, width, false, true)
+    await signIn(page, guard.origin)
+    await page.route('**/v1/owner/portfolio', () => undefined)
+    await page.locator('#app').getByRole('link', { name: 'Stop everything' }).click()
+    await page.getByRole('button', { name: 'Stop everything' }).click({ timeout: 2000 })
+    await expect.poll(() => status(page).textContent()).toBe('Stopped. 1 agent paused.')
+    expect(guard.state.killed).toBe(true)
+    expect(await page.getByRole('button', { name: 'Close positions with passkey' }).count()).toBe(0)
+    await close()
+  })
 })
