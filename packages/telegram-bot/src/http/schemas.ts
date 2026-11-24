@@ -129,4 +129,12 @@ export const alertEvent = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('passkey_enrolled'), detail: z.string().max(500), sentAt: isoTime }),
   z.object({ kind: z.literal('chain_broken'), detail: z.string().max(500), sentAt: isoTime }),
+  z.object({
+    kind: z.literal('admin_loosen_refused'),
+    detail: z.string().max(500),
+    sentAt: isoTime,
+  }),
 ])
+
+/** SPEC v0.17's alerts; shared's AlertEvent gains admin_loosen_refused with CR-022 (INT-48). */
+export type Alert = z.infer<typeof alertEvent>

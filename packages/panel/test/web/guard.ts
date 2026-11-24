@@ -252,6 +252,11 @@ export async function guardCore(dist: string, { fresh = false, trading = false }
         ...(state.passkeys > 0 ? { stepUp: issue(null) } : {}),
       })
     }
+    if (path === '/v1/owner/passkeys' && method === 'GET') {
+      const at = new Date().toISOString()
+      const ids = Array.from({ length: state.passkeys }, (_, i) => `credential-${i}`)
+      return send(200, { passkeys: ids.map((id) => ({ id, createdAt: at, lastUsedAt: null })) })
+    }
     if (path === '/v1/owner/passkeys' && method === 'POST') {
       if (state.passkeys > 0 && redeem(body['assertion']) === undefined) {
         return send(409, { error: 'step_up_required' })

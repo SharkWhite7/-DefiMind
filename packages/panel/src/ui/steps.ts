@@ -1,6 +1,7 @@
 import type { SettingsView } from '../adapters/schemas.js'
 import { chainName } from '../domain/chains.js'
 import { inPhantom, isSolana, signLink, type StepId } from '../domain/guide.js'
+import { ownerKeyNote } from './owner-key.js'
 import type { Context } from './context.js'
 import { depositCard } from './deposit.js'
 import { agent, live, next, rules, shadow } from './agent-steps.js'
@@ -64,6 +65,7 @@ async function vault(ctx: Context): Promise<Child[]> {
       'Open the signing page with Phantom and approve. It creates your vault and shows its address.',
     ),
     ...walletLinks(signLink(location.origin, chain, { action: 'create' }), 'Create'),
+    ...ownerKeyNote(),
     el('label', { for: 'vault' }, `Your vault address on ${chainName(chain)}`),
     input,
     button(
