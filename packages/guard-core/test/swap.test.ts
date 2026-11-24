@@ -294,6 +294,8 @@ describe('swaps (CR-021)', () => {
     const { h } = await setup({ mode: 'shadow', balance: 0n })
     const id = (await h.agent('POST', '/v1/agent/swap', buy())).json().intentId
     expect(wouldHave(h, id)).toMatchObject({ wouldAsk: true, flags: ['NEW_TOKEN'] })
+    const view = (await h.agent('GET', '/v1/agent/budget/agent-1')).json()
+    expect(view.shadow.asked).toEqual({ count: 1, flags: ['NEW_TOKEN'] })
   })
 
   it('refuses a swap when the policy allows payments only inside a mandate', async () => {
