@@ -24,6 +24,33 @@ Live addresses, caps and the launch record are in [`LAUNCH.md`](../LAUNCH.md) an
 
 ---
 
+## ⏳ HUMAN-36 — Move vault control to a Ledger (CR-022 HIGH-3)
+
+The independent review's HIGH-3: one Phantom account, one recovery phrase, controls every vault.
+On 2026-11-24 the owner chose the hardware wallet ("sim, vamos seguir com a ladger"), with an
+autonomous vault (CR-023) left for later as an option. What changes and what does not:
+
+- Agents, payments, trades and passkey approvals in the panel work as today. The panel's Stop still
+  pauses every agent at once, with no device.
+- The Ledger is needed only for vault actions: the onchain kill, a new or changed daily limit, and
+  withdrawals from the vault.
+
+Steps (the onchain session confirms the exact signing flow before step 4; see the BOARD row):
+
+1. Buy a Ledger (Nano S Plus or Nano X) from Ledger's own site only. Set it up, write the 24 words on
+   paper, and never type them into a phone, computer or website.
+2. In Ledger Live, install the Solana app, and the Ethereum app for Robinhood Chain.
+3. In the Phantom browser extension, add the Ledger account over USB. Share its public addresses
+   with the manager. They are not secret.
+4. Sign, with the current Phantom account, the change that hands control to the Ledger:
+   - Solana: the Squads vault's config authority becomes the Ledger address;
+   - Robinhood Chain: the Ledger becomes the Safe's owner in place of the current one.
+5. Check: doctor's `<chain>:control` line names the Ledger address, and one harmless vault action
+   signed on the Ledger works (the onchain session names which).
+6. Move funds the agents will not need in the coming weeks to cold storage.
+
+---
+
 ## ⏳ HUMAN-25 — Ask Phantom to review the signing page's domain
 
 When the owner created the Solana mainnet multisig, Phantom showed "This dApp could be malicious" and
