@@ -37,7 +37,15 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Jupiter and Whirlpool are read from mainnet for the swap fork test, never kept in the repo.
+      - uses: actions/cache@v4
+        with:
+          path: packages/onchain/.cache/programs
+          key: mainnet-programs-${{ hashFiles('packages/onchain/test/fixtures/jupiter-swap.json') }}
+
       - name: Test
+        env:
+          FORK_REQUIRED: '1'
         run: pnpm test
 
   # A probe of a public endpoint, not of our code: kept apart so an RPC outage does not fail the
