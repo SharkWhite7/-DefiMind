@@ -491,7 +491,7 @@
         <h1 data-t="title">The security layer every agent needs.</h1>
         <div class="meta-row">
           <span><b>DefiMind</b></span>
-          <span data-t="version">Version 0.5</span>
+          <span data-t="version">Public beta</span>
           <span data-t="date">November 2026</span>
           <span class="live-dot" data-t="status">Live on mainnet</span>
         </div>
@@ -502,44 +502,77 @@
     <article lang="en" data-article="en">
       <div class="wrap">
         <p class="abstract">
-          <b
-            >DefiMind is a security layer between an AI agent and its wallet, a firewall for
-            autonomous payments.</b
-          >
-          An agent can only pay through DefiMind. Every payment is checked against a policy the
-          owner sets, test-run before it is signed, and then auto-approved, sent to the owner's
-          panel for approval with a passkey, or rejected. The agent never holds a key. Funds stay in
-          the owner's own multisig vault; the agent spends only from a small hot wallet that is
-          refilled under a daily limit enforced by the blockchain itself, so the maximum that can be
-          lost in a day is bounded even if our software fails.
+          <b>AI agents are becoming economic actors. DefiMind is what lets them spend safely.</b>
+          An agent can only pay through DefiMind. Every payment is checked against rules the owner
+          sets, test-run before it is signed, and then auto-approved, sent to the owner for a
+          passkey approval, or rejected. The agent never holds a key. Funds stay in the owner's own
+          vault, and the agent spends from a small wallet refilled under a daily limit that the
+          blockchain itself enforces. The most a day can cost is fixed in advance, even if our
+          software fails.
         </p>
 
-        <h2><span class="n">01</span>The problem</h2>
+        <h2><span class="n">01</span>Why now</h2>
         <p>
-          Autonomous agents are starting to move money: paying per-request APIs, settling invoices,
-          buying compute. The moment an agent can spend, a single bad instruction, a prompt
-          injection, a bug or a compromised key can drain a wallet in seconds. Handing an agent a
-          private key trades all of your funds for a little convenience.
+          Agents have learned to reason, write code and use tools. The next step is obvious: they
+          will pay for what they use. Data, compute, APIs, services, each other. Two open standards
+          are making that real today. <strong>x402</strong> lets any API charge per request, in
+          stablecoins, with no account and no card. <strong>MCP</strong> gives every agent one
+          standard way to plug into tools.
+        </p>
+        <p>
+          What is missing is not intelligence. It is trust. Wallets were built for people who read
+          what they sign. An agent signs whatever it is told to, at machine speed. The agent economy
+          needs a layer that says yes to the right payment and no to everything else, and that keeps
+          saying no even when something goes wrong. That layer is DefiMind.
+        </p>
+
+        <h2><span class="n">02</span>The problem</h2>
+        <p>
+          The moment an agent can spend, a single bad instruction, a prompt injection, a bug or a
+          leaked key can drain a wallet in seconds. Today the choice is stark: give the agent a
+          private key and risk everything, or keep the keys and keep the agent useless.
         </p>
         <p class="lead">
-          DefiMind removes that trade-off. The agent gets spending power; you keep the keys and a
+          DefiMind removes that trade-off. The agent gets spending power. You keep the keys and a
           hard ceiling on what can go wrong.
         </p>
 
-        <h2><span class="n">02</span>Architecture</h2>
+        <h2><span class="n">03</span>How it works</h2>
+        <p>Every payment takes the same four steps, in the same order, on every chain.</p>
+        <ul class="plain">
+          <li>
+            <strong>Request.</strong> The agent asks DefiMind to pay. It holds no key and no money;
+            asking is all it can do.
+          </li>
+          <li>
+            <strong>Policy.</strong> The payment is checked against the owner's rules: limits,
+            chains, tokens, recipients and websites.
+          </li>
+          <li>
+            <strong>Test run.</strong> The exact transaction is simulated against the real chain. If
+            it would do anything the request did not describe, it never runs.
+          </li>
+          <li>
+            <strong>Decide.</strong> Under the owner's threshold it is paid. At or above it, it
+            waits for the owner's passkey. Anything that breaks a rule is rejected with a named
+            reason.
+          </li>
+        </ul>
+
+        <h2><span class="n">04</span>Architecture</h2>
         <p>Money flows through four layers. Each one narrows what the one above it can do.</p>
         <div class="flow">
           <div class="flow-step">
-            <b>Owner multisig vault</b> — holds the funds.
+            <b>Owner vault</b> — holds the funds.
             <span>Squads v4 on Solana, Safe on EVM chains. Only the owner controls it.</span>
           </div>
           <div class="flow-step">
             <b>Onchain spend limit</b> —
-            <span>refills the hot wallet, never above the daily cap.</span>
+            <span>refills the spending wallet, never above the daily cap.</span>
             <span class="mono">enforced by the chain, not by us</span>
           </div>
           <div class="flow-step">
-            <b>Guard hot wallet</b> —
+            <b>Spending wallet</b> —
             <span
               >a small balance the agent spends from. Its key lives only inside the guard service,
               never logged, never returned.</span
@@ -548,64 +581,68 @@
           <div class="flow-step">
             <b>Payments</b> —
             <span
-              >x402 pay-per-use APIs and transfers, only to recipients and domains the owner
+              >x402 pay-per-use APIs and transfers, only to recipients and websites the owner
               allowed.</span
             >
           </div>
         </div>
         <p>
-          The agent talks to DefiMind over the Model Context Protocol (MCP), so one connection works
-          with any agent on any platform. Four tools are exposed: <code>paid_fetch</code>,
-          <code>transfer</code>, <code>get_budget</code> and <code>check_intent</code>. The guard
-          never imports a chain SDK directly; each chain sits behind a single adapter interface, so
-          every chain gets the same policy, the same test run and the same kill switch.
+          The agent talks to DefiMind over MCP, so one connection works with any agent on any
+          platform. It gets four tools: <code>paid_fetch</code>, <code>transfer</code>,
+          <code>get_budget</code> and <code>check_intent</code>. Each chain sits behind one adapter,
+          so every chain gets the same policy, the same test run and the same kill switch. Adding a
+          chain means adding an adapter, not rebuilding the product.
         </p>
 
-        <h2><span class="n">03</span>Onchain guarantees</h2>
+        <h2><span class="n">05</span>Onchain guarantees</h2>
         <p>
-          The spend limit is a primitive that is already audited and deployed: the Squads Spending
-          Limit on Solana, and the Safe Allowance Module (reset every 24 hours) on EVM chains.
-          DefiMind deploys no smart contract of its own. The vault refills the hot wallet up to a
-          daily cap and no more, and the chain enforces that regardless of what our software does.
+          DefiMind deploys no smart contract of its own. The daily limit uses building blocks that
+          already secure large amounts onchain and are independently audited by their own makers:
+          the Squads Spending Limit on Solana, and the Safe Allowance Module on EVM chains, reset
+          every 24 hours. The vault refills the spending wallet up to the daily cap and no more, and
+          the chain enforces that whatever our software does.
         </p>
-        <div class="formula">Maximum loss per day = daily cap + hot wallet balance.</div>
+        <div class="formula">Maximum loss per day = daily cap + spending wallet balance.</div>
         <p>
-          This holds even if the offchain guard has a bug or is fully compromised. At launch the cap
-          is deliberately low and raised only after weeks without incident. A kill removes the limit
-          entirely and is signed by the owner.
+          This holds even if the guard itself has a bug or is fully compromised. The cap starts
+          deliberately low and rises only after weeks without incident. The owner can remove the
+          limit entirely at any time with one signature.
         </p>
 
-        <h2><span class="n">04</span>The policy engine</h2>
+        <h2><span class="n">06</span>The policy engine</h2>
         <p>
-          Before anything is signed, every payment is checked against the agent's policy. A new
-          agent starts at deny-all and can spend nothing until the owner allows it.
+          A new agent starts at deny-all and can spend nothing until the owner allows it. From
+          there, the owner decides exactly how much freedom it gets.
         </p>
         <ul class="plain">
           <li>
-            <strong>Per-payment and daily limits</strong> — a hard ceiling on each payment and on
-            the day's total, beneath the onchain cap.
+            <strong>Per-payment and daily limits</strong> — a ceiling on each payment and on the
+            day's total, beneath the onchain cap.
           </li>
           <li>
-            <strong>Allowlists</strong> — which chains, tokens, recipients and API domains are
+            <strong>Allowlists</strong> — which chains, tokens, recipients and websites are
             permitted. Empty means deny.
           </li>
           <li>
-            <strong>Approval threshold</strong> — any payment at or above it waits for the owner in
-            the panel.
+            <strong>Approval threshold</strong> — any payment at or above it waits for the owner.
+          </li>
+          <li>
+            <strong>Task budgets</strong> — a budget for one job, for a set time, that the agent
+            cannot exceed.
           </li>
           <li><strong>Pause</strong> — one switch stops an agent, or every agent at once.</li>
         </ul>
         <p>
-          Agent-provided text, the reason it gives, the URL, an API response, is shown to the owner
-          but never used to make a decision. Amounts are integers in the token's smallest unit end
-          to end; a value that would need rounding is refused, never rounded.
+          What the agent says, its reason, the URL, an API's reply, is shown to the owner but never
+          used to decide. Amounts are exact integers end to end: a value that would need rounding is
+          refused, never rounded.
         </p>
 
-        <h2><span class="n">05</span>Simulation and threat detection</h2>
+        <h2><span class="n">07</span>Simulation and threat detection</h2>
         <p>
           A payment that passes policy is test-run against the real chain before signing. The guard
-          inspects the exact transaction, sees what it would actually do, and refuses anything that
-          differs from the approved intent, with a named reject code written to the audit log.
+          reads the exact transaction, sees what it would really do, and refuses anything that
+          differs from what was asked, with a named reject code written to the audit log.
         </p>
         <div class="tscroll">
           <table>
@@ -630,7 +667,7 @@
               <tr>
                 <td class="d">All chains</td>
                 <td><code>SIM_UNEXPECTED_EFFECT</code></td>
-                <td class="d">The test run shows an effect the intent never described.</td>
+                <td class="d">The test run shows an effect the request never described.</td>
               </tr>
               <tr>
                 <td class="d">Solana</td>
@@ -649,25 +686,24 @@
         </div>
         <p class="lead">
           Twenty reject codes in all, split into a shared core and per-chain sets. Default deny: any
-          parsing doubt is a rejection.
+          doubt is a rejection.
         </p>
 
-        <h2><span class="n">06</span>Human approval and the kill switch</h2>
+        <h2><span class="n">08</span>The owner stays in charge</h2>
         <p>
-          Payments at or above your threshold wait in your owner panel, with a push to your phone
-          and a plain summary of what the transaction will do. You approve with your passkey, or
-          reject. An approval is redeemed once, for exactly the approved chain, token, amount,
-          recipient and domain, and expires after ten minutes if you do not answer, so nothing is
-          paid by default. A Telegram bot is optional: it can send the same alerts and stop
-          everything, but it cannot approve by default.
+          Payments at or above the owner's threshold wait in the DefiMind app, with a push to the
+          phone and a plain summary of what the payment will do. The owner approves with a passkey,
+          their face or fingerprint, or rejects. An approval pays once, for exactly that chain,
+          token, amount, recipient and website, and expires after ten minutes if nobody answers.
+          Nothing is ever paid by default.
         </p>
         <p>
-          One button, <strong>Stop everything</strong> in the panel, pauses every agent at once and
-          prepares, for each chain, the transaction that sets the spending limit to zero and removes
-          the delegate. You sign it and the vault is sealed. The kill has been rehearsed on mainnet.
+          One button, <strong>Stop everything</strong>, pauses every agent at once and prepares, for
+          each chain, the transaction that sets the spending limit to zero. The owner signs it and
+          the vault is sealed. The kill has been rehearsed on mainnet.
         </p>
 
-        <h2><span class="n">07</span>Chains and assets</h2>
+        <h2><span class="n">09</span>Chains and assets</h2>
         <div class="cols">
           <div class="card">
             <h3>Solana <span class="tag live">Live</span></h3>
@@ -713,24 +749,55 @@
           </div>
         </div>
         <p>
-          Base is next. Every chain uses that chain's dollar, one audited vault and the same policy,
-          simulation and kill switch. No asset other than the chain's dollar is spendable in this
-          version.
+          <strong>Base is next.</strong> Every chain uses that chain's dollar, a proven vault and
+          the same policy, test run and kill switch.
         </p>
 
-        <h2><span class="n">08</span>Status and roadmap</h2>
-        <p>
-          DefiMind is <strong>live on Solana and Robinhood Chain mainnet</strong> with a
-          deliberately low daily cap per chain, raised only after clean weeks of operation. Base
-          mainnet, higher caps and a public bug bounty come next. Mainnet runs on keys generated for
-          mainnet alone.
+        <h2><span class="n">10</span>Built for the whole market</h2>
+        <ul class="plain">
+          <li>
+            <strong>For builders.</strong> Give your agent a wallet without giving it your keys. One
+            MCP connection, four tools, and every payment arrives already checked, simulated and
+            within budget.
+          </li>
+          <li>
+            <strong>For users.</strong> Let an agent work for you around the clock, knowing the
+            worst day is fixed in advance and every big payment waits for your face or fingerprint.
+          </li>
+          <li>
+            <strong>For the ecosystem.</strong> Every API, protocol and service that wants agents as
+            customers needs agents that can pay safely. DefiMind is the guardrail that turns agent
+            spending from a risk into a feature, on every chain it reaches.
+          </li>
+        </ul>
+        <p class="lead">
+          As agents move from talking to transacting, the question every owner asks is the same:
+          what stops it from spending what it should not? DefiMind is built to be that answer.
         </p>
+
+        <h2><span class="n">11</span>Where we are and what comes next</h2>
+        <ul class="plain">
+          <li>
+            <strong>Done.</strong> The policy engine, simulation, passkey approvals, the kill switch
+            and the DefiMind app. The onchain cap proven live with real money, and the kill
+            rehearsed on mainnet.
+          </li>
+          <li>
+            <strong>Live now.</strong> Solana and Robinhood Chain mainnet, with a deliberately low
+            daily cap per chain.
+          </li>
+          <li>
+            <strong>Next.</strong> Base mainnet, higher caps after clean weeks of operation, a
+            public bug bounty and developer tools anyone can install in one step.
+          </li>
+        </ul>
         <div class="note">
-          <b>Security posture.</b> DefiMind writes no smart contract of its own; the onchain limit
-          is enforced by independently audited primitives already deployed on each chain. The
-          offchain guard is open to inspection, defaults to deny, and bounds the worst case onchain.
-          Use a cap you are comfortable losing.
+          <b>Security posture.</b> DefiMind is in public beta and has had no external audit of its
+          own code. It writes no smart contract of its own: the onchain limit is enforced by
+          primitives from Squads and Safe, independently audited by their makers. The guard defaults
+          to deny and the worst case is bounded onchain. Use a cap you are comfortable losing.
         </div>
+        <p class="lead">Spending power for your agent. Never your keys.</p>
       </div>
     </article>
 
