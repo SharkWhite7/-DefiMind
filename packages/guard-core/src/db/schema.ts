@@ -1,5 +1,6 @@
 import type {
   Address,
+  AgentWalletStatus,
   Mandate,
   Receipt,
   Amount,
@@ -392,3 +393,22 @@ export const x402Requests = sqliteTable('x402_requests', {
   intentId: text('intent_id').primaryKey(),
   requestHash: text('request_hash').notNull(),
 })
+
+/**
+ * An agent's own hot wallet on one chain (CR-022). The key is on disk; the address is kept so the
+ * panel, /sign and the kill can name it without reading the key. "active" once its limit was read
+ * onchain: only then are the agent's payments routed through it.
+ */
+export const agentWallets = sqliteTable(
+  'agent_wallets',
+  {
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id),
+    chain: text('chain').$type<ChainId>().notNull(),
+    address: text('address').notNull(),
+    status: text('status').$type<AgentWalletStatus>().notNull(),
+    createdAt: text('created_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.agentId, t.chain] })],
+)

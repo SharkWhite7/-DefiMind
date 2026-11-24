@@ -141,7 +141,10 @@ describe('keys made on the server (CR-019)', () => {
 
     const h = await harness({ keys })
     const owner = await signedIn(h)
-    expect((await owner.call('GET', '/v1/owner/keys')).json()).toEqual(keys)
+    expect((await owner.call('GET', '/v1/owner/keys')).json()).toEqual({
+      ...keys,
+      agentWallets: [],
+    })
     expect((await h.app.inject({ method: 'GET', url: '/v1/owner/keys' })).statusCode).toBe(401)
   })
 })

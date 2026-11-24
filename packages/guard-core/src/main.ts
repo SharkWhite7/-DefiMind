@@ -1,9 +1,10 @@
 import { createSvmAnchor } from '@defimind/onchain'
 import { readKeypairFile, readReceiptKeyFile } from './adapters/keypair.js'
-import { withKeys } from './adapters/keystore.js'
+import { keysDir, withKeys } from './adapters/keystore.js'
 import { publicKeys } from './adapters/public-keys.js'
 import { readVapidKeyFile, webPushService } from './adapters/push.js'
-import { buildChains } from './chains.js'
+import { agentKeys } from './adapters/agent-keys.js'
+import { buildAgentChain, buildChains } from './chains.js'
 import { listenerLayout, loadConfig, publicAdmin } from './config.js'
 import { migrateDb, openDb } from './db/client.js'
 import { countPasskeys } from './db/passkeys.js'
@@ -13,6 +14,7 @@ import type { ChainHost } from './http/owner-settings.js'
 import { readSettings } from './db/settings.js'
 import { applySettings, settingKeys } from './domain/settings.js'
 import { killTargets } from './kill-targets.js'
+import { Wallets } from './service/wallets.js'
 
 const env = loadConfig()
 
@@ -68,6 +70,16 @@ const host: ChainHost = {
   },
 }
 
+// CR-022. Built against the settings as they are when a wallet is made, since the vault may be
+// adopted after the start.
+const wallets = new Wallets(
+  db,
+  agentKeys(keysDir(config), (chain, file) =>
+    buildAgentChain(applySettings(config, readSettings(db)), chain, file),
+  ),
+)
+await wallets.load()
+
 const keys = await publicKeys(config)
 const split = config.PUBLIC_PORT !== undefined
 const [app, publicApp] = await buildServers(
@@ -79,6 +91,7 @@ const [app, publicApp] = await buildServers(
     killTargets: targets,
     keys,
     host,
+    wallets,
     ...(anchorPublisher === undefined ? {} : { anchorPublisher }),
     ...(vapid === undefined
       ? {}
