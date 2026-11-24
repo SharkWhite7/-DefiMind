@@ -8,6 +8,7 @@ const schema = z.object({
   rpc: record(z.string()),
   usdc: record(z.string()),
   hot: record(z.string()),
+  agents: record(z.array(z.string())),
   maxDailyCap: z.string().regex(/^[1-9]\d*$/),
   evm: record(
     z.object({
@@ -16,6 +17,7 @@ const schema = z.object({
       usd: z.string(),
       symbol: z.string(),
       hot: z.string().optional(),
+      agents: z.array(z.string()).optional(),
     }),
   ),
 }) satisfies z.ZodType<PageConfig>
