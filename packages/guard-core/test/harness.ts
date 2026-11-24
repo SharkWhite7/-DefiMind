@@ -202,3 +202,11 @@ export function spent(db: Db): bigint {
     .all()
     .reduce((total, row) => total + BigInt(row.spent), 0n)
 }
+
+/** What the shadowed row of the audit says live would have done (CR-024). */
+export const wouldHave = (h: Pick<Harness, 'db'>, intentId: string) =>
+  h.db
+    .select()
+    .from(schema.auditLog)
+    .all()
+    .find((row) => row.intentId === intentId && row.event === 'shadowed')?.detail
