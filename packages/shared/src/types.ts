@@ -418,6 +418,8 @@ export interface OwnerTransaction {
   link?: string
   /** CR-014: the signing page itself, for Phantom's desktop extension. */
   pageLink?: string
+  /** CR-022: set when the entry removes an agent's own wallet's limit; absent for the shared one. */
+  wallet?: { agentId: string; address: string }
 }
 
 /** Response of POST /v1/admin/kill. */

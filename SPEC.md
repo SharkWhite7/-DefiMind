@@ -658,7 +658,8 @@ Gas: the agent's wallet pays its own fees. The panel shows the address and the g
 doctor warns below the minimum.
 
 Kill. POST /v1/owner/kill still pauses every agent, and now returns one ownerTransactions entry per
-chain and wallet, shared and per agent: every limit is removed. POST /v1/owner/agents/:id/kill {}
+chain and wallet, shared and per agent: every limit is removed. An agent's entry carries
+wallet: { agentId, address }, and its links name that wallet. POST /v1/owner/agents/:id/kill {}
 (session) pauses that agent and returns ownerTransactions for its own wallets only. Revoking an agent
 with its own wallet returns the same transactions and says the limit is still live until they are
 signed. The bot's and the admin's kill pause everything, as before, and carry no links.
