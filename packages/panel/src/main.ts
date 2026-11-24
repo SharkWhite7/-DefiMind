@@ -7,6 +7,7 @@ import { approval, mandate } from './ui/approval.js'
 import type { Context, Screen } from './ui/context.js'
 import { el } from './ui/dom.js'
 import { kill } from './ui/kill.js'
+import { wholeTabs } from './ui/nav.js'
 import { deposit } from './ui/deposit.js'
 import { guide } from './ui/guide.js'
 import { enrol, login, setup } from './ui/login.js'
@@ -144,11 +145,13 @@ document.addEventListener('click', (event) => {
     event.preventDefault()
     status.textContent = ''
     history.pushState(null, '', anchor.pathname + anchor.hash)
+    wholeTabs(document.querySelector('nav')!)
     void render()
   }
 })
 window.addEventListener('popstate', () => {
   ctx.say('')
+  wholeTabs(document.querySelector('nav')!)
   void render()
 })
 
@@ -158,4 +161,5 @@ if ('serviceWorker' in navigator) {
     .register(`${BASE}sw.js`, { scope: BASE })
     .catch((error: unknown) => console.warn('service worker not registered', error))
 }
+wholeTabs(document.querySelector('nav')!)
 void render()

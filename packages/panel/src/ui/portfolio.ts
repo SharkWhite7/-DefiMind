@@ -1,3 +1,4 @@
+import { ApiError } from '../adapters/api.js'
 import type { PortfolioView } from '../adapters/schemas.js'
 import { chainName } from '../domain/chains.js'
 import { formatUsd, meterPercent } from '../domain/money.js'
@@ -28,8 +29,24 @@ function holdings(agent: PortfolioView) {
   )
 }
 
+/** A guard-core older than CR-021 has no portfolio route: that is no trading, not an error. */
+const read = (ctx: Context) =>
+  ctx.api.portfolio().catch((error: unknown) => {
+    if (error instanceof ApiError && error.status === 404) {
+      return undefined
+    }
+    throw error
+  })
+
 export async function portfolio(ctx: Context): Screen {
-  const { agents } = await ctx.api.portfolio()
+  const data = await read(ctx)
+  if (data === undefined) {
+    return [
+      el('h1', {}, 'Portfolio'),
+      el('p', {}, 'Trading is not available on this DefiMind yet: your agents hold no tokens.'),
+    ]
+  }
+  const { agents } = data
   const held = agents.some((agent) => agent.positions.length > 0)
   return [
     el('h1', {}, 'Portfolio'),

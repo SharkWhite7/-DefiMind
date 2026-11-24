@@ -141,7 +141,13 @@ nav a {
   border-bottom: 2px solid transparent;
   color: var(--muted);
   text-decoration: none;
-  transition: color var(--ease);
+  transition:
+    color var(--ease),
+    opacity var(--ease);
+}
+
+nav a.cut {
+  opacity: 0;
 }
 
 nav a:hover,
@@ -165,6 +171,7 @@ body[data-screen='overview'] nav a[href='/panel/'],
 body[data-screen='agents'] nav a[href='/panel/agents'],
 body[data-screen='agent'] nav a[href='/panel/agents'],
 body[data-screen='deposit'] nav a[href='/panel/deposit'],
+body[data-screen='portfolio'] nav a[href='/panel/portfolio'],
 body[data-screen='report'] nav a[href='/panel/report'],
 body[data-screen='executions'] nav a[href='/panel/executions'],
 body[data-screen='doctor'] nav a[href='/panel/doctor'],

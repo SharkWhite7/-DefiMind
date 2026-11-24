@@ -137,4 +137,37 @@ describe.each([390, 1280])('trading at %i px', (width) => {
     expect(await page.getByRole('button', { name: 'Close positions with passkey' }).count()).toBe(0)
     await close()
   })
+
+  it('says trading is not available where guard-core has no portfolio route', async () => {
+    const { guard, page, violations, close } = await openDevice(browser, dist, width)
+    await signIn(page, guard.origin)
+    await page.getByRole('link', { name: 'Portfolio' }).click()
+    await page.getByText(/^Trading is not available on this DefiMind yet/).waitFor()
+    expect(await status(page).textContent()).toBe('')
+    expect(violations).toEqual([])
+    await close()
+  })
+
+  it('shows no tab cut in half against Stop', async () => {
+    const { guard, page, close } = await openDevice(browser, dist, width)
+    await signIn(page, guard.origin)
+    for (const scroll of [0, 120, 10_000]) {
+      await page.locator('nav').evaluate((nav, x) => nav.scrollTo(x, 0), scroll)
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const nav = document.querySelector('nav')!
+            const edge = nav.querySelector('a.stop')!.getBoundingClientRect().left
+            const left = nav.getBoundingClientRect().left
+            return [...nav.querySelectorAll('a:not(.stop)')].filter((tab) => {
+              const box = tab.getBoundingClientRect()
+              const partial = box.right > edge + 1 || box.left < left - 1
+              return partial && box.left < edge && getComputedStyle(tab).opacity !== '0'
+            }).length
+          }),
+        )
+        .toBe(0)
+    }
+    await close()
+  })
 })
