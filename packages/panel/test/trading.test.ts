@@ -81,10 +81,12 @@ describe('percent', () => {
 
   it('parses a percent to basis points, up to 100', () => {
     expect(parsePercent('1.5')).toBe(150)
+    expect(parsePercent('1,5')).toBe(150)
+    expect(parsePercent('0,25%')).toBe(25)
     expect(parsePercent(' 3% ')).toBe(300)
     expect(parsePercent('0.05')).toBe(5)
     expect(parsePercent('100')).toBe(10_000)
-    for (const bad of ['', '100.01', '-1', '1.234', 'one', '1e2']) {
+    for (const bad of ['', '100.01', '-1', '1.234', '1,234', '1.2,3', 'one', '1e2']) {
       expect(parsePercent(bad)).toBeUndefined()
     }
   })

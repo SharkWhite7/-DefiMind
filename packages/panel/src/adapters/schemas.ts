@@ -20,6 +20,17 @@ export const allowance = z
   ])
   .nullable()
 
+/** SPEC v0.17, CR-022: an agent's own hot wallet on one chain, opt-in. */
+export const agentWallet = z.object({
+  chain: text(64),
+  address: text(128),
+  status: z.enum(['pending_limit', 'active']),
+  addLimitPage: text(2048).optional(),
+  gas: z.object({ balance: atomic, minimum: atomic, symbol: text(16) }).optional(),
+})
+
+export const agentWallets = z.object({ wallets: z.array(agentWallet).max(16) })
+
 export const agentSummary = z.object({
   agentId,
   paused: z.boolean(),
@@ -298,6 +309,7 @@ export type Overview = z.infer<typeof overview>
 export type ApprovalView = z.infer<typeof approvalRequest>
 export type MandateView = z.infer<typeof mandateRequest>
 export type AgentView = z.infer<typeof agentSummary>
+export type AgentWalletView = z.infer<typeof agentWallet>
 export type PolicyView = z.infer<typeof policy>
 export type BudgetView = z.infer<typeof budget>
 export type KillView = z.infer<typeof kill>

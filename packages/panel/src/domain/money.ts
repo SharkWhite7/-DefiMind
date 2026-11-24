@@ -3,7 +3,10 @@ import { getAddress, USDC_DECIMALS, usdSymbol } from '@defimind/shared'
 
 const ATOMIC = /^(0|[1-9]\d*)$/
 const UNIT = 10n ** BigInt(USDC_DECIMALS)
-const DOLLARS = /^\$?(\d{1,12})(?:\.(\d{1,6}))?$/
+// One dot or one comma before the cents: an iPhone in pt-BR types "2,00". No thousands separators:
+// "1.234,56" is refused, and so is a comma before exactly three digits, since "1,000" reads as a
+// thousand in English and as one in Portuguese.
+const DOLLARS = /^\$?(\d{1,12})(?:\.(\d{1,6})|,(?!\d{3}$)(\d{1,6}))?$/
 
 /** Dollar-token atomic units to dollars, in bigint: always cents, more digits only when not zero. */
 export function formatUsd(amount: string): string {
@@ -16,13 +19,14 @@ export function formatUsd(amount: string): string {
   return `$${whole}.${fraction.padEnd(2, '0')}`
 }
 
-/** "12.5" or "$12.50" to atomic units; undefined for anything else, a negative included. */
+/** "12.5", "12,50" or "$12.50" to atomic units; undefined for anything else, a negative included. */
 export function parseDollars(text: string): string | undefined {
   const match = DOLLARS.exec(text.trim())
   if (match === null) {
     return undefined
   }
-  const [, whole = '0', fraction = ''] = match
+  const [, whole = '0', dot, comma] = match
+  const fraction = dot ?? comma ?? ''
   return (BigInt(whole) * UNIT + BigInt(fraction.padEnd(USDC_DECIMALS, '0'))).toString()
 }
 

@@ -829,3 +829,10 @@ body[data-screen='enrol'] .primary {
     transition: none !important;
   }
 }
+
+/* CR-022: one block per agent wallet inside the Own wallet card. */
+.wallet {
+  padding-top: 12px;
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+}

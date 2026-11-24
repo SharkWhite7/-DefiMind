@@ -43,7 +43,7 @@ export type ApprovalFlag = (typeof APPROVAL_FLAGS)[number]
 export const FLAG_DESCRIPTIONS: Record<ApprovalFlag, string> = {
   RECIPIENT_CHANGED: 'This API asks to pay a different recipient, chain or token than last time.',
   PRICE_JUMP: 'Price jump: this API asks for much more than its last payment.',
-  NEW_TOKEN: 'New token: the agent has never bought this token before.',
+  NEW_TOKEN: 'New token: none of your agents has bought this token before.',
   MINT_AUTHORITY: "The token's issuer can still mint more of it.",
 }
 

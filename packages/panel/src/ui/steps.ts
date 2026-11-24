@@ -1,6 +1,7 @@
 import type { SettingsView } from '../adapters/schemas.js'
 import { chainName } from '../domain/chains.js'
 import { inPhantom, isSolana, signLink, type StepId } from '../domain/guide.js'
+import { ownerKeyNote } from './owner-key.js'
 import type { Context } from './context.js'
 import { depositCard } from './deposit.js'
 import { agent, live, next, rules, shadow } from './agent-steps.js'
@@ -39,7 +40,7 @@ async function setupChain(ctx: Context): Promise<Chain | undefined> {
   return chains.find((c) => isSolana(c.chain)) ?? chains[0]
 }
 
-function walletLinks(link: string | undefined, what: string): Child[] {
+export function walletLinks(link: string | undefined, what: string): Child[] {
   if (link === undefined) {
     return [el('p', { class: 'flag' }, 'The signing page does not serve this chain yet.')]
   }
@@ -64,6 +65,7 @@ async function vault(ctx: Context): Promise<Child[]> {
       'Open the signing page with Phantom and approve. It creates your vault and shows its address.',
     ),
     ...walletLinks(signLink(location.origin, chain, { action: 'create' }), 'Create'),
+    ...ownerKeyNote(chain),
     el('label', { for: 'vault' }, `Your vault address on ${chainName(chain)}`),
     input,
     button(
