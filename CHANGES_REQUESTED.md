@@ -1226,3 +1226,116 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     transfer. The default stays deny, and every unknown is a rejection.
   - **Not financial advice.** Trading features invite that reading. The product and the site must
     describe controls, never returns.
+
+### CR-022 — Independent review fixes: no loosening by token, no public admin, bound approvals
+
+- **From:** integrator, from the manager's summary of an independent review
+- **Date:** 2026-11-24
+- **Status:** approved by the owner on 2026-11-24. He was shown the reviewer's red flags and said
+  "let's fix the red flags" (relayed by the manager). Applied to SPEC v0.17 on 2026-11-24. HIGH-2 is
+  approved as a goal only: its design waits for the owner's choice among the options below.
+- **Why:** an independent reviewer ran DefiMind locally and published an analysis (8/10, "really
+  excellent engineering", explicitly not an audit). It listed six red flags. Two notes that need no
+  code: the commit history (fast, mostly AI-written) is a transparency matter, and the admin token
+  they found in git history is a test value. Their "not tested: production deploy, real RPC payments"
+  has answers: a real 1 USDC mainnet payment (E3) and the Robinhood Chain pilot.
+
+- **HIGH-1. The admin token alone loosens a policy.** `PUT /v1/admin/policy/:agentId` takes any
+  policy with the admin token only. The reviewer used it to send 50M test units to a "Thief" address
+  automatically; onchain, the loss stopped at the daily cap. Loosening is meant to need the owner's
+  passkey (CR-012, CR-015), and the admin token is a machine credential that can leak.
+  - **Fix:** an admin write that loosens, as `loosened()` counts it, is refused with
+    403 `{ error: "loosen_in_panel" }` once any passkey is enrolled, and on any chain that is not a
+    testnet even before then. This covers `PUT /v1/admin/policy/:agentId`, `POST /v1/admin/resume`
+    and `POST /v1/admin/mandates`. Before the first passkey, admin may still loosen a policy whose
+    chains are all testnets, so local runs, devnet scripts and the e2e suite stay scriptable. Real
+    money always needs the passkey.
+  - Every refusal is audited (`admin_loosen_refused`, via `admin`) and alerts the owner (webhook
+    alert and Web Push `attack`): someone who has the admin token is trying to widen a policy.
+  - Unchanged: admin reads, tightening, pause, kill, revoke, and creating an agent (deny-all, shadow).
+  - **Tests:** with a passkey enrolled, a raised perTxMax, an added recipient or domain, mode `live`,
+    resume and an admin mandate are each 403 and audited, with no policy changed. Without a passkey,
+    the same on a mainnet chain is 403, and on devnet it passes. Tightening still passes.
+
+- **MEDIUM-1. One public listener can serve the admin API without a warning.** With PUBLIC_PORT
+  unset, HOST=0.0.0.0 and ADMIN_ROUTES=true, `/v1/admin/*` faces whatever network the host faces.
+  - **Fix:** with one listener, guard-core refuses to start when ADMIN_ROUTES=true and HOST is not a
+    loopback address. The exit message names ADMIN_ROUTES=false (the hosted default, as on Render) and
+    the split listener (PUBLIC_PORT). `ALLOW_PUBLIC_ADMIN=true` overrides it for a host whose firewall
+    is the guard. It logs a warning at every start, and doctor shows `warn`. Split listeners are
+    unchanged, as on Fly (HOST=fly-local-6pn) and in docker-compose (the compose network).
+  - **Tests:** each combination of HOST, PUBLIC_PORT, ADMIN_ROUTES and ALLOW_PUBLIC_ADMIN, through the
+    config loader and the startup path.
+
+- **LOW-1. An x402 approval can be redeemed by another request.** An approval is redeemed for the
+  same chain, token, amount, recipient and domain, but on any path or method of that domain.
+  - **Fix:** a pending x402 intent stores the SHA-256 of its request: method, the full URL with path
+    and query, and the body. Only the same hash redeems the approval. SPEC already tells the agent to
+    repeat the same request. A different one is a new intent, evaluated as such. The hash is internal:
+    PayIntent does not change.
+  - **Tests:** approve, then repeat on another path, another method or another body: each is a new
+    intent and the approval stays unredeemed; the same request redeems it once.
+
+- **LOW-2. No check against DNS rebinding.** A request's Host header is not compared with the address
+  guard-core is meant to be reached at.
+  - **Fix:** with PUBLIC_URL (or PASSKEY_ORIGIN) set, the public listener answers
+    421 `{ error: "misdirected" }` to a request whose Host is another name. A single listener on
+    loopback accepts only `localhost`, `127.0.0.1`, `[::1]` and its HOST. `GET /health` is exempt for
+    the host's checks.
+  - Admin and bot routes already need a bearer token that a rebinding page cannot have. Owner routes
+    already need a SameSite=Strict cookie and, for writes, the Origin. This is defense in depth.
+  - **Tests:** a foreign Host is 421 on owner, agent and panel routes, and `/health` still answers.
+
+- **HIGH-3. One wallet controls every vault.** The owner's Squads multisig and Safe both have one
+  signer, from one Phantom account (one seed phrase). Leaking that seed loses every vault, past every
+  daily cap.
+  - **Fix, product side:**
+    - `ChainAdapter.getVault()` returns `control?: { threshold, signers }`, read onchain.
+    - Doctor warns when a vault has threshold 1.
+    - The panel's setup and settings say plainly: one seed phrase behind every vault is one point of
+      failure. Use a separate wallet per chain, or a 2-of-3 with a hardware key.
+    - The owner guide explains the trade-off. A 2-of-3 is safer but makes the kill slower, because
+      the second signer must also sign.
+  - The owner's own change goes on HUMAN_TODO (manager).
+  - The signing page today requires the sole owner of a Safe and the config authority of a multisig.
+    Multi-signer vaults need the page to propose rather than execute, which is a follow-up in the
+    same rows.
+
+- **HIGH-2. One spending (hot) wallet per chain, shared by every agent.** Each agent has its own
+  offchain policy, but onchain the daily cap is shared. A policy-engine bug for one agent could spend
+  another agent's share of it.
+  - **Options:**
+    - **A. A dedicated hot wallet and onchain limit per agent (recommended, opt-in per agent).**
+      guard-core generates one hot wallet per agent and chain. The owner signs one add-limit for it on
+      the signing page. That agent spends only from its own onchain limit, so a bug or a hijacked
+      agent can never cost more than that agent's own cap.
+      - Cost: one owner signature per agent and chain, plus gas for each wallet.
+      - Migration: existing agents stay on the shared wallet. The panel offers "Give this agent its
+        own wallet": generate, sign the limit, switch, then lower the shared limit.
+    - **B. Per-agent hot wallets funded from the shared limit.** Better accounting, but no onchain
+      isolation: the shared limit still bounds everyone together. Not recommended.
+    - **C. Keep the shared wallet and document it.** One agent is the common case, and then A and the
+      shared wallet are the same thing. It leaves the reviewer's point open for multi-agent owners.
+  - **Honest limit of every option:** each hot wallet key lives in the same guard-core. A compromised
+    server holds them all; the onchain caps, summed, are what bound that case, as today. Separating
+    keys from the server (KMS or a signer service) is a later CR.
+
+- **Order:** HIGH-1 and MEDIUM-1 first (guard-core, now), then LOW-1 and LOW-2 (guard-core), then
+  HIGH-3 (onchain `control`, guard-core doctor, panel copy), then HIGH-2 once the owner chooses.
+
+- **Rows:**
+  - GC-60: HIGH-1, admin loosening refused (guard-core).
+  - GC-61: MEDIUM-1, the startup refusal and doctor warning (guard-core).
+  - GC-62: LOW-1, the request hash on x402 approvals (guard-core).
+  - GC-63: LOW-2, the Host checks (guard-core).
+  - ON-29: HIGH-3, `Vault.control` on both families (onchain).
+  - GC-64: HIGH-3, the doctor warning on a threshold-1 vault (guard-core; depends on ON-29).
+  - PANEL-21: HIGH-3 copy in setup and settings; the `admin_loosen_refused` alert in the bot; the
+    swap intents the bot refuses today (found by INT-47) (panel).
+  - INT-48: e2e for each fix, SPEC and docs, the owner key guide, and the shared types (integrator).
+  - HIGH-2: rows after the owner's choice.
+- **Risks for the owner to accept:**
+  - Scripts that loosened mainnet policies with the admin token stop working. The panel does it,
+    with the passkey.
+  - A single-listener deployment that served the admin API publicly will not start until it chooses
+    ADMIN_ROUTES=false, a split listener or ALLOW_PUBLIC_ADMIN=true.

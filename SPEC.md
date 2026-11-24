@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.16 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.17 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -56,7 +56,8 @@ Neither chain needs a contract we write. Both primitives are audited and already
 Chains are CAIP-2 strings, never numbers: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" style for Solana,
 "eip155:8453" for Base mainnet, "eip155:84532" for Base Sepolia, "eip155:4663" for Robinhood Chain and
 "eip155:46630" for its testnet (CR-007). The values live in
-packages/shared/src/constants.ts. The Solana references are the first 32 characters of each cluster's
+packages/shared/src/constants.ts, with TESTNET_CHAINS (Solana devnet, Base Sepolia and Robinhood
+Chain testnet; CR-022). The Solana references are the first 32 characters of each cluster's
 genesis hash, confirmed with `solana genesis-hash` (CR-002):
 
   mainnet-beta | solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp
@@ -225,6 +226,8 @@ interface ChainAdapter {
   getVault(): Promise<{ address: string; token: string; balance: Amount }>  // CR-019: the owner's
                                                    // vault (Squads vault index 0, or the Safe),
                                                    // where deposits go, and its balance
+    // CR-022: plus control?: { threshold: number; signers: number }, read onchain: the multisig's
+    // threshold and members, or the Safe's threshold and owners. Doctor warns at threshold 1.
   buildKillTx(): Promise<{ description: string; payload: unknown }>  // owner signs this
   simulate(intent: PayIntent): Promise<SimulationOutcome>
   send(intent: PayIntent): Promise<string>         // returns txId
@@ -266,7 +269,9 @@ POST /v1/agent/x402/fetch   { agentId, url, method, headers?, body?, maxAmount? 
   and the response passes through with rejectReasons: []. When the host is refused before any request
   is made, intentId is absent and the result is { status: "rejected", rejectReasons: ["DOMAIN_NOT_ALLOWED"] }.
   After the owner approves, the agent repeats the same request. The approval is redeemed once, for
-  exactly the approved chain, token, amount, recipient and domain. An approval not redeemed before
+  exactly the approved chain, token, amount, recipient and domain, and (CR-022) only by the same
+  request: guard-core keeps the SHA-256 of the method, the full URL with its query, and the body.
+  Another request is a new intent. An approval not redeemed before
   expiresAt expires with APPROVAL_TIMEOUT.
 POST /v1/agent/transfer     { agentId, chain, token, amount, recipient, reason, mandateId? } -> { intentId, status, txId?, rejectReasons }
   x402 fetch takes mandateId? too. With one, the payment must also fit that mandate (CR-010).
@@ -298,7 +303,7 @@ GET  /v1/bot/agents, /v1/bot/policy/:agentId, /v1/bot/budget/:agentId, /v1/bot/c
 GET  /v1/bot/report?from&to, /v1/bot/doctor   the same bodies as the admin reads
 The bot has no route that creates agents, adds to an allowlist, raises a limit, goes live, resumes or
 issues an enrolment code: those are the panel's, with a passkey, or the machine's, with the admin
-token. A bot started with GUARD_ADMIN_TOKEN set logs a warning and does not use it.
+token within the CR-022 rule below. A bot started with GUARD_ADMIN_TOKEN set logs a warning and does not use it.
 POST /v1/admin/pause        { agentId } ; POST /v1/admin/resume { agentId }
 POST /v1/admin/kill         {} -> pauses all agents AND prepares, for every chain, the owner tx that
                                   sets the allowance to 0 and removes the delegate
@@ -308,6 +313,12 @@ POST /v1/admin/kill         {} -> pauses all agents AND prepares, for every chai
   A chain whose kill tx could not be built stays in the list with payload: null and a description
   telling the owner to remove the spend limit by hand: that chain's allowance is still live.
 GET/PUT /v1/admin/policy/:agentId  Policy
+  Admin loosening (CR-022). An admin write that loosens, as loosened() counts it, is refused with
+  403 { error: "loosen_in_panel" } once any passkey is enrolled, and on any chain outside
+  TESTNET_CHAINS even before then. This covers this PUT, POST /v1/admin/resume and
+  POST /v1/admin/mandates. Each refusal is audited (event "admin_loosen_refused", via "admin") and
+  alerts the owner: { kind: "admin_loosen_refused" } to the bot and Web Push "attack". Reads,
+  tightening, pause, kill, revoke and creating an agent are unchanged.
 POST /v1/admin/agents { agentId } -> { agentId, token }   (CR-011) the token once; only its hash is
   kept. The new agent gets a deny-all policy with mode "shadow". 409 { error: "exists" }.
 GET  /v1/admin/agents -> { agents: { agentId, paused, mode }[] }
@@ -488,7 +499,12 @@ with the same strict CSP as the panel, and each release publishes the SHA-256 of
 build so a modified /sign can be detected.
 
 Hosting behind one public listener. ADMIN_ROUTES=false leaves /v1/admin/* unregistered, as the
-one-click deployment does. PUBLIC_URL is the https address the owner opens; on Render it defaults to
+one-click deployment does. With one listener (PUBLIC_PORT unset), guard-core refuses to start with
+ADMIN_ROUTES=true unless HOST is a loopback address or ALLOW_PUBLIC_ADMIN=true. The override logs a
+warning at every start and doctor reports "warn" (CR-022).
+Host check (CR-022). With PUBLIC_URL or PASSKEY_ORIGIN set, the public listener answers
+421 { error: "misdirected" } when the Host header names another host. A single listener on loopback
+accepts only localhost, 127.0.0.1, [::1] and its HOST. GET /health is exempt. PUBLIC_URL is the https address the owner opens; on Render it defaults to
 RENDER_EXTERNAL_URL, and PASSKEY_RP_ID and PASSKEY_ORIGIN default from it. TRUST_FORWARDED_FOR=true
 takes the client address for rate limits from the hop the host's proxy adds, never from one the
 client sent.
@@ -548,6 +564,7 @@ POST {BOT_URL}/hooks/alert             (same X-Guard-Signature scheme; CR-010)
 { kind: "breaker_tripped", agentId: string, detail: string, sentAt: string }
   | { kind: "passkey_enrolled", detail: string, sentAt: string }
   | { kind: "chain_broken", detail: string, sentAt: string }   (CR-013)
+  | { kind: "admin_loosen_refused", detail: string, sentAt: string }   (CR-022)
 The approval-request body gains flags: ("RECIPIENT_CHANGED" | "PRICE_JUMP")[] (empty when none),
 pinned?: { recipient, amount } (the last executed payment to that domain, present with a flag),
 passkey: boolean (approve only through /owner/approve), and mandate?: Mandate when the request is to
@@ -576,6 +593,13 @@ runs once approved: while pending, the mandate's expiresAt is only the approval 
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.17 (2026-11-24): CR-022, approved by the owner. Fixes from an independent review:
+  - the admin token no longer loosens a policy once a passkey exists, nor on mainnet ever;
+  - one public listener refuses to serve the admin API unless told to;
+  - an x402 approval is bound to its exact request;
+  - the public listener checks the Host header;
+  - getVault reports the vault's threshold, and doctor warns at threshold 1.
+  Per-agent hot wallets (HIGH-2) wait for the owner's choice of design.
 - v0.16 (2026-11-24): CR-021, approved by the owner. Guarded trading, phase 1 on Solana through
   Jupiter: the swap intent kind, Policy.trading, the trading reject codes and approval flags,
   ChainAdapter.quoteSwap and getPositions, the agent quote, swap and portfolio routes, the owner's
