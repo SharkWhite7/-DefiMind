@@ -150,6 +150,8 @@ export interface ProofBundle {
 export type AlertEvent =
   | { kind: 'breaker_tripped'; agentId: string; detail: string; sentAt: string }
   | { kind: 'passkey_enrolled'; detail: string; sentAt: string }
+  /** CR-022: someone with the admin token tried to widen a policy. */
+  | { kind: 'admin_loosen_refused'; detail: string; sentAt: string }
   /** CR-013: the execution receipt chain failed its integrity check. */
   | { kind: 'chain_broken'; detail: string; sentAt: string }
 
@@ -419,4 +421,19 @@ export interface AgentSummary {
   agentId: string
   paused: boolean
   mode: 'live' | 'shadow'
+  /** CR-022: the agent's own spending wallets; absent or empty means the shared one everywhere. */
+  wallets?: { chain: ChainId; address: string; status: AgentWalletStatus }[]
+}
+
+/** CR-022. "active" only once guard-core has read the wallet's onchain limit or allowance. */
+export type AgentWalletStatus = 'pending_limit' | 'active'
+
+/** CR-022: an agent's own spending (hot) wallet on one chain. */
+export interface AgentWallet {
+  chain: ChainId
+  address: string
+  status: AgentWalletStatus
+  /** The signing page's add-limit for this wallet. */
+  addLimitPage: string
+  gas: { balance: Amount; minimum: Amount; symbol: string }
 }

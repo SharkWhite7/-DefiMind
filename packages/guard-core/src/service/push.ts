@@ -111,6 +111,9 @@ export function pusher(deps: PushDeps) {
     alert(event: AlertBody) {
       if (event.kind === 'breaker_tripped') {
         send({ kind: 'breaker', agentId: event.agentId })
+      } else if (event.kind === 'admin_loosen_refused') {
+        // CR-022: a leaked admin token at work reads as an attack, not as news.
+        send({ kind: 'attack' })
       } else {
         send({ kind: event.kind })
       }
