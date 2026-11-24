@@ -75,6 +75,7 @@ describe('routes', () => {
     { name: 'passkeys' },
     { name: 'settings' },
     { name: 'kill' },
+    { name: 'portfolio' },
     { name: 'setup' },
     { name: 'deposit' },
     { name: 'guide' },

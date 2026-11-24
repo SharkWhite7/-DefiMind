@@ -11,6 +11,7 @@ export type OwnerAction =
   | 'resume'
   | 'create_agent'
   | 'change_settings'
+  | 'close_positions'
 
 const STEP_UP_MS = 5 * 60_000
 type Address = Pick<PasskeySetup, 'rpId' | 'origin'>

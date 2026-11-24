@@ -15,6 +15,7 @@ export type Route =
   | { name: 'passkeys' }
   | { name: 'settings' }
   | { name: 'kill' }
+  | { name: 'portfolio' }
   | { name: 'setup' }
   | { name: 'deposit' }
   | { name: 'guide'; step?: StepId }
@@ -33,6 +34,7 @@ const SIMPLE = [
   'passkeys',
   'settings',
   'kill',
+  'portfolio',
   'setup',
   'deposit',
 ] as const

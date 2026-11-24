@@ -1,4 +1,6 @@
+import type { PayIntent } from '@defimind/shared'
 import { describe, expect, it } from 'vitest'
+import { summarise } from '../src/domain/report.js'
 import { schema } from '../src/db/client.js'
 import {
   ADMIN_TOKEN,
@@ -102,5 +104,24 @@ describe('GET /v1/admin/report', () => {
   ])('refuses %s', async (_case, query) => {
     const h = await harness()
     expect((await report(h, query)).statusCode).toBe(400)
+  })
+})
+
+describe('summarise with swaps (CR-021)', () => {
+  const at = (amount: string, status: PayIntent['status'], kind: PayIntent['kind']) =>
+    ({ agentId: 'agent-1', amount, status, kind, rejectReasons: [] }) as unknown as PayIntent
+
+  it('leaves executed swaps out of what payments spent, and still counts their refusals', () => {
+    const refused = { ...at('1', 'rejected', 'swap'), rejectReasons: ['TRADE_EXCEEDED'] }
+    const intents = [
+      at('5000000', 'executed', 'swap'),
+      refused,
+      at('1000000', 'executed', 'transfer'),
+    ]
+    expect(summarise(['agent-1'], intents as PayIntent[])[0]).toMatchObject({
+      spent: '1000000',
+      payments: 1,
+      refused: { TRADE_EXCEEDED: 1 },
+    })
   })
 })
