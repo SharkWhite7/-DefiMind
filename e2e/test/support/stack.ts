@@ -55,7 +55,9 @@ export function policy(
  * them. Only the chain (a stub that signs nothing) and Telegram (recorded, not sent) are fake, and
  * one clock drives all three so expiry can be tested without waiting.
  */
-export async function stack(options: { chain?: StubChain; net?: Net; panel?: boolean } = {}) {
+export async function stack(
+  options: { chain?: StubChain; net?: Net; panel?: boolean; setupCode?: string } = {},
+) {
   const net = options.net ?? SOLANA
   const log = pino({ level: 'silent' })
   const clock = { now: START }
@@ -87,6 +89,7 @@ export async function stack(options: { chain?: StubChain; net?: Net; panel?: boo
       BOT_URL: botUrl,
       BOT_WEBHOOK_SECRET: WEBHOOK_SECRET,
       LOG_LEVEL: 'fatal',
+      ...(options.setupCode === undefined ? {} : { SETUP_CODE: options.setupCode }),
       // The flows approve through the bot unless they test the panel, its default since CR-012.
       ...(options.panel
         ? { PASSKEY_RP_ID: PANEL_RP.id, PASSKEY_ORIGIN: PANEL_RP.origin }

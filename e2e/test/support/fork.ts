@@ -126,6 +126,10 @@ export function fork() {
   const self = {
     svm,
     hostile,
+    /** The hot wallet's dollars, as a top-up or a spend would leave them. */
+    setUsdc(amount: bigint) {
+      svm.setAccount(usdcAccount, tokenAccount(USDC, amount))
+    },
     balance(token: PublicKey) {
       const info = svm.getAccount(getAssociatedTokenAddressSync(token, HOT))
       return info ? AccountLayout.decode(Buffer.from(info.data)).amount : 0n
@@ -190,7 +194,8 @@ export function fork() {
       },
     },
   })
-  const chain = new ForkChain(real)
+  // A top-up stands in for the vault's spending-limit draw: the dollars arrive in the hot wallet.
+  const chain = new ForkChain(real, (amount) => self.setUsdc(self.balance(USDC) + amount))
   return { ...self, chain }
 }
 
@@ -198,8 +203,16 @@ export function fork() {
 class ForkChain extends StubChain {
   readonly swapsSent: PayIntent[] = []
 
-  constructor(private readonly real: ReturnType<typeof svmAdapter>) {
+  constructor(
+    private readonly real: ReturnType<typeof svmAdapter>,
+    private readonly credit: (amount: bigint) => void,
+  ) {
     super(CHAINS.solanaMainnet, 0n)
+  }
+
+  override async topUpHotWallet(amount: string): Promise<string> {
+    this.credit(BigInt(amount))
+    return super.topUpHotWallet(amount)
   }
 
   quoteSwap = (req: Parameters<NonNullable<typeof this.real.quoteSwap>>[0]) =>
