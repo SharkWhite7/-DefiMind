@@ -8,8 +8,7 @@
  */
 import { writeFile } from 'node:fs/promises'
 import { gzipSync } from 'node:zlib'
-import type {
-  AddressLookupTableAccount} from '@solana/web3.js';
+import type { AddressLookupTableAccount } from '@solana/web3.js'
 import {
   Connection,
   Keypair,
