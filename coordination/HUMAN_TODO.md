@@ -24,24 +24,6 @@ Live addresses, caps and the launch record are in [`LAUNCH.md`](../LAUNCH.md) an
 
 ---
 
-## ✖️ HUMAN-36 — Move vault control to a Ledger (CR-022 HIGH-3) — dropped, risk accepted
-
-The independent review's HIGH-3: one Phantom account, one recovery phrase, controls every vault. On
-2026-11-24 the owner first chose a Ledger, then decided the same day to keep Phantom as the vault's
-only key ("let's keep Phantom"). The risk is accepted, as in LAUNCH.md D4. A Ledger stays optional
-for every user, and the product side of HIGH-3 (doctor's `<chain>:control` warning, the panel's
-advice, `docs/owner-keys.md`) is unchanged.
-
-What the owner keeps doing instead:
-
-- keep in the vault only what the agents need for the coming weeks, the rest in cold storage;
-- keep the Phantom recovery phrase on paper only, never typed into a phone, computer or website.
-
-If he changes his mind, the hand-over plan is on BOARD (ON-34, deferred): the Ledger must replace the
-old key as config authority and member on Squads, and as owner on the Safe, in two signatures.
-
----
-
 ## ⏳ HUMAN-25 — Ask Phantom to review the signing page's domain
 
 When the owner created the Solana mainnet multisig, Phantom showed "This dApp could be malicious" and
@@ -91,25 +73,6 @@ is the owner's decision: which firm, what scope, what cost. Until then, the publ
 CR-012, CR-013 and CR-016 are complete in code, so the move of the live deployment to this repository
 can start. The runbook was `docs/migration.md` (Parts A to F, with a rollback), removed from `main` on 2026-11-24 and last at commit `7b0b51c`; the manager walks the owner through it one step at a time, and the integrator helps when a check fails; HUMAN-24, HUMAN-27, HUMAN-28 and HUMAN-30 were done in Parts A and B (2026-11-19). Progress: A, B and C1–C4 passed (the old apps are stopped, not destroyed; the database is on `defimind-guard-core`). The owner decided on 2026-11-20 to drop Telegram and use the web panel only, so C5 (the bot deploy) is skipped. D1 passed on 2026-11-20: the owner's passkey for `defimind-guard-core.fly.dev` is on his iPhone (the first one, made in Edge on Windows, was removed). D2 passed: the panel works on the iPhone in Safari. F0 is done: the bot's settings were unset and `main` was deployed, so guard-core runs without Telegram. E1 and E2 passed: `fly-agent` reaches `https://defimind-guard-core.fly.dev` from Claude Code and is live. E3 passed on 2026-11-23: a 1.00 USDC payment on Solana mainnet to the owner's own Phantom address, approved in the panel with the passkey, arrived in Phantom. The owner reported E3.5–E3.7 done the same day: receipt in Executions, today's spend in Overview, and the address removed again. F1 is done for guard-core (2026-11-23): `FLY_API_TOKEN_GUARD` is in the `defimind` environment, piped from flyctl, never shown; the bot needs none, since it is retired (HUMAN-32). Only F2 is left, after one to two stable weeks (from about 2026-12-07), together with HUMAN-32. One rule from CR-016: the new bot app gets `BOT_TOKEN` only, never
 `GUARD_ADMIN_TOKEN`. Until GC-58 lands, `SIGN_PAGE_URL` still points at the legacy signing page from HUMAN-14, so that Vercel project stays up until then.
-
----
-
-## ⬜ HUMAN-35 — Decide when to launch publicly
-
-On 2026-11-23 the owner decided not to launch publicly yet. In his words: "eu nao quero lançar agora
-para o publico quero fazer o video para mostrar para os co fundadores". The demo video is private, for
-his co-founders. Until he decides to launch, no announcement, launch copy, release or tag goes out.
-The same day he chose to leave the repository's visibility as it is and only take the GitHub links
-off the site (SITE-5): "Deixa como está, so remove o github site eu nao vou por ainda para publico".
-
-What the public launch still needs, once he decides:
-
-1. SITE-4, copy fixes on the site. It still mentions Telegram's `/kill`, Base as live and SPEC v0.5.
-2. The site's Vercel project builds from the legacy repository. Reconnect it
-   to `SharkWhite7/-DefiMind` with Root Directory `site`.
-3. `defimind-sign.vercel.app` answered 404 at its root after HUMAN-34. Recheck the project's
-   deployments and domains, then the integrator verifies the files and merges GC-58 (#89).
-4. HUMAN-25, the Phantom review, now also for `defimind-sign.vercel.app`.
 
 ---
 
