@@ -110,8 +110,9 @@ function routeReason(ix: TransactionInstruction, sides: SwapSides): RejectCode |
   if (inAmount !== sides.amountIn || feeBps !== 0 || slippageBps > 10_000n) {
     return 'SIM_UNEXPECTED_EFFECT'
   }
-  if ((quotedOut * (10_000n - slippageBps)) / 10_000n < sides.minAmountOut)
-    return 'SLIPPAGE_TOO_HIGH'
+  // Rounded up, as Jupiter rounds the threshold it quotes: the two agree to the atomic unit.
+  const enforced = (quotedOut * (10_000n - slippageBps) + 9_999n) / 10_000n
+  if (enforced < sides.minAmountOut) return 'SLIPPAGE_TOO_HIGH'
   return undefined
 }
 

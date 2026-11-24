@@ -32,7 +32,8 @@
     "build:web": "tsx web/build.ts",
     "test:web": "vitest run --config web/vitest.config.ts",
     "status:robinhood": "tsx --env-file=.env src/scripts/robinhood-status.ts",
-    "check:squads": "tsx src/scripts/check-squads.ts"
+    "check:squads": "tsx src/scripts/check-squads.ts",
+    "record:swap": "NODE_USE_ENV_PROXY=1 tsx src/scripts/record-swap.ts"
   },
   "dependencies": {
     "@defimind/shared": "workspace:*",

@@ -156,6 +156,17 @@ doubt is a rejection.
 - **`getPositions()`** returns every token the hot wallet holds but the dollar, in Token and
   Token-2022 accounts, with decimals read from the mint.
 
+**Fork test.** `test/swap-fork.test.ts` runs a real Jupiter route in LiteSVM: 1 USDC for wrapped SOL
+through a Whirlpool, executed by Jupiter's and Whirlpool's own programs. `pnpm record:swap` recorded
+that route from mainnet, with every account it touches at one slot, into `test/fixtures/`. The hot
+wallet is a key made for the recording, so no real funds are involved. The test checks three things:
+
+- the route passes the checks and the test run, and lands exactly the balances checked;
+- the same transaction, with its route's slippage opened to 100%, is refused;
+- an approved minimum the route cannot reach is refused.
+
+To refresh the fixtures, run `pnpm record:swap` again.
+
 ### Vault (CR-019)
 
 `getVault()` returns `{ address, token, balance }`. This is the vault deposits go to: the Squads

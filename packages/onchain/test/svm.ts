@@ -74,6 +74,15 @@ export class Svm {
     this.inner.addProgramFromFile(address(programId.toBase58()), path)
   }
 
+  addProgram(programId: PublicKey, bytes: Uint8Array): void {
+    this.inner.addProgram(address(programId.toBase58()), bytes)
+  }
+
+  /** Off for a transaction recorded on another chain, whose blockhash this one never saw. */
+  withBlockhashCheck(on: boolean): void {
+    this.inner.withBlockhashCheck(on)
+  }
+
   withSigverify(on: boolean): void {
     this.inner.withSigverify(on)
   }
