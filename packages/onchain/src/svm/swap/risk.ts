@@ -27,6 +27,25 @@ export async function exitImpact(
 }
 
 /**
+ * What `amount` of a token would fetch in the dollar now (CR-026): for valuing a token-to-token
+ * trade and for the order watcher. A venue claim held to its own request, never used to sign.
+ */
+export async function sellQuote(venue: Venue, dollar: PublicKey, token: string, amount: bigint) {
+  const request = {
+    inputMint: new PublicKey(token).toBase58(),
+    outputMint: dollar.toBase58(),
+    amount,
+    slippageBps: PROBE_SLIPPAGE_BPS,
+  }
+  const quote = checkQuote(await venue.quote(request), request)
+  return {
+    out: quote.expectedOut.toString(),
+    priceImpactBps: quote.priceImpactBps,
+    quotedAt: new Date().toISOString(),
+  }
+}
+
+/**
  * The mint read from the chain, and what selling 10 USD worth of it would cost: the amount 10 USD
  * buys, quoted back to the dollar. A token with no buy route has no exit to price either.
  */
