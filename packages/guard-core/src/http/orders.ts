@@ -25,7 +25,10 @@ function own(deps: PaymentDeps, id: string, agentId?: string): Order {
   return order
 }
 
-/** CR-026, behind the agent's token: an agent places and cancels its own orders only. */
+/**
+ * CR-026, behind the agent's token. An agent places its own orders and cancels only those it placed;
+ * it lists the owner's too, each marked with createdBy.
+ */
 export function agentOrderRoutes(deps: PaymentDeps) {
   return async (app: FastifyInstance) => {
     app.post('/orders', async (request, reply) => {
@@ -42,6 +45,11 @@ export function agentOrderRoutes(deps: PaymentDeps) {
         throw new HttpError(403, 'forbidden')
       }
       const order = own(deps, id, agentId)
+      // The owner's orders are listed to the agent but are not its to cancel: a hijacked agent
+      // must not remove the stop-loss the owner set with the passkey.
+      if (order.createdBy === 'owner') {
+        throw new HttpError(404, 'not_found')
+      }
       cancelOrder(deps, order, 'agent')
       return own(deps, id)
     })
