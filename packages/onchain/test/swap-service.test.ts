@@ -373,6 +373,59 @@ describe('simulate and send a swap', () => {
     expect((await s.simulate(buy())).rejectReasons).toEqual(['GAS_RESERVE'])
   })
 
+  describe('a sell to the dollar, exempt from the gas reserve when it costs only its fee', () => {
+    const sell: PayIntent = {
+      ...buy(),
+      token: bonk.toBase58(),
+      swap: { ...buy().swap!, tokenOut: usdc.toBase58(), decimalsIn: 5, decimalsOut: 6 },
+    }
+    const short = 3_000_000
+    const sellRoute = () =>
+      new TransactionInstruction({
+        programId: JUPITER_PROGRAM_ID,
+        keys: [TOKEN_PROGRAM_ID, hot, bonkAccount, usdcAccount, JUPITER_PROGRAM_ID].map(
+          (pubkey, i) => ({ pubkey, isSigner: i === 1, isWritable: true }),
+        ),
+        data: routeData(),
+      })
+    beforeEach(() => {
+      v.state.instructions = [
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+        sellRoute(),
+      ]
+      before.set(bonkAccount.toBase58(), account(bonk, 10_000_000n))
+      after.set(bonkAccount.toBase58(), account(bonk, 0n))
+      after.set(usdcAccount.toBase58(), account(usdc, 50_995_000n))
+    })
+
+    it('runs, and signs, on a hot wallet already short of gas', async () => {
+      before.set(hot.toBase58(), wallet(short))
+      after.set(hot.toBase58(), wallet(short - 5_000))
+      expect((await s.simulate(sell)).rejectReasons).toEqual([])
+      await s.send(sell)
+      expect(sent).toHaveLength(1)
+    })
+
+    it('allows the rent of the dollar account it has to open', async () => {
+      v.state.instructions.splice(
+        1,
+        0,
+        createAssociatedTokenAccountIdempotentInstruction(hot, usdcAccount, hot, usdc),
+      )
+      before.delete(usdcAccount.toBase58())
+      after.set(usdcAccount.toBase58(), account(usdc, 995_000n))
+      before.set(hot.toBase58(), wallet(short))
+      after.set(hot.toBase58(), wallet(short - 5_000 - 2_039_280))
+      expect((await s.simulate(sell)).rejectReasons).toEqual([])
+    })
+
+    it('is held to the reserve when it costs more SOL than that', async () => {
+      before.set(hot.toBase58(), wallet(short))
+      after.set(hot.toBase58(), wallet(short - 5_001))
+      expect((await s.simulate(sell)).rejectReasons).toContain('GAS_RESERVE')
+    })
+  })
+
   it('checks the gas reserve again when it signs: another spend may have come in between', async () => {
     expect((await s.simulate(buy())).rejectReasons).toEqual([])
     balanceNow = () => 6_000_000n

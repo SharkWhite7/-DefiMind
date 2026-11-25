@@ -43,7 +43,10 @@ const CHECKED_TTL_MS = 90_000
 export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
   const hot = hotWallet.publicKey
   // A checked transaction is good until its blockhash expires, about a minute; kept no longer.
-  const checked = new Map<string, { tx: VersionedTransaction; at: number; cost: bigint }>()
+  const checked = new Map<
+    string,
+    { tx: VersionedTransaction; at: number; cost: bigint; exempt: boolean }
+  >()
   const fresh = (entry?: { at: number }) => !!entry && Date.now() - entry.at < CHECKED_TTL_MS
 
   async function quoteSwap(req: {
@@ -140,13 +143,19 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
     }
     const after = value.accounts.map(fromSimulation)
     const fee = swapFee(expanded)
-    const effects = await holdings(watched, before, after, { ...request, minAmountOut, fee })
+    const { effects, hadDollar } = await holdings(watched, before, after, {
+      ...request,
+      minAmountOut,
+      fee,
+    })
     // What the hot wallet's own lamports pay, kept to check the gas reserve again at send time.
-    const cost = BigInt(before[0]?.lamports ?? 0) - BigInt(after[0]?.lamports ?? 0) + fee
-    const short = BigInt(before[0]?.lamports ?? 0) - cost < (await gasFloor())
+    // The test run has already taken the fee from the hot wallet's lamports.
+    const cost = BigInt(before[0]?.lamports ?? 0) - BigInt(after[0]?.lamports ?? 0)
+    const exempt = await sellOut(request.outputMint, cost, fee, hadDollar)
+    const short = !exempt && BigInt(after[0]?.lamports ?? 0) < (await gasFloor())
     const reasons: RejectCode[] = [...effects.reasons, ...(short ? (['GAS_RESERVE'] as const) : [])]
     const outcome = { simulation: describe(intent, effects.changes), rejectReasons: reasons }
-    if (reasons.length === 0) checked.set(intent.id, { tx, at: Date.now(), cost })
+    if (reasons.length === 0) checked.set(intent.id, { tx, at: Date.now(), cost, exempt })
     return outcome
   }
 
@@ -166,6 +175,19 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
   /** The hot wallet must still pay for the next sell after a swap's fees (CR-026). */
   const gasFloor = async () =>
     gasMinimum(await connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE))
+
+  /**
+   * A sell to the dollar whose SOL cost is its fee, and at most one token account's rent when the
+   * hot wallet has no dollar account yet, is exempt from the gas reserve (SPEC v0.20): Close
+   * positions must stay the way out of a wallet already short of gas.
+   */
+  async function sellOut(tokenOut: string, cost: bigint, fee: bigint, hadDollar: boolean) {
+    if (tokenOut !== dollar.toBase58()) return false
+    const rent = hadDollar
+      ? 0n
+      : BigInt(await connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE))
+    return cost <= fee + rent
+  }
 
   async function holdings(
     watched: PublicKey[],
@@ -198,7 +220,8 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
     const rents = await Promise.all(
       opened.map((size) => connection.getMinimumBalanceForRentExemption(size)),
     )
-    return swapEffects(
+    const hadDollar = [...was.values()].some((h) => h?.mint === dollar.toBase58())
+    const effects = swapEffects(
       was,
       now,
       { before: BigInt(before[0]?.lamports ?? 0), after: BigInt(after[0]?.lamports ?? 0) },
@@ -213,15 +236,16 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
         wsolAccount: getAssociatedTokenAddressSync(NATIVE_MINT, hot).toBase58(),
       },
     )
+    return { effects, hadDollar }
   }
 
   async function send(intent: PayIntent): Promise<string> {
     const entry = checked.get(intent.id)
     checked.delete(intent.id)
     if (!entry || !fresh(entry)) throw new Error(`swap_not_simulated: ${intent.id}`)
-    const { tx, cost } = entry
+    const { tx, cost, exempt } = entry
     // Checked again now: another swap or a payment since the test run may have spent the margin.
-    if (BigInt(await connection.getBalance(hot)) - cost < (await gasFloor())) {
+    if (!exempt && BigInt(await connection.getBalance(hot)) - cost < (await gasFloor())) {
       throw new Error(`send_refused: GAS_RESERVE`)
     }
     tx.sign([hotWallet])

@@ -198,7 +198,9 @@ must rise by the minimum less those.
 
 Every swap is refused with `GAS_RESERVE` if it would leave the hot wallet below
 `getHotWalletGas().minimum` after fees, so it can still pay for the next sell. It is checked at the
-test run, and again just before signing, against the balance then.
+test run, and again just before signing, against the balance then. A sell to the chain's dollar
+whose SOL cost is only its fee, plus at most one token account's rent when the hot wallet has no
+dollar account yet, is exempt: Close positions stays the way out of a wallet already short of gas.
 
 ### Sell quotes (CR-026)
 

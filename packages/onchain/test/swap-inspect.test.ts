@@ -8,8 +8,7 @@ import {
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
 } from '@solana/spl-token'
-import type {
-  PublicKey} from '@solana/web3.js';
+import type { PublicKey } from '@solana/web3.js'
 import {
   ComputeBudgetProgram,
   Keypair,
