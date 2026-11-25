@@ -580,7 +580,9 @@ GET  /v1/owner/portfolio -> { agents: { agentId, positions: Position[], tradedTo
   session only
 POST /v1/owner/positions/close { assertion } -> { intents: PayIntent[] }   step-up, OwnerAction
   "close_positions" with body {}; sells every token the hot wallets hold back to the chain's dollar,
-  through the same checks. Works while agents are paused.
+  through the same checks. Works while agents are paused. SOL (CR-026) is sold only as far as
+  trading bought it: at most min(the booked SOL position, the balance above the gas reserve). SOL the
+  owner sends to a hot wallet, for gas or above it, is never sold by Close or by the AI trader.
 Position = { chain, token, amount, cost, decimals, symbol? }: decimals read from the mint onchain by
   the adapter, never from a venue's token list; symbol is display only and untrusted, so a client
   always shows the mint beside it.
