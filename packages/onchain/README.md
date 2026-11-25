@@ -117,7 +117,8 @@ Swaps run only on Solana mainnet, where Jupiter routes. On any other cluster the
 doubt is a rejection.
 
 - **`quoteSwap({ tokenIn, tokenOut, amountIn, slippageBps })`**
-  - One side must be the chain's dollar.
+  - Any pair (CR-026): a buy, a sell, or a swap of one held token for another. Whatever is bought,
+    unless it is the chain's dollar, meets the buy checks below.
   - Jupiter's quote is held to the request: same mints, amount and slippage, and a minimum no looser
     than the slippage allows.
   - Both mints are read from the chain, which gives `decimalsIn` and `decimalsOut`.
@@ -174,6 +175,21 @@ and by the slot its code was deployed at. The test reads that code from mainnet 
 - an approved minimum the route cannot reach is refused.
 
 To refresh the fixtures, run `pnpm record:swap` again.
+
+### Sell quotes (CR-026)
+
+`quoteSell(token, amount)` (Solana mainnet, with the swap venue) is what `amount` of a token would
+fetch in the chain's dollar now: `{ out, priceImpactBps, quotedAt }`, a Jupiter quote held to its own
+request. guard-core uses it to value a token-to-token trade (the lower of the two legs' quotes) and
+for the take-profit and stop-loss watcher. It is a venue claim: it sizes limits and triggers and is
+never signed. A token with no route back throws `SwapUnavailable('no_route')`. It does not cache;
+cadence and caching are guard-core's.
+
+The fork test (`test/swap-fork.test.ts`) runs two recorded mainnet routes in LiteSVM: USDC for wSOL
+and JUP for BONK over three hops, whose intermediates net to zero. Record a pair with
+`pnpm record:swap <name> <in> <out> <amount> [wrap|nowrap] [dexes]`. Keep `dexes` to pools whose
+whole state is in the recorded accounts: an oracle-priced AMM moves with every slot, so its quote and
+its state never match in a recording.
 
 ### Token risk (CR-025)
 

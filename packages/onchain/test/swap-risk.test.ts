@@ -3,7 +3,7 @@ import { PublicKey, type AccountInfo, type Connection } from '@solana/web3.js'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { SwapUnavailable, type JupiterQuote, type Venue } from '../src/svm/swap/jupiter.js'
-import { tokenRisk } from '../src/svm/swap/risk.js'
+import { sellQuote, tokenRisk } from '../src/svm/swap/risk.js'
 
 /** Mint accounts as mainnet holds them, recorded with getAccountInfo. */
 const USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
@@ -110,5 +110,21 @@ describe("a token's risk card, from mainnet mints", () => {
       JUP,
     )
     await expect(read).rejects.toThrow(/^not_a_mint/)
+  })
+})
+
+describe('a sell quote back to the dollar (CR-026)', () => {
+  it('returns what the amount fetches and the impact, held to its own request', async () => {
+    const v = venue()
+    const quote = await sellQuote(v, new PublicKey(USDC), JUP, 1_000n)
+    expect(quote).toMatchObject({ out: '9800000', priceImpactBps: 125 })
+    expect(Date.parse(quote.quotedAt)).not.toBeNaN()
+    expect(v.asked).toEqual([1_000n])
+  })
+
+  it('throws no_route rather than a price of zero', async () => {
+    await expect(sellQuote(venue({ route: false }), new PublicKey(USDC), JUP, 1n)).rejects.toThrow(
+      SwapUnavailable,
+    )
   })
 })

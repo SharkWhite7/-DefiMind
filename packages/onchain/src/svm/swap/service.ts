@@ -58,10 +58,8 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
       amount: positive(req.amountIn),
       slippageBps: slippage(req.slippageBps),
     }
-    const buy = request.inputMint === dollar.toBase58()
-    if (!buy && request.outputMint !== dollar.toBase58()) {
-      throw new Error('invalid_swap: one side must be the chain dollar')
-    }
+    // Any pair (CR-026). Whatever is bought, unless it is the dollar, meets the buy's checks.
+    const buy = request.outputMint !== dollar.toBase58()
     const quote = checkQuote(await venue.quote(request), request)
     const mints = [new PublicKey(request.inputMint), new PublicKey(request.outputMint)]
     const [infoIn, infoOut] = await connection.getMultipleAccountsInfo(mints)

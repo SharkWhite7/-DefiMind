@@ -289,11 +289,36 @@ describe('quoteSwap', () => {
     expect(quote).toMatchObject({ risks: [], flags: [], exitImpactBps: null, decimalsIn: 5 })
   })
 
-  it('refuses a pair without the chain dollar, and a bad amount or slippage', async () => {
-    const other = key().toBase58()
+  it('quotes a token for a token, holding what is bought to the buy checks (CR-026)', async () => {
+    const jup = key()
+    before.set(jup.toBase58(), mint(6))
+    before.set(bonk.toBase58(), mint(5, { freeze: true, authority: true }))
+    const quote = await s.quoteSwap({
+      tokenIn: jup.toBase58(),
+      tokenOut: bonk.toBase58(),
+      amountIn: '50000000',
+      slippageBps: 50,
+    })
+    expect(quote).toMatchObject({ expectedOut: '5000000', decimalsIn: 6, decimalsOut: 5 })
+    expect(quote.risks).toEqual(['TOKEN_FREEZABLE'])
+    expect(quote.flags).toEqual(['MINT_AUTHORITY'])
+    expect(quote.exitImpactBps).toBe(300)
+  })
+
+  it('quotes a sell to the dollar with no buy checks', async () => {
+    before.set(bonk.toBase58(), mint(5, { freeze: true, authority: true }))
+    const quote = await s.quoteSwap({
+      tokenIn: bonk.toBase58(),
+      tokenOut: usdc.toBase58(),
+      amountIn: '1000000',
+      slippageBps: 50,
+    })
+    expect(quote).toMatchObject({ risks: [], flags: [], exitImpactBps: null })
+  })
+
+  it('refuses a bad amount or slippage', async () => {
     const ask = (tokenIn: string, amountIn = '1', slippageBps = 50) =>
       s.quoteSwap({ tokenIn, tokenOut: bonk.toBase58(), amountIn, slippageBps })
-    await expect(ask(other)).rejects.toThrow(/^invalid_swap/)
     await expect(ask(usdc.toBase58(), '0')).rejects.toThrow(/^invalid_amount/)
     await expect(ask(usdc.toBase58(), '1', -1)).rejects.toThrow(/^invalid_slippage/)
     await expect(ask(usdc.toBase58(), '1', 10_001)).rejects.toThrow(/^invalid_slippage/)

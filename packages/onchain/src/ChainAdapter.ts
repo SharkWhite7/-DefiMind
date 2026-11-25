@@ -87,6 +87,15 @@ export interface ChainAdapter {
   getLandedChanges?(txId: TxId): Promise<BalanceChange[]>
   /** CR-025: a token's mint and exit, read for the owner's risk card. Facts only, never a verdict. */
   tokenRisk?(mint: Address): Promise<TokenRiskFacts>
+  /**
+   * CR-026: what `amount` of a token would fetch in the chain's dollar now, for valuation and the
+   * order watcher. A venue claim: it sizes limits and triggers, and is never signed. A token with no
+   * route back throws SwapUnavailable('no_route').
+   */
+  quoteSell?(
+    token: Address,
+    amount: Amount,
+  ): Promise<{ out: Amount; priceImpactBps: number; quotedAt: string }>
 
   buildKillTx(): Promise<KillTx>
 

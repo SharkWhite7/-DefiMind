@@ -5,9 +5,11 @@
  * here for the test; it never holds anything on mainnet.
  *
  *   pnpm record:swap                                  USDC → wSOL, one Whirlpool hop
- *   pnpm record:swap <name> <in> <out> <amount> [wrap]  any pair, into jupiter-swap-<name>.json
+ *   pnpm record:swap <name> <in> <out> <amount> [wrap|nowrap] [dexes]  into jupiter-swap-<name>.json
  *
- * `wrap` lets Jupiter wrap and unwrap native SOL (CR-026), for a SOL leg.
+ * `wrap` lets Jupiter wrap and unwrap native SOL (CR-026), for a SOL leg. `dexes` keeps the route to
+ * pools whose state is all in the recorded accounts: an oracle-priced AMM moves with each slot, so
+ * its quote and its state never match in a recording.
  */
 import { writeFile } from 'node:fs/promises'
 import type { AddressLookupTableAccount } from '@solana/web3.js'
@@ -24,7 +26,8 @@ const RPC = process.env['SOLANA_MAINNET_RPC'] ?? 'https://api.mainnet-beta.solan
 const JUPITER = 'https://lite-api.jup.ag/swap/v1'
 const USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const WSOL = 'So11111111111111111111111111111111111111112'
-const [name, inputMint = USDC, outputMint = WSOL, amount = '1000000', wrap] = process.argv.slice(2)
+const [name, inputMint = USDC, outputMint = WSOL, amount = '1000000', wrap, dexes] =
+  process.argv.slice(2)
 const OUT = new URL(
   `../../test/fixtures/jupiter-swap${name ? `-${name}` : ''}.json`,
   import.meta.url,
@@ -41,7 +44,8 @@ const get = async (path: string, init?: RequestInit) => {
 // One Whirlpool hop keeps the default's program set small; the checks do not depend on the route.
 const quote = await get(
   `/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=50` +
-    `&swapMode=ExactIn&restrictIntermediateTokens=true${name ? '' : '&onlyDirectRoutes=true&dexes=Whirlpool'}`,
+    `&swapMode=ExactIn&restrictIntermediateTokens=true` +
+    (name ? (dexes ? `&dexes=${dexes}` : '') : '&onlyDirectRoutes=true&dexes=Whirlpool'),
 )
 const { swapTransaction } = (await get('/swap', {
   method: 'POST',
