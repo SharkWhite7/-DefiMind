@@ -180,7 +180,7 @@ To refresh the fixtures, run `pnpm record:swap` again.
 
 `quoteSell(token, amount)` (Solana mainnet, with the swap venue) is what `amount` of a token would
 fetch in the chain's dollar now: `{ out, priceImpactBps, quotedAt }`, a Jupiter quote held to its own
-request. guard-core uses it to value a token-to-token trade (the lower of the two legs' quotes) and
+request. guard-core uses it to value a token-to-token trade (the higher of the two legs' quotes, the strict one for every limit) and
 for the take-profit and stop-loss watcher. It is a venue claim: it sizes limits and triggers and is
 never signed. A token with no route back throws `SwapUnavailable('no_route')`. It does not cache;
 cadence and caching are guard-core's.
