@@ -97,4 +97,25 @@ describe.each([390, 1280])('trading limits at %i px (CR-026)', (width) => {
     })
     await close()
   })
+
+  it('keeps the limit of a mint no longer allowed when another is lowered, without a passkey', async () => {
+    const { guard, page, close } = await openDevice(browser, dist, width)
+    const gone = 'Gone1111111111111111111111111111111111111111'
+    guard.state.policy['trading'] = {
+      ...trading,
+      tokenLimits: { [gone]: { maxBuyUsd: '1000000' }, [MINT]: { maxBuyUsd: '5000000' } },
+    }
+    await agentPage(page, guard.origin)
+    await page.getByText(gone, { exact: true }).waitFor()
+    await page.getByText(/^Not in the allowed list\./).waitFor()
+    await page.getByLabel('Most per buy, in dollars').first().fill('4')
+    await page.getByRole('button', { name: 'Save limits' }).click()
+    await expect.poll(() => status(page).textContent()).toBe('Limits saved.')
+    const put = guard.state.puts.at(-1)
+    expect(put?.stepUp).toBeUndefined()
+    expect(put?.policy['trading']).toMatchObject({
+      tokenLimits: { [gone]: { maxBuyUsd: '1000000' }, [MINT]: { maxBuyUsd: '4000000' } },
+    })
+    await close()
+  })
 })

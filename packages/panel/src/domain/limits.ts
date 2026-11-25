@@ -65,6 +65,14 @@ export interface LimitsForm {
 
 const shown = (amount: string | undefined) => (amount === undefined ? '' : dollarsInput(amount))
 
+/**
+ * Every mint with a limit, allowed or not, then the allowed ones without: a limit on a mint the
+ * owner no longer lists stays visible, so saving never drops it unseen.
+ */
+export function limitedMints(limits: Limits, allowed: string[]): string[] {
+  return [...new Set([...allowed, ...Object.keys(limits.tokenLimits ?? {})])]
+}
+
 export function toLimitsForm(limits: Limits, mints: string[]): LimitsForm {
   const op = (kind: Kind) => limits.operations?.[kind]
   return {
@@ -123,10 +131,11 @@ export function fromLimitsForm(form: LimitsForm): Limits | string {
       operations[kind] = { maxTradeUsd: trade, dailyMax: daily }
     }
   }
-  const maxOpen = Number(form.maxOpen.trim())
-  if (!Number.isInteger(maxOpen) || maxOpen < 0 || maxOpen > 1000) {
+  const open = form.maxOpen.trim()
+  if (!/^\d{1,6}$/.test(open)) {
     return 'Open orders: write a whole number, like 10.'
   }
+  const maxOpen = Number(open)
   return {
     ...(Object.keys(tokenLimits).length === 0 ? {} : { tokenLimits }),
     ...(Object.keys(operations).length === 0 ? {} : { operations }),

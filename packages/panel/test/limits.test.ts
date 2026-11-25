@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   fromLimitsForm,
   type Limits,
+  limitedMints,
   limitsLoosen,
   toLimitsForm,
   withLimits,
@@ -78,6 +79,14 @@ describe('CR-026 limits', () => {
     expect(fromLimitsForm({ ...form, maxOpen: '2.5' })).toBe(
       'Open orders: write a whole number, like 10.',
     )
+  })
+
+  it('lists every mint with a limit, allowed or not, so none is dropped unseen', () => {
+    const other = 'B'.repeat(44)
+    expect(limitedMints({ tokenLimits: { [other]: { maxBuyUsd: '1' } } }, [MINT])).toEqual([
+      MINT,
+      other,
+    ])
   })
 
   it('replaces the old limits, an emptied one removed', () => {

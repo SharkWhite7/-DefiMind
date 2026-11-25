@@ -1,5 +1,12 @@
 import type { PolicyView } from '../adapters/schemas.js'
-import { fromLimitsForm, KIND_NAMES, KINDS, toLimitsForm, withLimits } from '../domain/limits.js'
+import {
+  fromLimitsForm,
+  KIND_NAMES,
+  KINDS,
+  limitedMints,
+  toLimitsForm,
+  withLimits,
+} from '../domain/limits.js'
 import type { Context } from './context.js'
 import { button, card, el } from './dom.js'
 import { tokenIcon } from './risk.js'
@@ -26,9 +33,11 @@ export function tradingLimits(ctx: Context, policy: PolicyView, save: Save) {
   if (trading === undefined) {
     return false
   }
-  const form = toLimitsForm(trading, trading.tokens)
-  const tokens = trading.tokens.map((mint, i) => ({
+  const mints = limitedMints(trading, trading.tokens)
+  const form = toLimitsForm(trading, mints)
+  const tokens = mints.map((mint, i) => ({
     mint,
+    listed: trading.tokens.includes(mint),
     buy: money(`tl-buy-${i}`, 'Most per buy, in dollars', form.tokens[mint]?.maxBuy ?? ''),
     held: money(`tl-held-${i}`, 'Most held at cost, in dollars', form.tokens[mint]?.maxHeld ?? ''),
   }))
@@ -58,8 +67,14 @@ export function tradingLimits(ctx: Context, policy: PolicyView, save: Save) {
     ),
     el('h3', {}, 'Per token'),
     tokens.length === 0 && el('p', { class: 'muted' }, 'Allow a token first.'),
-    ...tokens.flatMap(({ mint, buy, held }) => [
+    ...tokens.flatMap(({ mint, listed, buy, held }) => [
       el('div', { class: 'token' }, tokenIcon(mint), el('span', { class: 'mono' }, mint)),
+      !listed &&
+        el(
+          'p',
+          { class: 'muted' },
+          'Not in the allowed list. Empty both fields to remove its limits.',
+        ),
       ...buy.nodes,
       ...held.nodes,
     ]),
