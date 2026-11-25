@@ -1,8 +1,9 @@
 import { getAddress } from '@defimind/shared'
+import { type Limits, limitsLoosen } from './limits.js'
 import { amountText, dollarsInput, parseDollars } from './money.js'
 
-/** CR-021's Policy.trading, as guard-core returns it. Absent means no trading at all. */
-export interface Trading {
+/** CR-021's Policy.trading, with CR-026's limits. Absent means no trading at all. */
+export interface Trading extends Limits {
   enabled: boolean
   venues: string[]
   tokens: string[]
@@ -44,7 +45,8 @@ export function tradingLoosens(before: Trading | undefined, after: Trading | und
     now.venues.some((venue) => !was.venues.includes(venue)) ||
     now.tokens.some((token) => !was.tokens.includes(token)) ||
     AMOUNTS.some((key) => BigInt(now[key]) > BigInt(was[key])) ||
-    BPS.some((key) => now[key] > was[key])
+    BPS.some((key) => now[key] > was[key]) ||
+    limitsLoosen(was, now)
   )
 }
 
@@ -178,7 +180,12 @@ export function fromTradingForm(before: Trading | undefined, form: TradingForm):
     return `${long.slice(0, 20)}… is too long for a token address.`
   }
   const venues = before?.venues ?? []
+  // CR-026's limits are set in their own card: this form keeps them as they are.
+  const { tokenLimits, operations, orders } = before ?? {}
   return {
+    ...(tokenLimits === undefined ? {} : { tokenLimits }),
+    ...(operations === undefined ? {} : { operations }),
+    ...(orders === undefined ? {} : { orders }),
     enabled: form.enabled,
     venues: form.enabled && !venues.includes('jupiter') ? [...venues, 'jupiter'] : venues,
     tokens,

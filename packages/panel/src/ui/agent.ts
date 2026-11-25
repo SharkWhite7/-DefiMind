@@ -8,6 +8,7 @@ import { chainRules, loosens } from '../domain/policy.js'
 import type { Context, Screen } from './context.js'
 import { button, card, el, row, when } from './dom.js'
 import { tradingForm } from './trading.js'
+import { tradingLimits } from './trading-limits.js'
 import { FLAGS } from '../domain/trading.js'
 import { ownerTrading, tokenSearch } from './token-search.js'
 import { stopAgentCard, walletsCard } from './wallets.js'
@@ -204,6 +205,8 @@ export async function agent(ctx: Context, id: string): Screen {
     ),
     policyForm(ctx, policy, known),
     tradingForm(ctx, policy, (after, message) => save(ctx, policy, after, message)),
+    policy.trading?.enabled === true &&
+      tradingLimits(ctx, policy, (after, message) => save(ctx, policy, after, message)),
     tools &&
       solana !== undefined &&
       tokenSearch(ctx, policy, solana, (after, message) => save(ctx, policy, after, message)),
