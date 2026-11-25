@@ -1,6 +1,6 @@
 import type { TokenRisk } from '@defimind/shared'
 import { afterEach, describe, expect, it } from 'vitest'
-import { fork, MAINNET, programs, QUOTE, USDC, WSOL, type Fork } from './support/fork.js'
+import { fork, MAINNET, programs, QUOTE, USDC, WSOL, type Fork, MAX_FEE } from './support/fork.js'
 import { owner } from './support/owner.js'
 import { stack, type Stack } from './support/stack.js'
 
@@ -88,9 +88,13 @@ describe.skipIf(skipped)(
         minAmountOut: QUOTE.otherAmountThreshold,
       }
       const assertion = await panel.stepUp('manual_trade', order)
+      const sol = f.lamports()
       const byHand = await panel.call('/v1/owner/trade', { ...order, assertion })
       expect(byHand.body).toMatchObject({ status: 'executed' })
-      expect(f.balance(WSOL)).toBeGreaterThanOrEqual(BigInt(QUOTE.otherAmountThreshold))
+      expect(f.balance(WSOL)).toBe(0n)
+      expect(f.lamports() - sol).toBeGreaterThanOrEqual(
+        BigInt(QUOTE.otherAmountThreshold) - MAX_FEE,
+      )
     })
   },
 )
