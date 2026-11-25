@@ -3,7 +3,6 @@ import type { BalanceChange, PayIntent, SimulationResult } from '@defimind/share
 import { applySwap } from '../db/swap-book.js'
 import { applyTrade, capPositions } from '../db/trades.js'
 import { correctSold } from '../db/day-book.js'
-import { utcDay } from '../db/repo.js'
 import { expectedOf } from '../domain/trading.js'
 import { listWallets } from '../db/wallets.js'
 import { parseAmount } from '../domain/amount.js'
@@ -82,6 +81,8 @@ export async function settle(
   intent: PayIntent,
   side: 'buy' | 'sell' | 'swap',
   simulation: SimulationResult,
+  /** The day the trade was counted on, so a sell landing after midnight corrects that day. */
+  day: string,
   wait: (ms: number) => Promise<void> = (ms) => new Promise((done) => setTimeout(done, ms)),
 ): Promise<PayIntent> {
   const details = intent.swap
@@ -137,7 +138,7 @@ export async function settle(
   )
   // The day's sells counted what this one was expected to bring; it now says what it brought.
   if (side === 'sell' && changes !== undefined) {
-    const key = { agentId: intent.agentId, chain: intent.chain, day: utcDay(deps.now()) }
+    const key = { agentId: intent.agentId, chain: intent.chain, day }
     correctSold(deps.db, key, expectedOf(details), net(moved, details.tokenOut))
   }
   if (changes === undefined) {

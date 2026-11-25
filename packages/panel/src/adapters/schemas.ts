@@ -164,6 +164,8 @@ export const overview = z.object({
   mandates: z.array(mandateRequest).max(500),
 })
 
+const operation = z.object({ maxTradeUsd: atomic, dailyMax: atomic })
+
 export const policy = z.object({
   agentId,
   chains: z.array(text(64)).max(16),
@@ -189,6 +191,23 @@ export const policy = z.object({
       maxPositionUsd: atomic,
       maxSlippageBps: bps,
       maxPriceImpactBps: bps,
+      // CR-026: per mint, per kind of trade, and the agent's own orders.
+      tokenLimits: z
+        .record(
+          text(128),
+          z.object({ maxBuyUsd: atomic.optional(), maxHeldUsd: atomic.optional() }),
+        )
+        .optional(),
+      operations: z
+        .object({
+          buy: operation.optional(),
+          sell: operation.optional(),
+          swap: operation.optional(),
+        })
+        .optional(),
+      orders: z
+        .object({ enabled: z.boolean(), maxOpen: z.number().int().nonnegative() })
+        .optional(),
     })
     .optional(),
 })

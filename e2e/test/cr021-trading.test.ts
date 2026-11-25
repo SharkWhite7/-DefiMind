@@ -12,6 +12,7 @@ import {
   USDC,
   WSOL,
   type Fork,
+  MAX_FEE,
 } from './support/fork.js'
 import { intentIdIn, stack, type Stack } from './support/stack.js'
 
@@ -98,12 +99,16 @@ describe.skipIf(skipped)(
         const text = await buy()
         expect(text).toContain(': pending_approval.')
         expect(f.chain.swapsSent).toEqual([])
+        const sol = f.lamports()
         await s.telegram.press(intentIdIn(text), 'approve')
         await vi.waitFor(async () =>
           expect((await s.intent(intentIdIn(text))).status).toBe('executed'),
         )
         expect(f.balance(USDC)).toBe(5_000_000n - BigInt(QUOTE.inAmount))
-        expect(f.balance(WSOL)).toBeGreaterThanOrEqual(BigInt(QUOTE.otherAmountThreshold))
+        expect(f.balance(WSOL)).toBe(0n)
+        expect(f.lamports() - sol).toBeGreaterThanOrEqual(
+          BigInt(QUOTE.otherAmountThreshold) - MAX_FEE,
+        )
         expect(await s.tool('get_portfolio')).toContain(WSOL.toBase58())
       })
 
