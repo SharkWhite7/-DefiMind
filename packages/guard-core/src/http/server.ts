@@ -13,7 +13,7 @@ import { botSettings, publicAdmin, type Config } from '../config.js'
 import type { Db } from '../db/client.js'
 import { usdcFor } from '../chains.js'
 import { parseBearer, tokenMatches } from '../domain/auth.js'
-import { serializeError } from '../domain/redact.js'
+import { LOG_REDACT, serializeError } from '../domain/redact.js'
 import { errorHandler } from './errors.js'
 import type { PasskeySetup } from '../service/passkeys.js'
 import { publicKeyHex } from '../service/receipts.js'
@@ -31,6 +31,7 @@ import { pusher } from '../service/push.js'
 import { integrityMonitor } from '../service/integrity.js'
 import type { AnchorPublisher } from '../service/anchor.js'
 import { type Backups, startTimers, type Watch } from './timers.js'
+import type { Claude } from '../adapters/claude.js'
 import { ownerSessionRoutes } from './owner-session.js'
 import { ownerSetupRoutes } from './owner-setup.js'
 import { clientIp } from './client-ip.js'
@@ -58,6 +59,8 @@ export interface ServerDeps {
   sweepMs?: number
   backups?: Backups
   orders?: Watch
+  /** Runs the AI traders on this interval (CR-027); a test passes its own Claude client. */
+  traders?: { checkMs: number; claude?: Claude }
   /** Signs receipts. Receipts are off without it. */
   receiptKey?: KeyObject
   /** Web Push to the owner's panel, with the VAPID public key the panel subscribes with. */
@@ -100,13 +103,7 @@ export async function buildServers(
     Fastify({
       logger: {
         level: config.LOG_LEVEL,
-        // A bearer token in a log file is the same as a bearer token in a repository.
-        redact: [
-          'req.headers.authorization',
-          'req.headers.cookie',
-          'req.headers["x-guard-signature"]',
-          'res.headers["set-cookie"]',
-        ],
+        redact: LOG_REDACT,
         serializers: { err: serializeError },
       },
     }),
@@ -222,6 +219,7 @@ async function serve(
           ownerPanelRoutes(deps, rp, {
             ...doctor,
             hosted: config.ADMIN_ROUTES === 'false',
+            traderKey: config.ANTHROPIC_API_KEY !== undefined,
             ...(pushKey === undefined ? {} : { pushKey }),
             ...(keys === undefined ? {} : { keys }),
             ...(host === undefined ? {} : { host }),

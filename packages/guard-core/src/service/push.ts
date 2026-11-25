@@ -20,6 +20,7 @@ export interface PushPayload {
     | 'backup_failed'
     | 'order_filled'
     | 'order_failed'
+    | 'trader_paused'
   agentId?: string
   chain?: string
   amount?: string
@@ -92,6 +93,7 @@ export function pusher(deps: PushDeps) {
   return {
     send,
     kill: () => send({ kind: 'kill' }),
+    traderPaused: (agentId: string) => send({ kind: 'trader_paused', agentId }),
     /** CR-026: an order filled, or could not be filled at its floor and was failed. */
     order(kind: 'order_filled' | 'order_failed', order: Order, intentId?: string) {
       const { agentId, chain, amount } = order

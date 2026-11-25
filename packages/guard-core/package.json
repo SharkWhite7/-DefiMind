@@ -24,6 +24,7 @@
     "build": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.8.0",
     "@defimind/onchain": "workspace:*",
     "@defimind/shared": "workspace:*",
     "@fastify/rate-limit": "^11.2.2",

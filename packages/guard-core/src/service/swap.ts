@@ -1,5 +1,5 @@
 import type { ChainAdapter } from '@defimind/onchain'
-import type { Amount, PayIntent, Policy } from '@defimind/shared'
+import type { Amount, PayIntent, Policy, RejectCode } from '@defimind/shared'
 import { admit } from '../db/breaker.js'
 import { ownerApprovalMethod, recordOwnerApproval, saveClearance } from '../db/receipts.js'
 import * as repo from '../db/repo.js'
@@ -63,12 +63,18 @@ export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy
  * POST /v1/agent/swap: the same pipeline as a payment, with the trading policy (CR-021). `floor`
  * is the least the trade may bring: the minimum the owner saw on their own trade (CR-025), whose
  * passkey already approved it, or an order's trigger less its slippage (CR-026).
+ *
+ * `trader` is set for an AI trader's swap (CR-027). `shadow` shadows it whatever the policy says,
+ * as for a trader in shadow mode on a live agent. `guard` runs once the wallet's lock is held, so a
+ * Close or a pause that held the lock first is seen before anything is decided.
  */
 export async function swap(
   deps: PaymentDeps,
   req: SwapRequest,
   floor?: { minAmountOut: Amount; by: 'owner' | 'order' },
+  trader?: { shadow: boolean; guard: () => RejectCode | undefined },
 ): Promise<PayIntent> {
+  const shadow = trader?.shadow ?? false
   return deps.serial(signerKey(deps, req.agentId, req.chain), async () => {
     const { db, now } = deps
     const adapter = adapterFor(deps, req.agentId, req.chain)
@@ -89,7 +95,8 @@ export async function swap(
     const policy = repo.getPolicy(db, req.agentId)
     const pair = pairOf(deps, req)
     const early =
-      policy === undefined
+      trader?.guard() ??
+      (policy === undefined
         ? 'PAUSED'
         : adapter === undefined || !policy.chains.includes(req.chain)
           ? 'CHAIN_NOT_ALLOWED'
@@ -99,7 +106,7 @@ export async function swap(
               ? 'VENUE_NOT_ALLOWED'
               : pair === undefined
                 ? 'TOKEN_NOT_TRADABLE'
-                : undefined
+                : undefined)
     if (early !== undefined || policy?.trading === undefined || !adapter || !pair) {
       return reject(deps, intent, [early ?? 'TRADING_DISABLED'])
     }
@@ -120,7 +127,6 @@ export async function swap(
     if (gas !== undefined) {
       return reject(deps, priced, [gas])
     }
-    const shadow = policy.mode === 'shadow'
     const maxImpact = policy.trading.maxPriceImpactBps
     const valueUsd =
       pair.side === 'swap'
@@ -136,7 +142,7 @@ export async function swap(
     const book = bookOf(
       db,
       { ...where, dollar: dollarOf(deps, req.chain), day: repo.utcDay(now()) },
-      shadow,
+      shadow || policy.mode === 'shadow',
     )
     const verdict = evaluateTrade(trade, policy, book, now())
     repo.audit(
@@ -158,7 +164,13 @@ export async function swap(
     if (verdict.reasons.length > 0) {
       return reject(deps, priced, verdict.reasons)
     }
-    const how = { side: pair.side, verdict, shadow, policy, valueUsd: valueUsd ?? 0n }
+    const how = {
+      side: pair.side,
+      verdict,
+      shadow: shadow || policy.mode === 'shadow',
+      policy,
+      valueUsd: valueUsd ?? 0n,
+    }
     if (floor?.by !== 'owner') {
       return clearSwap(deps, adapter, priced, how)
     }

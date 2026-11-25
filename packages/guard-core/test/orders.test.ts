@@ -1,3 +1,4 @@
+import { SwapUnavailable } from '@defimind/onchain'
 import { describe, expect, it, vi } from 'vitest'
 import { getOrder, moveOrder } from '../src/db/orders.js'
 import { applyTrade, getPosition } from '../src/db/trades.js'
@@ -238,5 +239,22 @@ describe('orders that cannot be left behind (SPEC #182)', () => {
     const admin = await signedIn(again.h)
     await admin.call('POST', '/v1/owner/agents/agent-1/revoke')
     expect(getOrder(again.h.db, other.id)?.status).toBe('cancelled')
+  })
+})
+
+describe('a venue that is down at the fill (SPEC #183)', () => {
+  it('puts the order back to open, with its run of checks started over', async () => {
+    const { h, chain, run, watcher } = await setup()
+    const order = (await h.agent('POST', '/v1/agent/orders', place())).json()
+    vi.spyOn(chain, 'quoteSwap').mockRejectedValueOnce(
+      new SwapUnavailable('venue_unavailable', 'test venue'),
+    )
+    await run()
+    expect(getOrder(h.db, order.id)?.status).toBe('open')
+    // The old run had three hits: kept, the next hit would fire it again at once.
+    await watcher.tick()
+    h.clock.now = new Date(h.clock.now.getTime() + 15_000)
+    await watcher.tick()
+    expect(getOrder(h.db, order.id)?.status).toBe('open')
   })
 })
