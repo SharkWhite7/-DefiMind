@@ -23,6 +23,7 @@ import {
 // The onchain package's own LiteSVM harness and mainnet program loader: one fork, not two.
 import { liteConnection } from '../../../packages/onchain/test/litesvm.js'
 import { mainnetPrograms, type PinnedProgram } from '../../../packages/onchain/test/programs.js'
+import { MAX_PRIORITY_LAMPORTS } from '../../../packages/onchain/src/svm/swap/inspect.js'
 import { Clock, Svm } from '../../../packages/onchain/test/svm.js'
 import type { Net } from './paid-api.js'
 
@@ -67,6 +68,8 @@ export const programs = await mainnetPrograms(recorded.programs)
 
 const hotWallet = Keypair.fromSecretKey(Uint8Array.from(recorded.hotSecretKey))
 export const HOT = hotWallet.publicKey
+/** The most a swap may pay the network: the signature and the capped priority fee. */
+export const MAX_FEE = 5_000n + MAX_PRIORITY_LAMPORTS
 const usdcAccount = getAssociatedTokenAddressSync(USDC, HOT)
 const wsolAccount = getAssociatedTokenAddressSync(WSOL, HOT)
 
@@ -129,6 +132,10 @@ export function fork() {
     /** The hot wallet's dollars, as a top-up or a spend would leave them. */
     setUsdc(amount: bigint) {
       svm.setAccount(usdcAccount, tokenAccount(USDC, amount))
+    },
+    /** A buy of SOL unwraps (CR-026): what it bought lands here, not in a wSOL account. */
+    lamports() {
+      return svm.getBalance(HOT) ?? 0n
     },
     balance(token: PublicKey) {
       const info = svm.getAccount(getAssociatedTokenAddressSync(token, HOT))

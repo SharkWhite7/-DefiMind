@@ -1,6 +1,16 @@
 import type { SwapQuote, TokenInfo, TokenRisk } from '@defimind/shared'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ATTACKER, fork, MAINNET, programs, QUOTE, USDC, WSOL, type Fork } from './support/fork.js'
+import {
+  ATTACKER,
+  fork,
+  MAINNET,
+  programs,
+  QUOTE,
+  USDC,
+  WSOL,
+  type Fork,
+  MAX_FEE,
+} from './support/fork.js'
 import { owner } from './support/owner.js'
 import { stack, type Stack } from './support/stack.js'
 
@@ -77,9 +87,11 @@ describe.skipIf(skipped)(
         expect(BigInt(minAmountOut)).toBeGreaterThanOrEqual(BigInt(QUOTE.otherAmountThreshold))
         expect(f.chain.swapsSent).toEqual([])
 
+        const sol = f.lamports()
         const done = await trade(minAmountOut)
         expect(done.body).toMatchObject({ status: 'executed', rejectReasons: [] })
-        expect(f.balance(WSOL)).toBeGreaterThanOrEqual(BigInt(minAmountOut))
+        expect(f.balance(WSOL)).toBe(0n)
+        expect(f.lamports() - sol).toBeGreaterThanOrEqual(BigInt(minAmountOut) - MAX_FEE)
         expect(s.telegram.approvalFor(String(done.body['intentId']))).toBeUndefined()
       })
 

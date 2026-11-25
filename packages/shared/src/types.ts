@@ -246,6 +246,8 @@ export interface SwapDetails {
   venue: string
   tokenOut: Address
   minAmountOut: Amount
+  /** CR-026: what the quote expected; a sell counts this against its limits. Absent on older intents. */
+  expectedOut?: Amount
   slippageBps: number
   priceImpactBps: number
   /** Read from each mint onchain by the adapter, never from a venue. */

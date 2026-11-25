@@ -2,11 +2,16 @@ import type {
   Policy,
   PolicyDecision,
   RejectCode,
+  SwapDetails,
   SwapQuote,
   TradingFlag,
   TradingPolicy,
 } from '@defimind/shared'
+import { z } from 'zod'
 import { parseAmount } from './amount.js'
+import { type Book, limitReasons } from './trade-limits.js'
+
+export type { Book } from './trade-limits.js'
 
 /** What a trading policy means for the fields it leaves out (SPEC v0.16). */
 export const TRADING_DEFAULTS = { maxSlippageBps: 100, maxPriceImpactBps: 300 } as const
@@ -28,16 +33,6 @@ export interface Trade {
   /** What the agent asked for: the quote must answer exactly this. */
   request: { tokenIn: string; tokenOut: string; amountIn: string; maxSlippageBps?: number }
   quote: SwapQuote
-}
-
-/** What the agent's trading so far means for this trade, from executed swaps. */
-export interface Book {
-  /** Today's buys, in the chain's dollar. */
-  tradedToday: bigint
-  /** What the agent holds of `token`, at cost. */
-  positionCost: bigint
-  /** Whether any buy of `token` has ever executed, for any agent. */
-  boughtBefore: boolean
 }
 
 export interface TradeVerdict {
@@ -83,16 +78,16 @@ export function evaluateTrade(trade: Trade, policy: Policy, book: Book, now: Dat
   }
 
   const amountIn = parseAmount(request.amountIn)
+  // A sell counts at what it is expected to bring: a cap is not slipped under on the slippage.
+  const valueUsd = side === 'buy' ? amountIn : parseAmount(quote.expectedOut)
+  for (const reason of limitReasons(
+    trading,
+    { side, token: trade.token, amountIn, valueUsd },
+    book,
+  )) {
+    add(reason)
+  }
   if (side === 'buy') {
-    if (amountIn > parseAmount(trading.maxTradeUsd)) {
-      add('TRADE_EXCEEDED')
-    }
-    if (book.tradedToday + amountIn > parseAmount(trading.dailyTradeMax)) {
-      add('TRADE_DAILY_EXCEEDED')
-    }
-    if (book.positionCost + amountIn > parseAmount(trading.maxPositionUsd)) {
-      add('POSITION_EXCEEDED')
-    }
     for (const risk of quote.risks) {
       add(risk)
     }
@@ -146,4 +141,15 @@ function quoteReasons(trade: Trade, trading: TradingPolicy, now: Date): RejectCo
 function buyFlags(quote: SwapQuote, book: Book): TradingFlag[] {
   const flags = quote.flags.filter((flag) => flag === 'MINT_AUTHORITY')
   return book.boughtBefore ? flags : ['NEW_TOKEN', ...flags]
+}
+
+const stored = z.object({ expectedOut: z.string().regex(/^\d+$/) })
+
+/**
+ * What a recorded swap was expected to bring: kept beside its SwapDetails since CR-026. A swap
+ * recorded before that counts at its minimum, the only figure it kept.
+ */
+export function expectedOf(swap: SwapDetails | undefined): bigint {
+  const kept = stored.safeParse(swap)
+  return kept.success ? BigInt(kept.data.expectedOut) : parseAmount(swap?.minAmountOut ?? '0')
 }

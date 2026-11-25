@@ -4,7 +4,12 @@
  * so the test can run the real route in LiteSVM. Programs are recorded by id and deploy slot only. The hot wallet is a key made
  * here for the test; it never holds anything on mainnet.
  *
- *   NODE_USE_ENV_PROXY=1 pnpm tsx src/scripts/record-swap.ts
+ *   pnpm record:swap                                  USDC → wSOL, one Whirlpool hop
+ *   pnpm record:swap <name> <in> <out> <amount> [dexes]  into jupiter-swap-<name>.json
+ *
+ * Jupiter wraps native SOL for a SOL leg, as the adapter asks it to (CR-026). `dexes` keeps the route to
+ * pools whose state is all in the recorded accounts: an oracle-priced AMM moves with each slot, so
+ * its quote and its state never match in a recording.
  */
 import { writeFile } from 'node:fs/promises'
 import type { AddressLookupTableAccount } from '@solana/web3.js'
@@ -21,7 +26,11 @@ const RPC = process.env['SOLANA_MAINNET_RPC'] ?? 'https://api.mainnet-beta.solan
 const JUPITER = 'https://lite-api.jup.ag/swap/v1'
 const USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const WSOL = 'So11111111111111111111111111111111111111112'
-const OUT = new URL('../../test/fixtures/jupiter-swap.json', import.meta.url)
+const [name, inputMint = USDC, outputMint = WSOL, amount = '1000000', dexes] = process.argv.slice(2)
+const OUT = new URL(
+  `../../test/fixtures/jupiter-swap${name ? `-${name}` : ''}.json`,
+  import.meta.url,
+)
 
 const connection = new Connection(RPC, 'confirmed')
 const hot = Keypair.generate()
@@ -31,10 +40,11 @@ const get = async (path: string, init?: RequestInit) => {
   return response.json() as Promise<Record<string, unknown>>
 }
 
-// One Whirlpool hop keeps the recorded program set small; the checks do not depend on the route.
+// One Whirlpool hop keeps the default's program set small; the checks do not depend on the route.
 const quote = await get(
-  `/quote?inputMint=${USDC}&outputMint=${WSOL}&amount=1000000&slippageBps=50&swapMode=ExactIn` +
-    '&restrictIntermediateTokens=true&onlyDirectRoutes=true&dexes=Whirlpool',
+  `/quote?inputMint=${inputMint}&outputMint=${outputMint}&amount=${amount}&slippageBps=50` +
+    `&swapMode=ExactIn&restrictIntermediateTokens=true` +
+    (name ? (dexes ? `&dexes=${dexes}` : '') : '&onlyDirectRoutes=true&dexes=Whirlpool'),
 )
 const { swapTransaction } = (await get('/swap', {
   method: 'POST',
@@ -42,7 +52,7 @@ const { swapTransaction } = (await get('/swap', {
   body: JSON.stringify({
     quoteResponse: quote,
     userPublicKey: hot.publicKey.toBase58(),
-    wrapAndUnwrapSol: false,
+    wrapAndUnwrapSol: inputMint === WSOL || outputMint === WSOL,
     dynamicComputeUnitLimit: true,
     prioritizationFeeLamports: {
       priorityLevelWithMaxLamports: { priorityLevel: 'medium', maxLamports: 500_000 },
@@ -66,7 +76,7 @@ const keys = new Map<string, PublicKey>()
 const add = (key: PublicKey) => keys.set(key.toBase58(), key)
 message.instructions.forEach((ix) => [ix.programId, ...ix.keys.map((k) => k.pubkey)].forEach(add))
 tables.forEach((table) => add(table.key))
-;[USDC, WSOL].forEach((mint) => add(new PublicKey(mint)))
+;[USDC, WSOL, inputMint, outputMint].forEach((mint) => add(new PublicKey(mint)))
 
 const accounts: Record<
   string,

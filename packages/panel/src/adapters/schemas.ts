@@ -215,6 +215,8 @@ export const approvalRequest = z.object({
   approveBefore: isoTime,
   flags: z.array(text(64)).max(8).default([]),
   pinned: z.object({ recipient: text(128), amount: atomic }).optional(),
+  // CR-024: a buy asked before its test run; funded and test-run only once approved.
+  untested: z.literal(true).optional(),
 })
 
 export const mandate = z.object({
@@ -242,6 +244,8 @@ export const overview = z.object({
   mandates: z.array(mandateRequest).max(500),
 })
 
+const operation = z.object({ maxTradeUsd: atomic, dailyMax: atomic })
+
 export const policy = z.object({
   agentId,
   chains: z.array(text(64)).max(16),
@@ -267,6 +271,23 @@ export const policy = z.object({
       maxPositionUsd: atomic,
       maxSlippageBps: bps,
       maxPriceImpactBps: bps,
+      // CR-026: per mint, per kind of trade, and the agent's own orders.
+      tokenLimits: z
+        .record(
+          text(128),
+          z.object({ maxBuyUsd: atomic.optional(), maxHeldUsd: atomic.optional() }),
+        )
+        .optional(),
+      operations: z
+        .object({
+          buy: operation.optional(),
+          sell: operation.optional(),
+          swap: operation.optional(),
+        })
+        .optional(),
+      orders: z
+        .object({ enabled: z.boolean(), maxOpen: z.number().int().nonnegative() })
+        .optional(),
     })
     .optional(),
 })

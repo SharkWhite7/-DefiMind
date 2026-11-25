@@ -406,7 +406,7 @@ POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, sing
     | "change_settings" (CR-019) | "close_positions" (CR-021, body {})
     | "agent_wallet" (CR-022, body { agentId, chain })
     | "manual_trade" (CR-025, body { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut })
-    | "place_order" (CR-026, body { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps })
+    | "place_order" (CR-026, body { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps? })
     | "trader_settings" (CR-027, body { agentId, config }) | "resume_trader" (CR-027, body { agentId })
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
@@ -580,7 +580,9 @@ GET  /v1/owner/portfolio -> { agents: { agentId, positions: Position[], tradedTo
   session only
 POST /v1/owner/positions/close { assertion } -> { intents: PayIntent[] }   step-up, OwnerAction
   "close_positions" with body {}; sells every token the hot wallets hold back to the chain's dollar,
-  through the same checks. Works while agents are paused.
+  through the same checks. Works while agents are paused. SOL (CR-026) is sold only as far as
+  trading bought it: at most min(the booked SOL position, the balance above the gas reserve). SOL the
+  owner sends to a hot wallet, for gas or above it, is never sold by Close or by the AI trader.
 Position = { chain, token, amount, cost, decimals, symbol? }: decimals read from the mint onchain by
   the adapter, never from a venue's token list; symbol is display only and untrusted, so a client
   always shows the mint beside it.
@@ -704,8 +706,9 @@ whole transaction: tokenIn falls by at most amountIn, tokenOut rises by at least
 other token account of the hot wallet nets to zero or more (route intermediates included), and SOL
 falls by fees and rent only, plus amountIn when SOL is tokenIn. A trade never leaves the hot wallet's
 SOL below getHotWalletGas().minimum after fees (GAS_RESERVE), so it can still pay for the next sell.
-A sell to the chain's dollar is exempt, as long as the hot wallet can pay its fee, so a wallet low
-on SOL can always sell and Close positions stays the way out. guard-core checks the reserve again
+A sell to the chain's dollar whose SOL cost is only its fee, plus at most one token account's rent
+when the hot wallet has no dollar account yet, is exempt. A wallet low on SOL can then always sell,
+and Close positions stays the way out. A sell the wallet cannot pay for fails at the RPC, with no loss. guard-core checks the reserve again
 just before signing, since two trades checked in the same window could pass it together.
 
 Orders. guard-core stores take-profit and stop-loss orders and fills each one as a sell to the
@@ -764,6 +767,10 @@ POST /v1/owner/orders/:id/cancel -> Order   session only: cancelling only tighte
 GET  /v1/owner/orders -> { orders: Order[] }   session only
 The agent routes take the agent's key, as for swaps. An agent's order follows its own policy;
 placing one never waits for the owner, since a fill only sells.
+An order that cannot be placed answers 409 { error: "order_refused", rejectReasons }, with the codes
+from the placing checks above. The owner's step-up body carries maxSlippageBps only when the owner
+sent one, so the passkey signs exactly what was asked. order_filled and order_failed are Web Push
+kinds only, not bot alerts.
 
 ## The AI trader (CR-027)
 Solana mainnet, spot, through Jupiter. The AI trader is an agent that runs inside guard-core on a

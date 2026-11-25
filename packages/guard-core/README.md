@@ -392,6 +392,20 @@ policy without `trading` trades nothing, and an adapter without `quoteSwap` refu
 - **Loosening needs the step-up.** Turning trading on, a new venue or token, `allowAnyToken`, or a
   raised limit is a loosening, so it needs the passkey step-up (CR-015). The bot can only tighten.
 
+### Trade limits (CR-026)
+
+`trading` takes three optional fields. Leaving all three out keeps CR-021's behaviour.
+
+- `operations.{buy,sell,swap}: { maxTradeUsd, dailyMax }`, in the chain's dollar.
+  - The buy entry replaces `maxTradeUsd` and `dailyTradeMax`.
+  - A sell entry caps sells. A sell is valued at what its quote expects it to bring, so a cap is not slipped under on the slippage, and a day's sells are counted at that value, then corrected to what landed (`SELL_EXCEEDED`, `SELL_DAILY_EXCEEDED`). Without one, sells are not capped.
+- `tokenLimits[mint]: { maxBuyUsd?, maxHeldUsd? }`, at most 64 mints. It lowers one token's buy and replaces its held limit (`TOKEN_LIMIT_EXCEEDED`).
+- `orders: { enabled, maxOpen }`, for take-profit and stop-loss orders.
+
+A sell never spends more than the agent's position holds (`INSUFFICIENT_POSITION`). Shadow mode holds no positions, and the owner's Close sells what the chain holds, so neither is checked this way.
+
+Adding, raising or removing any of these caps, enabling orders, or raising `maxOpen` is a loosening, and needs the passkey. Only lowering a cap that is already set tightens.
+
 ### Owner trading tools (CR-025)
 
 Every route needs the owner's session. These routes serve Solana mainnet through Jupiter only.

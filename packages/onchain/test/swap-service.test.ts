@@ -4,6 +4,7 @@ import {
   ACCOUNT_SIZE,
   AccountState,
   createAssociatedTokenAccountIdempotentInstruction,
+  NATIVE_MINT,
   getAssociatedTokenAddressSync,
   MINT_SIZE,
   MintLayout,
@@ -87,9 +88,14 @@ const wallet = (lamports: number): AccountInfo<Buffer> => ({
 let before: Map<string, AccountInfo<Buffer>>
 let after: Map<string, AccountInfo<Buffer>>
 let sent: Buffer[]
+/** The hot wallet's lamports when send() reads them: what the test run left, unless a test says. */
+const fromBefore = (key: PublicKey) => BigInt(before.get(key.toBase58())?.lamports ?? 0)
+let balanceNow = fromBefore
 
 const connection = {
   getSlot: async () => 1_000,
+  getMinimumBalanceForRentExemption: async () => 2_039_280,
+  getBalance: async (key: PublicKey) => Number(balanceNow(key)),
   getMultipleAccountsInfo: async (keys: PublicKey[]) =>
     keys.map((k) => before.get(k.toBase58()) ?? null),
   getTokenAccountsByOwner: async (_owner: PublicKey, { programId }: { programId: PublicKey }) => ({
@@ -142,10 +148,13 @@ function routeData(slippageBps = 50) {
 const route = (extra: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = []) =>
   new TransactionInstruction({
     programId: JUPITER_PROGRAM_ID,
+    // route's layout: token program, signer, source, destination, then Jupiter's id for none.
     keys: [
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: hot, isSigner: true, isWritable: true },
       { pubkey: usdcAccount, isSigner: false, isWritable: true },
       { pubkey: bonkAccount, isSigner: false, isWritable: true },
+      { pubkey: JUPITER_PROGRAM_ID, isSigner: false, isWritable: false },
       ...extra,
     ],
     data: routeData(),
@@ -196,6 +205,7 @@ let v: ReturnType<typeof fakeVenue>
 let s: ReturnType<typeof swaps>
 
 beforeEach(() => {
+  balanceNow = fromBefore
   before = new Map([
     [hot.toBase58(), wallet(100_000_000)],
     [usdc.toBase58(), mint(6)],
@@ -289,11 +299,36 @@ describe('quoteSwap', () => {
     expect(quote).toMatchObject({ risks: [], flags: [], exitImpactBps: null, decimalsIn: 5 })
   })
 
-  it('refuses a pair without the chain dollar, and a bad amount or slippage', async () => {
-    const other = key().toBase58()
+  it('quotes a token for a token, holding what is bought to the buy checks (CR-026)', async () => {
+    const jup = key()
+    before.set(jup.toBase58(), mint(6))
+    before.set(bonk.toBase58(), mint(5, { freeze: true, authority: true }))
+    const quote = await s.quoteSwap({
+      tokenIn: jup.toBase58(),
+      tokenOut: bonk.toBase58(),
+      amountIn: '50000000',
+      slippageBps: 50,
+    })
+    expect(quote).toMatchObject({ expectedOut: '5000000', decimalsIn: 6, decimalsOut: 5 })
+    expect(quote.risks).toEqual(['TOKEN_FREEZABLE'])
+    expect(quote.flags).toEqual(['MINT_AUTHORITY'])
+    expect(quote.exitImpactBps).toBe(300)
+  })
+
+  it('quotes a sell to the dollar with no buy checks', async () => {
+    before.set(bonk.toBase58(), mint(5, { freeze: true, authority: true }))
+    const quote = await s.quoteSwap({
+      tokenIn: bonk.toBase58(),
+      tokenOut: usdc.toBase58(),
+      amountIn: '1000000',
+      slippageBps: 50,
+    })
+    expect(quote).toMatchObject({ risks: [], flags: [], exitImpactBps: null })
+  })
+
+  it('refuses a bad amount or slippage', async () => {
     const ask = (tokenIn: string, amountIn = '1', slippageBps = 50) =>
       s.quoteSwap({ tokenIn, tokenOut: bonk.toBase58(), amountIn, slippageBps })
-    await expect(ask(other)).rejects.toThrow(/^invalid_swap/)
     await expect(ask(usdc.toBase58(), '0')).rejects.toThrow(/^invalid_amount/)
     await expect(ask(usdc.toBase58(), '1', -1)).rejects.toThrow(/^invalid_slippage/)
     await expect(ask(usdc.toBase58(), '1', 10_001)).rejects.toThrow(/^invalid_slippage/)
@@ -333,6 +368,72 @@ describe('simulate and send a swap', () => {
     expect((await s.simulate(buy())).rejectReasons).toEqual(['SIM_UNEXPECTED_EFFECT'])
   })
 
+  it('refuses a swap that would leave the hot wallet short of gas for the next sell', async () => {
+    before.set(hot.toBase58(), wallet(7_000_000))
+    after.set(hot.toBase58(), wallet(7_000_000 - 5_000 - 2_039_280))
+    expect((await s.simulate(buy())).rejectReasons).toEqual(['GAS_RESERVE'])
+  })
+
+  describe('a sell to the dollar, exempt from the gas reserve when it costs only its fee', () => {
+    const sell: PayIntent = {
+      ...buy(),
+      token: bonk.toBase58(),
+      swap: { ...buy().swap!, tokenOut: usdc.toBase58(), decimalsIn: 5, decimalsOut: 6 },
+    }
+    const short = 3_000_000
+    const sellRoute = () =>
+      new TransactionInstruction({
+        programId: JUPITER_PROGRAM_ID,
+        keys: [TOKEN_PROGRAM_ID, hot, bonkAccount, usdcAccount, JUPITER_PROGRAM_ID].map(
+          (pubkey, i) => ({ pubkey, isSigner: i === 1, isWritable: true }),
+        ),
+        data: routeData(),
+      })
+    beforeEach(() => {
+      v.state.instructions = [
+        ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+        sellRoute(),
+      ]
+      before.set(bonkAccount.toBase58(), account(bonk, 10_000_000n))
+      after.set(bonkAccount.toBase58(), account(bonk, 0n))
+      after.set(usdcAccount.toBase58(), account(usdc, 50_995_000n))
+    })
+
+    it('runs, and signs, on a hot wallet already short of gas', async () => {
+      before.set(hot.toBase58(), wallet(short))
+      after.set(hot.toBase58(), wallet(short - 5_000))
+      expect((await s.simulate(sell)).rejectReasons).toEqual([])
+      await s.send(sell)
+      expect(sent).toHaveLength(1)
+    })
+
+    it('allows the rent of the dollar account it has to open', async () => {
+      v.state.instructions.splice(
+        1,
+        0,
+        createAssociatedTokenAccountIdempotentInstruction(hot, usdcAccount, hot, usdc),
+      )
+      before.delete(usdcAccount.toBase58())
+      after.set(usdcAccount.toBase58(), account(usdc, 995_000n))
+      before.set(hot.toBase58(), wallet(short))
+      after.set(hot.toBase58(), wallet(short - 5_000 - 2_039_280))
+      expect((await s.simulate(sell)).rejectReasons).toEqual([])
+    })
+
+    it('is held to the reserve when it costs more SOL than that', async () => {
+      before.set(hot.toBase58(), wallet(short))
+      after.set(hot.toBase58(), wallet(short - 5_001))
+      expect((await s.simulate(sell)).rejectReasons).toContain('GAS_RESERVE')
+    })
+  })
+
+  it('checks the gas reserve again when it signs: another spend may have come in between', async () => {
+    expect((await s.simulate(buy())).rejectReasons).toEqual([])
+    balanceNow = () => 6_000_000n
+    await expect(s.send(buy())).rejects.toThrow('send_refused: GAS_RESERVE')
+    expect(sent).toEqual([])
+  })
+
   it('refuses a transaction whose route would accept less than the approved minimum', async () => {
     v.state.instructions = [new TransactionInstruction({ ...route(), data: routeData(10_000) })]
     expect((await s.simulate(buy())).rejectReasons).toEqual(['SLIPPAGE_TOO_HIGH'])
@@ -363,9 +464,22 @@ describe('simulate and send a swap', () => {
 })
 
 describe('getPositions', () => {
+  // (2 token accounts' rent + 10 signatures) × 1.25, at 2,039,280 lamports of rent.
+  const reserve = 5_160_700n
+
   it('lists every token held but the dollar, with decimals from the mint', async () => {
+    balanceNow = () => reserve
     before.set(bonkAccount.toBase58(), account(bonk, 777n))
     expect(await s.getPositions()).toEqual([{ token: bonk.toBase58(), amount: '777', decimals: 5 }])
+  })
+
+  it('counts the SOL above the gas reserve as a position under the wSOL mint, never the reserve', async () => {
+    balanceNow = () => reserve + 14_324_861n
+    expect(await s.getPositions()).toEqual([
+      { token: NATIVE_MINT.toBase58(), amount: '14324861', decimals: 9 },
+    ])
+    balanceNow = () => reserve - 1n
+    expect(await s.getPositions()).toEqual([])
   })
 })
 

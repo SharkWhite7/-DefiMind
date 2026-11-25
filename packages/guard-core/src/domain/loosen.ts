@@ -1,4 +1,4 @@
-import type { Policy, TradingPolicy } from '@defimind/shared'
+import type { Amount, Policy, TradingPolicy } from '@defimind/shared'
 import { parseAmount } from './amount.js'
 import type { StoredPolicy } from './policy.js'
 
@@ -26,7 +26,10 @@ export function loosened(before: StoredPolicy, after: Policy): string[] {
     ...((after.priceIncreaseMaxPct ?? 0) > before.priceIncreaseMaxPct
       ? ['priceIncreaseMaxPct']
       : []),
-    ...tradingLoosened(before.trading, after.trading).map((field) => `trading.${field}`),
+    // A PUT without trading keeps the stored one (repo.putPolicy), so it loosens nothing there.
+    ...(after.trading === undefined ? [] : tradingLoosened(before.trading, after.trading)).map(
+      (field) => `trading.${field}`,
+    ),
   ]
 }
 
@@ -55,5 +58,29 @@ function tradingLoosened(before: TradingPolicy = CLOSED, after: TradingPolicy = 
     ),
     ...TRADE_LIMITS.filter((limit) => parseAmount(after[limit]) > parseAmount(before[limit])),
     ...TRADE_BPS.filter((limit) => after[limit] > before[limit]),
+    ...Object.keys({ ...before.tokenLimits, ...after.tokenLimits })
+      .filter((mint) => amountsLoosened(before.tokenLimits?.[mint], after.tokenLimits?.[mint]))
+      .map((mint) => `tokenLimits.${mint}`),
+    ...(['buy', 'sell', 'swap'] as const)
+      .filter((kind) => amountsLoosened(before.operations?.[kind], after.operations?.[kind]))
+      .map((kind) => `operations.${kind}`),
+    ...((after.orders?.enabled ?? false) && !(before.orders?.enabled ?? false)
+      ? ['orders.enabled']
+      : []),
+    ...((after.orders?.maxOpen ?? 10) > (before.orders?.maxOpen ?? 10) ? ['orders.maxOpen'] : []),
   ]
+}
+
+/**
+ * CR-026: a set of caps loosens when a cap is added, raised or removed. Only lowering one that
+ * was there tightens: an added cap may replace a stricter default, a removed one leaves none.
+ */
+function amountsLoosened<T extends object>(before: T | undefined, after: T | undefined): boolean {
+  const caps = (value: T | undefined) => (value ?? {}) as Partial<Record<string, Amount>>
+  const fields = new Set([...Object.keys(caps(before)), ...Object.keys(caps(after))])
+  return [...fields].some((field) => {
+    const was = caps(before)[field]
+    const now = caps(after)[field]
+    return was === undefined || now === undefined || parseAmount(now) > parseAmount(was)
+  })
 }

@@ -79,6 +79,7 @@ export function tradingMock(later: string) {
     simulation: { summary: 'Spends 25 USDC; receives at least 1,843.920113 JUP.' },
     approveBefore: later,
     flags: ['NEW_TOKEN', 'MINT_AUTHORITY'],
+    untested: true,
   })
 
   function route(
