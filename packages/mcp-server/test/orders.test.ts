@@ -103,9 +103,38 @@ describe('place_order', () => {
   it('says a stop-loss is not a guarantee, and to place orders only when asked', async () => {
     const { tools } = await (await connect(fakeGuard({}))).listTools()
     const description = tools.find((tool) => tool.name === 'place_order')?.description ?? ''
-    expect(description).toContain('A stop-loss is not a guarantee')
+    expect(description).toContain('A stop is not a guarantee')
     expect(description).toContain('Place one only when the user asks for it.')
     expect(description).not.toMatch(/(?<!take[-_])profit|guaranteed|earn|yield/i)
+  })
+})
+
+describe('trailing stops (CR-028)', () => {
+  it('places one with its trail and no trigger, and refuses a trail on any other kind', async () => {
+    const placeOrder = vi.fn(async () => ({
+      ...order,
+      kind: 'trailing_stop' as const,
+      trailBps: 1000,
+    }))
+    const client = await connect(fakeGuard({ placeOrder }))
+    const { text } = await call(client, 'place_order', {
+      token: order.token,
+      kind: 'trailing_stop',
+      amount: '1000',
+      trailBps: 1000,
+    })
+    expect(placeOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'trailing_stop', triggerOut: '0', trailBps: 1000 }),
+    )
+    expect(text).toContain('Trails its high by 1000 bps; confirmed high not set yet.')
+    const wrong = await call(client, 'place_order', {
+      token: order.token,
+      kind: 'stop_loss',
+      amount: '1000',
+      triggerUsd: '1',
+      trailBps: 1000,
+    })
+    expect(wrong.text).toContain('trailBps: give it for a trailing_stop, and only for one.')
   })
 })
 

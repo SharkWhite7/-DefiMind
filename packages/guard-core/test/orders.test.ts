@@ -96,6 +96,72 @@ describe('placing and cancelling orders (CR-026)', () => {
   })
 })
 
+describe('trailing stops and protective sells (CR-028)', () => {
+  const trail = (extra: object = {}) =>
+    place({ kind: 'trailing_stop', triggerOut: '0', trailBps: 1000, ...extra })
+
+  it('places a trailing stop only with its trail, and a plain stop only with a price', async () => {
+    const { h } = await setup()
+    expect((await h.agent('POST', '/v1/agent/orders', trail())).json()).toMatchObject({
+      kind: 'trailing_stop',
+      trailBps: 1000,
+      status: 'open',
+    })
+    const bare = await h.agent('POST', '/v1/agent/orders', place({ kind: 'trailing_stop' }))
+    expect(bare.statusCode).toBe(400)
+    const zero = await h.agent(
+      'POST',
+      '/v1/agent/orders',
+      place({ kind: 'stop_loss', triggerOut: '0' }),
+    )
+    expect(zero.statusCode).toBe(400)
+  })
+
+  it('follows a held high up, ignores a one-check spike, and sells 10% under it', async () => {
+    const { h, chain, watcher, run } = await setup()
+    chain.clock = () => h.clock.now
+    const order = (await h.agent('POST', '/v1/agent/orders', trail())).json()
+    chain.sellOut = '1010'
+    await run()
+    expect(getOrder(h.db, order.id)?.peakOut).toBe('1010')
+    for (const out of ['5000', '1010', '1010']) {
+      chain.sellOut = out
+      await watcher.tick()
+      h.clock.now = new Date(h.clock.now.getTime() + 15_000)
+    }
+    expect(getOrder(h.db, order.id)?.peakOut).toBe('1010')
+    chain.sellOut = '905'
+    await run()
+    expect(getOrder(h.db, order.id)).toMatchObject({ status: 'filled', peakOut: '1010' })
+    expect(getPosition(h.db, 'agent-1', CHAIN, BONK).amount).toBe(1_000_000n)
+  })
+
+  it('fills past the sell limits and a mandate rule an agent could use up', async () => {
+    const operations = { sell: { maxTradeUsd: '1', dailyMax: '1' } }
+    const { h, run } = await setup({
+      requireMandate: true,
+      trading: { ...trading, orders: { enabled: true, maxOpen: 3 }, operations },
+    })
+    const order = (await h.agent('POST', '/v1/agent/orders', place())).json()
+    await run()
+    expect(getOrder(h.db, order.id)?.status).toBe('filled')
+  })
+
+  it('needs the passkey to cancel a stop from the panel, and the session for a take-profit', async () => {
+    const { h } = await setup()
+    const owner = await signedIn(h)
+    const stop = (
+      await h.agent('POST', '/v1/agent/orders', place({ kind: 'stop_loss', triggerOut: '500' }))
+    ).json()
+    const bare = await owner.call('POST', `/v1/owner/orders/${stop.id}/cancel`)
+    expect(bare.json().error).toBe('step_up_required')
+    const done = await owner.call('POST', `/v1/owner/orders/${stop.id}/cancel`, {
+      assertion: await owner.stepUp('cancel_order', { orderId: stop.id }),
+    })
+    expect(done.json().status).toBe('cancelled')
+  })
+})
+
 describe('the order watcher (CR-026)', () => {
   it('fills a take-profit after enough hits over long enough, as a sell', async () => {
     const { h, watcher } = await setup()
@@ -114,18 +180,17 @@ describe('the order watcher (CR-026)', () => {
     expect(h.auditEvents()).toContain('order_filled')
   })
 
-  it('never sells a stop-loss below its floor: the order fails and the position stays', async () => {
+  it('never sells a stop-loss below its floor: it watches again and the position stays', async () => {
     const { h, run } = await setup()
     const order = (
       await h.agent('POST', '/v1/agent/orders', place({ kind: 'stop_loss', triggerOut: '2000' }))
     ).json()
     await run()
     await run()
-    expect(getOrder(h.db, order.id)).toMatchObject({
-      status: 'failed',
-      failReason: 'SLIPPAGE_TOO_HIGH',
-    })
+    // CR-028: refused on price, the order goes back to open, so a gap-down never disarms it.
+    expect(getOrder(h.db, order.id)?.status).toBe('open')
     expect(getPosition(h.db, 'agent-1', CHAIN, BONK).amount).toBe(2_000_000n)
+    expect(h.auditEvents()).toContain('order_failed')
   })
 
   it('neither fills nor counts while the agent is paused, or while the price moves too far', async () => {

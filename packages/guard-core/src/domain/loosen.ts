@@ -10,8 +10,10 @@ const LISTS = ['chains', 'tokens', 'allowedRecipients', 'allowedDomains'] as con
  * going live, no longer requiring a mandate), plus three it leaves out. Unpausing here is a resume
  * without the resume's passkey, and a higher breaker or price-jump limit lets more through. Any of
  * them needs the owner's passkey; a change that only tightens needs the session alone.
+ * `stopsOpen` says whether the agent has an open stop: turning orders off then cancels the stops
+ * that protect its positions, so it counts as a loosening (CR-028).
  */
-export function loosened(before: StoredPolicy, after: Policy): string[] {
+export function loosened(before: StoredPolicy, after: Policy, stopsOpen = false): string[] {
   const raised = LIMITS.filter((limit) => parseAmount(after[limit]) > parseAmount(before[limit]))
   const added = LISTS.filter((list) => after[list].some((item) => !before[list].includes(item)))
   return [
@@ -27,9 +29,10 @@ export function loosened(before: StoredPolicy, after: Policy): string[] {
       ? ['priceIncreaseMaxPct']
       : []),
     // A PUT without trading keeps the stored one (repo.putPolicy), so it loosens nothing there.
-    ...(after.trading === undefined ? [] : tradingLoosened(before.trading, after.trading)).map(
-      (field) => `trading.${field}`,
-    ),
+    ...(after.trading === undefined
+      ? []
+      : tradingLoosened(before.trading, after.trading, stopsOpen)
+    ).map((field) => `trading.${field}`),
   ]
 }
 
@@ -49,7 +52,12 @@ const CLOSED: TradingPolicy = {
   maxPriceImpactBps: 0,
 }
 
-function tradingLoosened(before: TradingPolicy = CLOSED, after: TradingPolicy = CLOSED): string[] {
+function tradingLoosened(
+  before: TradingPolicy = CLOSED,
+  after: TradingPolicy = CLOSED,
+  stopsOpen = false,
+): string[] {
+  const ordersOn = (policy: TradingPolicy) => policy.orders?.enabled ?? false
   return [
     ...(after.enabled && !before.enabled ? ['enabled'] : []),
     ...(after.allowAnyToken && !before.allowAnyToken ? ['allowAnyToken'] : []),
@@ -64,7 +72,7 @@ function tradingLoosened(before: TradingPolicy = CLOSED, after: TradingPolicy = 
     ...(['buy', 'sell', 'swap'] as const)
       .filter((kind) => amountsLoosened(before.operations?.[kind], after.operations?.[kind]))
       .map((kind) => `operations.${kind}`),
-    ...((after.orders?.enabled ?? false) && !(before.orders?.enabled ?? false)
+    ...(ordersOn(after) !== ordersOn(before) && (ordersOn(after) || stopsOpen)
       ? ['orders.enabled']
       : []),
     ...((after.orders?.maxOpen ?? 10) > (before.orders?.maxOpen ?? 10) ? ['orders.maxOpen'] : []),

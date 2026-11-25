@@ -2,6 +2,7 @@ import type { RegistrationResponseJSON } from '@simplewebauthn/server'
 import type { FastifyInstance } from 'fastify'
 import { revokeMandate } from '../db/mandates.js'
 import { countPasskeys } from '../db/passkeys.js'
+import { stopsOpen } from '../db/orders.js'
 import { loosened } from '../domain/loosen.js'
 import { alert } from '../service/events.js'
 import * as repo from '../db/repo.js'
@@ -167,7 +168,7 @@ export function adminRoutes(
       const { agentId } = agentIdParam.parse(request.params)
       const next = { agentId, ...policyBody.parse(request.body) }
       const before = control.existing(agentId)
-      const fields = loosened(before, next)
+      const fields = loosened(before, next, stopsOpen(deps.db, agentId))
       if (fields.length > 0) {
         refuse(agentId, fields)
       }

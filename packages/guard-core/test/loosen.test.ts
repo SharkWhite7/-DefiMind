@@ -175,4 +175,11 @@ describe('loosened trading (CR-021)', () => {
       loosened(orders({ enabled: true, maxOpen: 10 }), orders({ enabled: false, maxOpen: 2 })),
     ).toEqual([])
   })
+
+  it('flags turning orders off while a stop is open, since that cancels it (CR-028)', () => {
+    const on = { ...trades, trading: { ...trading, orders: { enabled: true, maxOpen: 10 } } }
+    const off = { ...trades, trading: { ...trading, orders: { enabled: false, maxOpen: 10 } } }
+    expect(loosened(on, off, true)).toEqual(['trading.orders.enabled'])
+    expect(loosened(on, off, false)).toEqual([])
+  })
 })

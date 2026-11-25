@@ -3,16 +3,34 @@ import { parseUnits } from './tokens.js'
 import { parsePercent } from './trading.js'
 
 export type OrderKind = 'take_profit' | 'stop_loss'
+/** CR-028: placed by an agent or the hunt; the panel shows and cancels it, and places none yet. */
+export type ListedKind = OrderKind | 'trailing_stop'
 
-export const ORDER_KINDS: Record<OrderKind, string> = {
+export const ORDER_KINDS: Record<ListedKind, string> = {
   take_profit: 'Take profit',
   stop_loss: 'Stop loss',
+  trailing_stop: 'Trailing stop',
 }
 
 /** When each kind sells, as the label of the trigger the owner typed. */
-export const WHEN: Record<OrderKind, string> = {
+export const WHEN: Record<ListedKind, string> = {
   take_profit: 'Sells once worth at least',
   stop_loss: 'Sells once worth at most',
+  trailing_stop: 'Sells once worth at most',
+}
+
+/** The level an order sells at, as guard-core works it out: a trailing stop's follows its high. */
+export function orderTrigger(order: {
+  kind: ListedKind
+  triggerOut: string
+  trailBps?: number | undefined
+  peakOut?: string | undefined
+}): string {
+  if (order.kind !== 'trailing_stop' || order.peakOut === undefined) {
+    return order.triggerOut
+  }
+  const trailed = (BigInt(order.peakOut) * BigInt(10_000 - (order.trailBps ?? 0))) / 10_000n
+  return trailed > BigInt(order.triggerOut) ? trailed.toString() : order.triggerOut
 }
 
 export const ORDER_STATUS: Record<string, string> = {
@@ -42,7 +60,7 @@ export interface NewOrder {
   maxSlippageBps: number
 }
 
-const isKind = (kind: string): kind is OrderKind => Object.hasOwn(ORDER_KINDS, kind)
+const isKind = (kind: string): kind is OrderKind => kind === 'take_profit' || kind === 'stop_loss'
 
 /** The order the owner typed, or the first thing wrong with it, said to the owner. */
 export function fromOrderForm(form: OrderForm, decimals: number, maxSlippageBps: number) {

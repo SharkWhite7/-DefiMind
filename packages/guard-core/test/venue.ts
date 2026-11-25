@@ -22,6 +22,8 @@ export class Venue extends StubChain {
   down: 'venue_unavailable' | 'no_route' | undefined
   received: bigint | undefined
   held = new Map<string, bigint>()
+  /** Stamps quotes at the test's clock instead of NOW, for tests that run past a quote's age. */
+  clock: (() => Date) | undefined
 
   constructor(balance = 100_000_000n) {
     super(CHAIN, balance)
@@ -53,6 +55,7 @@ export class Venue extends StubChain {
       quotedAt: NOW.toISOString(),
       decimalsIn: buy ? 6 : 5,
       decimalsOut: buy ? 5 : 6,
+      ...(this.clock === undefined ? {} : { quotedAt: this.clock().toISOString() }),
     }
     return quote
   }

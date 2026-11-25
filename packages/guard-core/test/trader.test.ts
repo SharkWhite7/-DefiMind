@@ -70,6 +70,19 @@ describe('a trader tick (CR-027)', () => {
     ])
   })
 
+  it('takes a trail only on a trailing stop, and a zero price only there (CR-028)', async () => {
+    const base = { token: BONK, amount: '1', triggerUsd: '1.5' }
+    const wrong = [
+      { name: 'place_order', input: { ...base, kind: 'stop_loss', trailBps: 1000 } },
+      { name: 'place_order', input: { ...base, kind: 'trailing_stop' } },
+      { name: 'place_order', input: { ...base, kind: 'stop_loss', triggerUsd: '0' } },
+    ]
+    const { fake, tick } = await setup([{ tools: wrong }])
+    const done = await tick()
+    expect(done?.actions).toEqual([])
+    expect(JSON.stringify(fake.sent[1]?.body['messages']).match(/invalid_input/g)).toHaveLength(3)
+  })
+
   it('keeps venue text inside the data block, unable to close it', async () => {
     const quote = { name: 'quote', input: { from: 'USDC', to: BONK, amount: '1000000' } }
     const { t, fake, tick } = await setup([{ tools: [quote] }])

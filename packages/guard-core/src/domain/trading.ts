@@ -49,8 +49,18 @@ export interface TradeVerdict {
  * Default deny, as for payments: a swap is approved only when no rule objects. The quote comes
  * from a venue nobody trusts, so it is checked against the request and against itself, never
  * believed. Pure, so every attack case is a test.
+ *
+ * A protective sell (CR-028: an order's fill) skips the sell limits, the mandate rule and the price
+ * impact: its floor bounds the price, and an agent must not be able to use up the room its own
+ * stops need to sell.
  */
-export function evaluateTrade(trade: Trade, policy: Policy, book: Book, now: Date): TradeVerdict {
+export function evaluateTrade(
+  trade: Trade,
+  policy: Policy,
+  book: Book,
+  now: Date,
+  protective = false,
+): TradeVerdict {
   const trading = policy.trading
   if (trading === undefined || !trading.enabled) {
     return { decision: 'reject', reasons: ['TRADING_DISABLED'], flags: [] }
@@ -66,10 +76,11 @@ export function evaluateTrade(trade: Trade, policy: Policy, book: Book, now: Dat
   }
   // A swap cannot name a mandate yet, so an owner who allows payments only inside a task budget
   // gets no swaps at all until mandates have a design for trades.
-  if (policy.requireMandate === true) {
+  const { quote, request, side } = trade
+  const guarded = protective && side === 'sell'
+  if (policy.requireMandate === true && !guarded) {
     add('MANDATE_REQUIRED')
   }
-  const { quote, request, side } = trade
   if (!trading.venues.includes(quote.venue)) {
     add('VENUE_NOT_ALLOWED')
   }
@@ -79,7 +90,9 @@ export function evaluateTrade(trade: Trade, policy: Policy, book: Book, now: Dat
     add('TOKEN_NOT_TRADABLE')
   }
   for (const reason of quoteReasons(trade, trading, now)) {
-    add(reason)
+    if (!(guarded && reason === 'PRICE_IMPACT_TOO_HIGH')) {
+      add(reason)
+    }
   }
 
   const amountIn = parseAmount(request.amountIn)
@@ -94,7 +107,9 @@ export function evaluateTrade(trade: Trade, policy: Policy, book: Book, now: Dat
     { side, token: trade.token, amountIn, valueUsd: valueUsd ?? 0n },
     book,
   )) {
-    add(reason)
+    if (!(guarded && (reason === 'SELL_EXCEEDED' || reason === 'SELL_DAILY_EXCEEDED'))) {
+      add(reason)
+    }
   }
   if (bringsIn) {
     for (const risk of quote.risks) {

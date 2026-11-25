@@ -25,6 +25,8 @@ export interface PushPayload {
   chain?: string
   amount?: string
   intentId?: string
+  /** CR-028: an order refused on price that went back to open. */
+  reopened?: boolean
 }
 
 /** A rejection with one of these means something tried to take standing authority over funds. */
@@ -94,10 +96,22 @@ export function pusher(deps: PushDeps) {
     send,
     kill: () => send({ kind: 'kill' }),
     traderPaused: (agentId: string) => send({ kind: 'trader_paused', agentId }),
-    /** CR-026: an order filled, or could not be filled at its floor and was failed. */
-    order(kind: 'order_filled' | 'order_failed', order: Order, intentId?: string) {
+    /** CR-026: an order filled, or could not be filled; CR-028: one refused on price re-opens. */
+    order(
+      kind: 'order_filled' | 'order_failed',
+      order: Order,
+      intentId?: string,
+      reopened = false,
+    ) {
       const { agentId, chain, amount } = order
-      send({ kind, agentId, chain, amount, ...(intentId === undefined ? {} : { intentId }) })
+      send({
+        kind,
+        agentId,
+        chain,
+        amount,
+        ...(intentId === undefined ? {} : { intentId }),
+        ...(reopened ? { reopened } : {}),
+      })
     },
     approval(request: ApprovalRequest | MandateApprovalRequest) {
       if ('mandate' in request) {

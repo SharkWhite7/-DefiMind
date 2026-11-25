@@ -144,7 +144,8 @@ export async function swap(
       { ...where, dollar: dollarOf(deps, req.chain), day: repo.utcDay(now()) },
       shadow || policy.mode === 'shadow',
     )
-    const verdict = evaluateTrade(trade, policy, book, now())
+    const protective = floor?.by === 'order'
+    const verdict = evaluateTrade(trade, policy, book, now(), protective)
     repo.audit(
       db,
       {
@@ -170,6 +171,7 @@ export async function swap(
       shadow: shadow || policy.mode === 'shadow',
       policy,
       valueUsd: valueUsd ?? 0n,
+      protective,
     }
     if (floor?.by !== 'owner') {
       return clearSwap(deps, adapter, priced, how)
@@ -197,6 +199,8 @@ export async function clearSwap(
     policy: Policy
     /** A swap's valuation, which its day counts (CR-026). */
     valueUsd?: bigint
+    /** CR-028: an order's fill, which the sell day does not count. */
+    protective?: boolean
   },
   /** Set when the owner has already answered: their approval, or their own Close. */
   owner?: 'approved' | 'close',
@@ -271,7 +275,7 @@ export async function clearSwap(
     addBought(db, intent.agentId, intent.chain, day, intent.amount)
   } else if (how.side === 'swap') {
     addSwapped(db, intent.agentId, intent.chain, day, toAmount(how.valueUsd ?? 0n))
-  } else {
+  } else if (how.protective !== true) {
     addSold(db, intent.agentId, intent.chain, day, toAmount(expectedOf(intent.swap)))
   }
   return settle(deps, adapter, approved, how.side, simulation, day)

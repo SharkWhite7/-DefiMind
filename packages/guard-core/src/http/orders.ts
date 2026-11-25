@@ -6,7 +6,7 @@ import { cancelOrder, type OrderInput, placeOrder } from '../service/orders.js'
 import type { PaymentDeps } from '../service/payments.js'
 import type { OwnerAction } from '../service/step-up.js'
 import { HttpError } from './errors.js'
-import { orderCancel, orderRequest, ownerOrder } from './order-schemas.js'
+import { orderCancel, orderRequest, ownerCancel, ownerOrder } from './order-schemas.js'
 import { agentIdParam, idParam } from './schemas.js'
 
 /** A refused order answers 409 with the reasons, as a refused swap's intent carries them. */
@@ -64,8 +64,9 @@ export function agentOrderRoutes(deps: PaymentDeps) {
 }
 
 /**
- * CR-026, behind the owner's session. Placing needs the step-up over the order as sent;
- * cancelling only tightens, so the session alone does.
+ * CR-026, behind the owner's session. Placing needs the step-up over the order as sent. Cancelling
+ * a take-profit only tightens, so the session alone does; a stop is protection, and removing it
+ * needs the step-up (CR-028), so a stolen session cannot strip a position bare.
  */
 export function ownerOrderRoutes(
   deps: PaymentDeps,
@@ -82,7 +83,12 @@ export function ownerOrderRoutes(
     })
     app.post('/v1/owner/orders/:id/cancel', async (request) => {
       const { id } = idParam.parse(request.params)
-      cancelOrder(deps, own(deps, id), 'panel')
+      const { assertion } = ownerCancel.parse(request.body ?? {})
+      const order = own(deps, id)
+      if (order.kind !== 'take_profit') {
+        await stepUp('cancel_order', { orderId: id }, assertion)
+      }
+      cancelOrder(deps, order, 'panel')
       return own(deps, id)
     })
     app.get('/v1/owner/orders', async () => ({ orders: listOrders(deps.db) }))
@@ -94,7 +100,8 @@ export function ownerOrderRoutes(
  * assertion cannot be replayed with another expiry.
  */
 function bound(input: OrderInput) {
-  const { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps, expiresAt } = input
+  const { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps, expiresAt, trailBps } =
+    input
   return {
     agentId,
     chain,
@@ -104,5 +111,6 @@ function bound(input: OrderInput) {
     triggerOut,
     ...(maxSlippageBps === undefined ? {} : { maxSlippageBps }),
     ...(expiresAt === undefined ? {} : { expiresAt }),
+    ...(trailBps === undefined ? {} : { trailBps }),
   }
 }

@@ -6,12 +6,14 @@ import { orders } from './schema.js'
 type Row = typeof orders.$inferSelect
 
 function order(row: Row): Order {
-  const { expiresAt, filledIntentId, failReason, ...rest } = row
+  const { expiresAt, filledIntentId, failReason, trailBps, peakOut, ...rest } = row
   return {
     ...rest,
     ...(expiresAt === null ? {} : { expiresAt }),
     ...(filledIntentId === null ? {} : { filledIntentId }),
     ...(failReason === null ? {} : { failReason }),
+    ...(trailBps === null ? {} : { trailBps }),
+    ...(peakOut === null ? {} : { peakOut }),
   }
 }
 
@@ -22,8 +24,15 @@ export function saveOrder(db: Db, value: Order): void {
       expiresAt: value.expiresAt ?? null,
       filledIntentId: value.filledIntentId ?? null,
       failReason: value.failReason ?? null,
+      trailBps: value.trailBps ?? null,
+      peakOut: value.peakOut ?? null,
     })
     .run()
+}
+
+/** CR-028: a trailing stop's confirmed high only ever moves up. */
+export function raisePeak(db: Db, id: string, peakOut: string): void {
+  db.update(orders).set({ peakOut }).where(eq(orders.id, id)).run()
 }
 
 export function getOrder(db: Db, id: string): Order | undefined {
@@ -75,6 +84,11 @@ export function moveOrder(
       .where(and(eq(orders.id, id), eq(orders.status, from)))
       .run().changes > 0
   )
+}
+
+/** CR-028: whether an agent has an open stop, which turning orders off would cancel. */
+export function stopsOpen(db: Db, agentId: string): boolean {
+  return openOrders(db, agentId).some((o) => o.kind !== 'take_profit')
 }
 
 /** Orders whose sell was under way when guard-core stopped: none can still be running. */

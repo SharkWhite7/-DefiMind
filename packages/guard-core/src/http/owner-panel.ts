@@ -3,6 +3,7 @@ import { listAgents } from '../db/agents.js'
 import { subscribe, unsubscribe } from '../db/push.js'
 import * as repo from '../db/repo.js'
 import { openRequests } from '../db/requests.js'
+import { stopsOpen } from '../db/orders.js'
 import { loosened } from '../domain/loosen.js'
 import { pushEndpointAllowed } from '../domain/push-host.js'
 import type { PasskeySetup } from '../service/passkeys.js'
@@ -161,7 +162,7 @@ export function ownerPanelRoutes(
       const { agentId } = agentIdParam.parse(request.params)
       const { policy, assertion } = ownerPolicy.parse(request.body)
       const next = { agentId, ...policy }
-      if (loosened(control.existing(agentId), next).length > 0) {
+      if (loosened(control.existing(agentId), next, stopsOpen(deps.db, agentId)).length > 0) {
         // Hashed as the panel sent it, so a field this route ignores still has to match.
         const sent = (request.body as { policy: unknown }).policy
         await stepUp('loosen_policy', { agentId, policy: sent }, assertion)
