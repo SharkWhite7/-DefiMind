@@ -42,11 +42,11 @@ export function boughtTodayAll(db: Db, agentId: string, day: string): bigint {
     .reduce((sum, row) => sum + parseAmount(row.bought), 0n)
 }
 
-type Counter = 'bought' | 'sold'
+type Counter = 'bought' | 'sold' | 'swapped'
 
 function today(db: Db, agentId: string, chain: ChainId, day: string, counter: Counter): bigint {
   const row = db
-    .select({ bought: dailyTrades.bought, sold: dailyTrades.sold })
+    .select({ bought: dailyTrades.bought, sold: dailyTrades.sold, swapped: dailyTrades.swapped })
     .from(dailyTrades)
     .where(
       and(eq(dailyTrades.agentId, agentId), eq(dailyTrades.chain, chain), eq(dailyTrades.day, day)),
@@ -67,7 +67,7 @@ function addToday(
 ) {
   db.transaction((tx) => {
     const row = tx
-      .select({ bought: dailyTrades.bought, sold: dailyTrades.sold })
+      .select({ bought: dailyTrades.bought, sold: dailyTrades.sold, swapped: dailyTrades.swapped })
       .from(dailyTrades)
       .where(
         and(
@@ -95,13 +95,19 @@ export const addBought = (db: Db, agentId: string, chain: ChainId, day: string, 
 export const addSold = (db: Db, agentId: string, chain: ChainId, day: string, amount: Amount) =>
   addToday(db, { agentId, chain, day }, 'sold', amount)
 
+/** CR-026: a token-to-token swap counts at its valuation. */
+export const addSwapped = (db: Db, agentId: string, chain: ChainId, day: string, amount: Amount) =>
+  addToday(db, { agentId, chain, day }, 'swapped', amount)
+
 /** A sell that landed replaces what it was expected to bring with what it brought. */
 export function correctSold(
   db: Db,
   key: { agentId: string; chain: ChainId; day: string },
   counted: bigint,
-  landed: bigint,
+  read: bigint,
 ) {
+  // A bad read can cancel this sell's own count, never eat into the other sells of the day.
+  const landed = read < 0n ? 0n : read
   if (landed > counted) {
     addToday(db, key, 'sold', toAmount(landed - counted))
     return
@@ -148,11 +154,19 @@ function shadowSoldToday(db: Db, agentId: string, chain: ChainId, day: string, d
  */
 export function bookOf(
   db: Db,
-  where: { agentId: string; chain: ChainId; token: string; dollar: string; day: string },
+  where: {
+    agentId: string
+    chain: ChainId
+    token: string
+    spends: string
+    dollar: string
+    day: string
+  },
   shadow: boolean,
 ): Book {
   const { agentId, chain, token, dollar, day } = where
   const position = getPosition(db, agentId, chain, token)
+  const spent = getPosition(db, agentId, chain, where.spends)
   return {
     tradedToday: shadow
       ? shadowBoughtToday(db, agentId, chain, day, dollar)
@@ -160,8 +174,10 @@ export function bookOf(
     soldToday: shadow
       ? shadowSoldToday(db, agentId, chain, day, dollar)
       : today(db, agentId, chain, day, 'sold'),
+    // In shadow the swaps are not counted: paper swaps leave no row to sum. Their limits still hold.
+    swappedToday: shadow ? 0n : today(db, agentId, chain, day, 'swapped'),
     positionCost: position.cost,
-    ...(shadow ? {} : { positionAmount: position.amount }),
+    ...(shadow ? {} : { positionAmount: spent.amount }),
     boughtBefore: everHeld(db, chain, token),
   }
 }

@@ -406,7 +406,8 @@ POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, sing
     | "change_settings" (CR-019) | "close_positions" (CR-021, body {})
     | "agent_wallet" (CR-022, body { agentId, chain })
     | "manual_trade" (CR-025, body { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut })
-    | "place_order" (CR-026, body { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps? })
+    | "place_order" (CR-026, body { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps?,
+      expiresAt? })
     | "trader_settings" (CR-027, body { agentId, config }) | "resume_trader" (CR-027, body { agentId })
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
@@ -739,7 +740,9 @@ interface Order {
 - The watcher quotes every open order every ORDER_CHECK_MS (default 15000) for its whole amount. A
   take-profit triggers when the quote is at or above triggerOut, a stop-loss when it is at or below
   it, and only after ORDER_CONFIRM_CHECKS (default 3) consecutive checks spanning at least
-  ORDER_CONFIRM_SECONDS (default 30). Each check's price impact is that of the whole order, never
+  ORDER_CONFIRM_SECONDS (default 30). The run of checks starts over after a quote that fails, a
+  check above maxPriceImpactBps, a pause, or a gap between checks longer than twice ORDER_CHECK_MS,
+  so hits spread over a long window never add up to a trigger. Each check's price impact is that of the whole order, never
   the venue's liquidityUsd, and a check above maxPriceImpactBps does not count. That is the
   order's minimum liquidity: the venue's liquidityUsd stays display only (CR-025), since a wrong
   figure could otherwise hold a stop-loss back.
@@ -750,7 +753,12 @@ interface Order {
   less than minAmountOut is refused: the order is failed with that reason, the position stays, and
   the owner is told with "order_failed". A stop-loss is never sold at any price.
 - A paused agent's orders do not execute; they stay open. Close positions and kill cancel every open
-  order. An order whose position was sold elsewhere is failed with INSUFFICIENT_POSITION. An expired
+  order. Turning orders.enabled off, or revoking the agent, cancels its open orders.
+- An order whose fill stops part-way (any error, or a restart) is failed with SIM_FAILED and the
+  owner is told with "order_failed": it never stays triggered. A venue that is down before the sell
+  is built puts the order back to open instead, with its run of checks started over, so a stop-loss
+  outlives a passing outage. On start, guard-core fails every
+  order it finds triggered. The open orders on a token count triggered ones against the position. An order whose position was sold elsewhere is failed with INSUFFICIENT_POSITION. An expired
   order is cancelled. Orders are Solana only and need trading.enabled.
 - In shadow mode a fill is simulated and shadowed, like any swap.
 

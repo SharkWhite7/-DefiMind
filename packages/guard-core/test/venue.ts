@@ -33,7 +33,13 @@ export class Venue extends StubChain {
       throw new SwapUnavailable(this.down, 'test venue')
     }
     const buy = req.tokenIn === USDC
-    const out = buy ? BigInt(req.amountIn) * 1000n : BigInt(req.amountIn) / 1000n
+    // One token for one token on a swap (CR-026); 1 USDC = 1000 of any token otherwise.
+    const swap = !buy && req.tokenOut !== USDC
+    const out = buy
+      ? BigInt(req.amountIn) * 1000n
+      : swap
+        ? BigInt(req.amountIn)
+        : BigInt(req.amountIn) / 1000n
     const quote: SwapQuote = {
       venue: 'jupiter',
       ...req,
@@ -51,6 +57,15 @@ export class Venue extends StubChain {
     return quote
   }
 
+  /** CR-026: any token sells at 1000 for 1 USDC, unless a test moves the price. */
+  sellImpactBps = 10
+  /** Set to move the market the order watcher sees. */
+  sellOut: string | undefined
+  async quoteSell(_token: string, amount: string) {
+    const out = this.sellOut ?? `${BigInt(amount) / 1000n}`
+    return { out, priceImpactBps: this.sellImpactBps, quotedAt: NOW.toISOString() }
+  }
+
   /** What the swap really brings in, when the market moved after its test run. */
   landed: bigint | undefined
 
@@ -58,12 +73,17 @@ export class Venue extends StubChain {
     const tx = await super.send(intent)
     const swap = intent.swap
     if (swap !== undefined) {
-      const bought = intent.token === USDC
-      const token = bought ? swap.tokenOut : intent.token
-      const before = this.held.get(token) ?? 0n
       const got = this.landed ?? this.received ?? BigInt(swap.minAmountOut)
-      const left = bought ? before + got : before - BigInt(intent.amount)
-      this.held.set(token, left > 0n ? left : 0n)
+      const move = (token: string, delta: bigint) => {
+        const left = (this.held.get(token) ?? 0n) + delta
+        this.held.set(token, left > 0n ? left : 0n)
+      }
+      if (intent.token !== USDC) {
+        move(intent.token, -BigInt(intent.amount))
+      }
+      if (swap.tokenOut !== USDC) {
+        move(swap.tokenOut, got)
+      }
     }
     return tx
   }

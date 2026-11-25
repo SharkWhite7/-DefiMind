@@ -5,11 +5,13 @@ import { hashToken, parseBearer } from '../domain/auth.js'
 import { UpstreamError } from '../adapters/upstream.js'
 import { budget } from '../service/budget.js'
 import { portfolio } from '../service/portfolio.js'
-import { quote, swap, VenueUnavailable } from '../service/swap.js'
+import { quote, swap } from '../service/swap.js'
+import { VenueUnavailable } from '../service/swap-quote.js'
 import { transfer } from '../service/transfer.js'
 import { paidFetch, type X402Deps } from '../service/x402.js'
 import { appendExecution } from '../service/executions.js'
 import { HttpError } from './errors.js'
+import { agentOrderRoutes } from './orders.js'
 import { windowLimiter } from './limiter.js'
 import { openMandate } from '../service/mandates.js'
 import { mandateReply } from './mandates.js'
@@ -77,6 +79,7 @@ export function agentRoutes(
       }
     })
     app.addHook('preHandler', requireAgent)
+    await app.register(agentOrderRoutes(deps))
 
     app.post('/transfer', async (request) => {
       const body = transferRequest.parse(request.body)

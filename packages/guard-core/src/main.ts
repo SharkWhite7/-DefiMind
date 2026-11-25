@@ -1,3 +1,4 @@
+import { claude } from './adapters/claude.js'
 import { createSvmAnchor } from '@defimind/onchain'
 import { bucketConfig } from './adapters/bucket.js'
 import { readKeypairFile, readReceiptKeyFile } from './adapters/keypair.js'
@@ -93,6 +94,17 @@ const [app, publicApp] = await buildServers(
     keys,
     host,
     wallets,
+    traders: {
+      checkMs: 60_000,
+      ...(config.ANTHROPIC_API_KEY === undefined
+        ? {}
+        : { claude: claude(config.ANTHROPIC_API_KEY) }),
+    },
+    orders: {
+      checkMs: config.ORDER_CHECK_MS,
+      confirmChecks: config.ORDER_CONFIRM_CHECKS,
+      confirmSeconds: config.ORDER_CONFIRM_SECONDS,
+    },
     backups: {
       databaseUrl: config.DATABASE_URL,
       hour: config.BACKUP_HOUR_UTC,

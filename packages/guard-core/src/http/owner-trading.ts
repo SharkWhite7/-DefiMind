@@ -2,10 +2,11 @@ import { CHAINS, type TokenRisk } from '@defimind/shared'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { TokenSearch } from '../adapters/jupiter-tokens.js'
 import * as repo from '../db/repo.js'
-import { everHeld } from '../db/trades.js'
 import type { PaymentDeps } from '../service/payments.js'
 import type { OwnerAction } from '../service/step-up.js'
-import { quote, swap, VenueUnavailable } from '../service/swap.js'
+import { quote, swap } from '../service/swap.js'
+import { VenueUnavailable } from '../service/swap-quote.js'
+import { tokenRisk } from '../service/token-risk.js'
 import { HttpError } from './errors.js'
 import { windowLimiter } from './limiter.js'
 import {
@@ -51,27 +52,10 @@ export function ownerTradingRoutes(
     return policy
   }
 
-  async function risk(request: FastifyRequest): Promise<TokenRisk> {
+  function risk(request: FastifyRequest): Promise<TokenRisk> {
     const { mint } = tokenRiskParams.parse(request.params)
     const { chain } = tokenRiskQuery.parse(request.query)
-    const adapter = deps.chains.get(chain)
-    if (adapter?.tokenRisk === undefined) {
-      throw new HttpError(400, 'not_tradable')
-    }
-    const facts = await adapter.tokenRisk(mint).catch(() => {
-      throw new VenueUnavailable()
-    })
-    // The venue's own claims, labelled as such; a venue that is down leaves them out.
-    const listed = await search(chain, mint).catch(() => [])
-    const token = listed.find((t) => t.mint === mint)
-    return {
-      ...facts,
-      flags: [
-        ...(everHeld(db, chain, mint) ? [] : (['NEW_TOKEN'] as const)),
-        ...(facts.mintAuthority ? (['MINT_AUTHORITY'] as const) : []),
-      ],
-      venue: { verified: token?.verified ?? false, ...token?.venue },
-    }
+    return tokenRisk(deps, search, chain, mint)
   }
 
   return async (app: FastifyInstance) => {
@@ -115,7 +99,7 @@ export function ownerTradingRoutes(
         now(),
       )
       try {
-        const intent = await swap(deps, { ...order, reason: REASON }, { minAmountOut })
+        const intent = await swap(deps, { ...order, reason: REASON }, { minAmountOut, by: 'owner' })
         return {
           intentId: intent.id,
           status: intent.status,

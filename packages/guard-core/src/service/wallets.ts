@@ -114,3 +114,18 @@ export function adapterFor(
   const own = deps.wallets?.route(agentId, chain)
   return own === undefined ? deps.chains.get(chain) : own.adapter
 }
+
+/**
+ * The lock a trade takes: the wallet that signs it (CR-026). Agents without an own wallet share
+ * the hot wallet, so they take turns, and one cannot pass the gas reserve on a balance the other
+ * is about to spend. An agent's own wallet is its alone.
+ */
+export function signerKey(
+  deps: { wallets?: Wallets | undefined },
+  agentId: string,
+  chain: ChainId,
+): string {
+  return deps.wallets?.route(agentId, chain) === undefined
+    ? `wallet:shared:${chain}`
+    : `wallet:${agentId}:${chain}`
+}

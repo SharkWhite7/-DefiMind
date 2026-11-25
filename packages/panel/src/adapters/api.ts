@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { TraderConfig } from '../domain/trader.js'
+import type { NewOrder } from '../domain/orders.js'
 import * as s from './schemas.js'
 import { type Assertion, type Authenticator, creationOptions, requestOptions } from './webauthn.js'
 
@@ -16,6 +17,7 @@ export type OwnerAction =
   | 'manual_trade'
   | 'trader_settings'
   | 'resume_trader'
+  | 'place_order'
 
 /** A swap for one agent, as the owner set it up: amountIn in tokenIn's base units. */
 export interface Order {
@@ -32,6 +34,7 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
+    readonly reasons: string[] = [],
   ) {
     super(`${status} ${code}`)
   }
@@ -70,7 +73,9 @@ export function ownerApi(passkey: Authenticator, fetchImpl: typeof fetch = fetch
     const data: unknown = await response.json().catch(() => undefined)
     if (!response.ok) {
       const code = s.problem.safeParse(data)
-      throw new ApiError(response.status, code.success ? code.data.error : 'error')
+      throw code.success
+        ? new ApiError(response.status, code.data.error, code.data.rejectReasons)
+        : new ApiError(response.status, 'error')
     }
     return schema.parse(data)
   }
@@ -238,6 +243,14 @@ export function ownerApi(passkey: Authenticator, fetchImpl: typeof fetch = fetch
         s.traderTicks,
         `/v1/owner/trader/${agent(id)}/ticks${before === undefined ? '' : `?${new URLSearchParams({ before })}`}`,
       ),
+    orders: () => get(s.orders, '/v1/owner/orders'),
+    /** The passkey signs the whole order, slippage included: no expiry is offered yet. */
+    placeOrder: (order: { agentId: string; chain: string; token: string } & NewOrder) =>
+      stepUp('place_order', { ...order }, (assertion) =>
+        post(s.order, '/v1/owner/orders', { ...order, assertion }),
+      ),
+    /** Session only: cancelling never loosens anything. */
+    cancelOrder: (id: string) => post(s.order, `/v1/owner/orders/${encodeURIComponent(id)}/cancel`),
 
     agentWallets: (id: string) => get(s.agentWallets, `/v1/owner/agents/${agent(id)}/wallets`),
     createAgentWallet: (agentId: string, chain: string) =>

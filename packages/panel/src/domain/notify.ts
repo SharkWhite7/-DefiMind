@@ -11,6 +11,9 @@ const TITLES = {
   kill: 'Everything stopped',
   chain_broken: 'The execution record is broken',
   backup_failed: 'The database backup failed',
+  order_filled: 'An order sold',
+  order_failed: 'An order could not sell',
+  trader_paused: 'The AI trader paused',
 } as const
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/

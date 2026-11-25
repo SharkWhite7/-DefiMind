@@ -90,6 +90,7 @@ describe('routes', () => {
     { name: 'trade', id: 'bot/1' },
     { name: 'trader' },
     { name: 'trader', id: 'bot/1' },
+    { name: 'orders', id: 'bot/1' },
     { name: 'report' },
     { name: 'doctor' },
     { name: 'executions' },
@@ -229,6 +230,8 @@ describe('notification', () => {
     expect(notification({ kind: 'approval', intentId: '../../x' }).path).toBe('/panel/')
     expect(notification({ kind: 'toString' }).title).toBe('DefiMind')
     expect(notification({ kind: 'backup_failed' }).title).toBe('The database backup failed')
+    expect(notification({ kind: 'order_filled' }).title).toBe('An order sold')
+    expect(notification({ kind: 'order_failed' }).title).toBe('An order could not sell')
   })
 })
 

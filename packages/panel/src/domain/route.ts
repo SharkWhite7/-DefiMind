@@ -11,6 +11,7 @@ export type Route =
   | { name: 'agent'; id: string }
   | { name: 'trade'; id: string }
   | { name: 'trader'; id?: string }
+  | { name: 'orders'; id: string }
   | { name: 'report' }
   | { name: 'doctor' }
   | { name: 'executions' }
@@ -61,9 +62,13 @@ export function parseRoute(pathname: string, hash = ''): Route {
   const [first, second, ...rest] = parts
   if (rest.length > 0) {
     const id = second === undefined ? undefined : decode(second)
-    // CR-025: an agent's manual trade screen, the only three-part path.
-    return first === 'agents' && rest.join('/') === 'trade' && id !== undefined && AGENT_ID.test(id)
-      ? { name: 'trade', id }
+    // CR-025 and CR-026: an agent's trade and orders screens, the only three-part paths.
+    const page = rest.join('/')
+    return first === 'agents' &&
+      (page === 'trade' || page === 'orders') &&
+      id !== undefined &&
+      AGENT_ID.test(id)
+      ? { name: page, id }
       : { name: 'missing' }
   }
   if (first === undefined) {
@@ -117,7 +122,8 @@ export function href(route: Route): string {
     case 'agent':
       return `${BASE}agents/${encodeURIComponent(route.id)}`
     case 'trade':
-      return `${BASE}agents/${encodeURIComponent(route.id)}/trade`
+    case 'orders':
+      return `${BASE}agents/${encodeURIComponent(route.id)}/${route.name}`
     case 'trader':
       return `${BASE}trader${route.id === undefined ? '' : `/${encodeURIComponent(route.id)}`}`
     case 'guide':

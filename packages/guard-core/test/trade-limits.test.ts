@@ -17,6 +17,7 @@ const trading: TradingPolicy = {
 const book: Book = {
   tradedToday: 0n,
   soldToday: 0n,
+  swappedToday: 0n,
   positionCost: 0n,
   positionAmount: 5_000n,
   boughtBefore: true,
@@ -74,5 +75,26 @@ describe('trade limits (CR-026)', () => {
       'SELL_DAILY_EXCEEDED',
     ])
     expect(limitReasons(own, sell(1n, 500_000n), { ...book, soldToday: 1_000_000n })).toEqual([])
+  })
+
+  it('holds a swap to its own caps, or to the buy limits without them, on its own day', () => {
+    const swap = (usd: bigint, amount = 1n) => ({
+      side: 'swap' as const,
+      token: BONK,
+      amountIn: amount,
+      valueUsd: usd,
+    })
+    expect(limitReasons(trading, swap(10_000_001n), book)).toEqual(['SWAP_EXCEEDED'])
+    expect(limitReasons(trading, swap(1n), { ...book, swappedToday: 25_000_000n })).toEqual([
+      'SWAP_DAILY_EXCEEDED',
+    ])
+    const own = limits({ operations: { swap: { maxTradeUsd: '100', dailyMax: '150' } } })
+    expect(limitReasons(own, swap(101n), book)).toEqual(['SWAP_EXCEEDED'])
+    expect(limitReasons(own, swap(60n), { ...book, swappedToday: 100n })).toEqual([
+      'SWAP_DAILY_EXCEEDED',
+    ])
+    expect(limitReasons(trading, swap(1n, 5_001n), book)).toEqual(['INSUFFICIENT_POSITION'])
+    const capped = limits({ tokenLimits: { [BONK]: { maxBuyUsd: '5' } } })
+    expect(limitReasons(capped, swap(6n), book)).toEqual(['TOKEN_LIMIT_EXCEEDED'])
   })
 })
