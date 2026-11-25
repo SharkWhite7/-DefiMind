@@ -80,6 +80,7 @@ describe('what a mint says about the token', () => {
       extensions: [],
       risks: [],
       mintAuthority: true,
+      supply: '0',
     })
   })
 

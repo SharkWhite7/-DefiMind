@@ -62,6 +62,7 @@ export async function tokenRisk(
     decimals: facts.decimals,
     freezeAuthority: facts.freezeAuthority,
     mintAuthority: facts.mintAuthority,
+    supply: facts.supply,
     extensions: facts.extensions,
     risks: exit === null ? [...facts.risks, 'NO_EXIT_ROUTE'] : facts.risks,
     exit: exit === null ? null : { amountUsd: PROBE.toString(), priceImpactBps: exit },
