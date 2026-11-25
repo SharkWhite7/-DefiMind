@@ -1,4 +1,4 @@
-import type { Position, SwapQuote, TradingFlag } from '@defimind/shared'
+import type { Order, Position, SwapQuote, TradingFlag } from '@defimind/shared'
 import { z } from 'zod'
 
 const atomic = z.string().regex(/^\d{1,40}$/)
@@ -71,4 +71,36 @@ export interface SwapInput {
 export interface SwapOrder extends SwapInput {
   reason: string
   mandateId?: string
+}
+
+/** CR-026. Every field is echoed to the model, so each is bounded and well formed. */
+export const order = z.object({
+  id: z.uuid(),
+  agentId: z.string().min(1).max(64),
+  chain: z.string().min(1).max(64),
+  token: z.string().min(1).max(128),
+  kind: z.enum(['take_profit', 'stop_loss']),
+  amount: atomic,
+  triggerOut: atomic,
+  maxSlippageBps: bps,
+  createdBy: z.enum(['agent', 'owner']),
+  status: z.enum(['open', 'triggered', 'filled', 'cancelled', 'failed']),
+  createdAt: z.iso.datetime({ offset: true }),
+  expiresAt: z.iso.datetime({ offset: true }).optional(),
+  filledIntentId: z.uuid().optional(),
+  failReason: code.optional(),
+}) satisfies z.ZodType<Omit<Order, 'failReason'> & { failReason?: string }>
+
+export const orderList = z.object({ orders: z.array(order).max(500) })
+
+export type PlacedOrder = z.infer<typeof order>
+
+/** The body of POST /v1/agent/orders, as SPEC v0.20 shapes it. */
+export interface OrderInput {
+  chain: string
+  token: string
+  kind: 'take_profit' | 'stop_loss'
+  amount: string
+  triggerOut: string
+  maxSlippageBps?: number
 }

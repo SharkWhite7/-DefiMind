@@ -1,11 +1,15 @@
 import type { BudgetView, Mandate } from '@defimind/shared'
 import { z } from 'zod'
 import {
+  type OrderInput,
+  type PlacedOrder,
   type Portfolio,
   type Quote,
   type SwapInput,
   type SwapOrder,
   decimals,
+  order,
+  orderList,
   portfolio,
   symbol,
   swapQuote,
@@ -151,6 +155,9 @@ export interface Guard {
   quote(input: SwapInput): Promise<Quote>
   swap(input: SwapOrder): Promise<TransferResult>
   portfolio(): Promise<Portfolio>
+  placeOrder(input: OrderInput): Promise<PlacedOrder>
+  cancelOrder(id: string): Promise<PlacedOrder>
+  orders(): Promise<PlacedOrder[]>
 }
 
 /** A guard-core call that did not produce a usable answer. `message` is safe to show the model. */
@@ -226,6 +233,10 @@ export function httpGuard(options: HttpGuardOptions): Guard {
     quote: (input) => call(swapQuote, '/v1/agent/quote', { agentId, ...input }),
     swap: (input) => call(transferResult, '/v1/agent/swap', { agentId, ...input }),
     portfolio: () => call(portfolio, `/v1/agent/portfolio/${agent}`),
+    placeOrder: (input) => call(order, '/v1/agent/orders', { agentId, ...input }),
+    cancelOrder: (id) =>
+      call(order, `/v1/agent/orders/${encodeURIComponent(id)}/cancel`, { agentId }),
+    orders: () => call(orderList, `/v1/agent/orders/${agent}`).then((list) => list.orders),
     hasReceipt: (id) =>
       call(receipt, `/v1/agent/intents/${encodeURIComponent(id)}/receipt`).then(
         () => true,

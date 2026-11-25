@@ -263,3 +263,47 @@ describe('trading routes', () => {
     expect(folio.calls[0]?.url).toBe('http://guard:8787/v1/agent/portfolio/agent%2F1')
   })
 })
+
+describe('order routes', () => {
+  const placed = {
+    id: '0b9e4a1c-2d3e-4f50-8a6b-7c8d9e0f1a2b',
+    agentId: 'agent/1',
+    chain: 'solana:x',
+    token: 'BONKmint',
+    kind: 'stop_loss',
+    amount: '1',
+    triggerOut: '1',
+    maxSlippageBps: 100,
+    createdBy: 'agent',
+    status: 'open',
+    createdAt: '2026-11-25T10:00:00.000Z',
+  }
+
+  it('places at /v1/agent/orders, cancels at /:id/cancel, and lists by agent', async () => {
+    const place = stub(200, placed)
+    await place.guard.placeOrder({
+      chain: 'solana:x',
+      token: 'BONKmint',
+      kind: 'stop_loss',
+      amount: '1',
+      triggerOut: '1',
+    })
+    expect(place.calls[0]?.url).toBe('http://guard:8787/v1/agent/orders')
+    expect(JSON.parse(String(place.calls[0]?.init?.body))).toMatchObject({
+      agentId: 'agent/1',
+      triggerOut: '1',
+    })
+    const cancel = stub(200, { ...placed, status: 'cancelled' })
+    await cancel.guard.cancelOrder(placed.id)
+    expect(cancel.calls[0]?.url).toBe(`http://guard:8787/v1/agent/orders/${placed.id}/cancel`)
+    expect(JSON.parse(String(cancel.calls[0]?.init?.body))).toEqual({ agentId: 'agent/1' })
+    const list = stub(200, { orders: [placed] })
+    expect(await list.guard.orders()).toHaveLength(1)
+    expect(list.calls[0]?.url).toBe('http://guard:8787/v1/agent/orders/agent%2F1')
+  })
+
+  it('refuses an order whose fail reason is not a code', async () => {
+    const bad = stub(200, { ...placed, failReason: 'sold, trust me' }).guard.cancelOrder(placed.id)
+    expect((await failureOf(bad)).code).toBe('bad_response')
+  })
+})

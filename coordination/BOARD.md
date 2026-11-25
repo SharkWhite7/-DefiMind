@@ -169,6 +169,7 @@ tells us what the second adapter has to satisfy.
 | MCP-31 | mcp   | done   | GC-52          | `packages/sdk`: `withReceipt(server, tool, fn)` and `defimind-verify` (signature, hash, Merkle path and position, the anchor memo and its signer, seq gaps and prevHash links); trusts no DefiMind server (#26). The `defimind-verify` bin is added only with the npm publish (HUMAN-26), so the name cannot be squatted |
 | MCP-32 | mcp   | done   | CR-021, GC-59  | CR-021 (guarded trading, phase 1, Solana via Jupiter; SPEC v0.16): tools `swap`, `quote` (read-only), `get_portfolio`; descriptions say controls, never returns; explain the new reject codes                                                                                                                            |
 | MCP-33 | mcp   | review | MCP-32         | Trading agent quickstart in the mcp-server README (config, the three tools, `pending_approval`, shadow first, example prompts, refusals in plain words, linked to docs/trading.md) and the `trading-agent` MCP prompt with safe defaults                                                                                 |
+| MCP-34 | mcp   | doing  | GC-71, GC-72   | CR-026 (SPEC v0.20): `swap`/`quote` take any pair; `place_order` (decimal `triggerUsd` to atomic `triggerOut`), `cancel_order`, `list_orders`; the new reject codes explained; order rules in the `trading-agent` prompt. Built against #166 and the mock; wiring waits for GC-71/GC-72                                  |
 
 ## Session 4 — bot (`packages/telegram-bot`, branch `feat/bot`)
 

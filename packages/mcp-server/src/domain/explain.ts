@@ -74,6 +74,19 @@ const ADVICE: Partial<Record<RejectCode, string>> = {
   TOKEN_EXTENSION_RISK: 'Do not buy this token. Tell the user why it was refused.',
   QUOTE_STALE:
     'The price moved on before the trade was checked. You may try the same swap once more.',
+  TOKEN_LIMIT_EXCEEDED:
+    "Tell the user. Do not split the trade into smaller ones to get under this token's limit.",
+  SELL_EXCEEDED: 'Tell the user. Do not split the sell into smaller ones to get under the limit.',
+  SELL_DAILY_EXCEEDED: 'Stop selling for today and tell the user.',
+  SWAP_EXCEEDED: 'Tell the user. Do not split the swap into smaller ones to get under the limit.',
+  SWAP_DAILY_EXCEEDED: 'Stop swapping for today and tell the user.',
+  INSUFFICIENT_POSITION:
+    'Use at most what get_portfolio shows is held; open orders on the token count against it too.',
+  VALUATION_UNAVAILABLE:
+    'The token could not be priced reliably just now. Tell the user; do not try another route around it.',
+  ORDERS_DISABLED: 'Tell the user the owner has to turn orders on.',
+  ORDER_LIMIT_EXCEEDED:
+    'Cancel an order the user no longer wants with cancel_order, or tell the user.',
 }
 
 export function explainReject(code: string): string {
@@ -161,6 +174,11 @@ export function explainStatus(
     lines.push(...new Set(advice))
   }
   return lines.join('\n')
+}
+
+/** The advice for these codes, each once, for refusals that are not an intent's. */
+export function adviceFor(codes: readonly string[]): string[] {
+  return [...new Set(codes.flatMap((code) => ADVICE[code as RejectCode] ?? []))]
 }
 
 /** guard-core refuses a task budget outright, before any intent, when it leaves the policy. */
