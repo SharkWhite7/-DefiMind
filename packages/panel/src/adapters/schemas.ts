@@ -135,6 +135,8 @@ export const approvalRequest = z.object({
   approveBefore: isoTime,
   flags: z.array(text(64)).max(8).default([]),
   pinned: z.object({ recipient: text(128), amount: atomic }).optional(),
+  // CR-024: a buy asked before its test run; funded and test-run only once approved.
+  untested: z.literal(true).optional(),
 })
 
 export const mandate = z.object({
