@@ -117,7 +117,8 @@ Swaps run only on Solana mainnet, where Jupiter routes. On any other cluster the
 doubt is a rejection.
 
 - **`quoteSwap({ tokenIn, tokenOut, amountIn, slippageBps })`**
-  - One side must be the chain's dollar.
+  - Any pair (CR-026): a buy, a sell, or a swap of one held token for another. Whatever is bought,
+    unless it is the chain's dollar, meets the buy checks below.
   - Jupiter's quote is held to the request: same mints, amount and slippage, and a minimum no looser
     than the slippage allows.
   - Both mints are read from the chain, which gives `decimalsIn` and `decimalsOut`.
@@ -175,6 +176,48 @@ and by the slot its code was deployed at. The test reads that code from mainnet 
 
 To refresh the fixtures, run `pnpm record:swap` again.
 
+### SOL legs and the gas reserve (CR-026)
+
+Native SOL can be either side of a swap; its mint is wSOL. Jupiter wraps it for that swap only, and
+`inspectSwap` allows one shape alone:
+
+- the hot wallet's own wSOL account, created;
+- when SOL is sold, exactly amountIn moved into it from the hot wallet, then SyncNative;
+- that account closed back to the hot wallet in the same transaction.
+
+The wrap must come in that order around one route. The route must be signed by the hot wallet,
+spend from its own tokenIn account and pay into its own tokenOut account, so it cannot park the
+proceeds anywhere else.
+
+`balanceChanges` reports every leg gross of the network fee and the rent of the accounts the swap
+opens, a SOL leg as any other. The test run counts a SOL leg in lamports alone: the hot wallet's own, plus those of every wSOL
+account it owns, rent included. SOL moved between them nets to nothing, and only SOL that leaves
+the hot wallet counts. Only the hot wallet's own wSOL account may close. Selling SOL, the leg may
+fall by amountIn plus the fee actually paid (the signature and the priority on the units the
+transaction asks for) plus the rent-exempt minimum of each account it opens. Buying SOL, the leg
+must rise by the minimum less those.
+
+Every swap is refused with `GAS_RESERVE` if it would leave the hot wallet below
+`getHotWalletGas().minimum` after fees, so it can still pay for the next sell. It is checked at the
+test run, and again just before signing, against the balance then. A sell to the chain's dollar
+whose SOL cost is only its fee, plus at most one token account's rent when the hot wallet has no
+dollar account yet, is exempt: Close positions stays the way out of a wallet already short of gas.
+
+### Sell quotes (CR-026)
+
+`quoteSell(token, amount)` (Solana mainnet, with the swap venue) is what `amount` of a token would
+fetch in the chain's dollar now: `{ out, priceImpactBps, quotedAt }`, a Jupiter quote held to its own
+request. guard-core uses it to value a token-to-token trade (the higher of the two legs' quotes, the strict one for every limit) and
+for the take-profit and stop-loss watcher. It is a venue claim: it sizes limits and triggers and is
+never signed. A token with no route back throws `SwapUnavailable('no_route')`. It does not cache;
+cadence and caching are guard-core's.
+
+The fork test (`test/swap-fork.test.ts`) runs three recorded mainnet routes in LiteSVM: USDC for
+SOL, JUP for BONK over three hops (whose intermediates net to zero), and SOL for JUP. Record a pair with
+`pnpm record:swap <name> <in> <out> <amount> [dexes]`. Keep `dexes` to pools whose
+whole state is in the recorded accounts: an oracle-priced AMM moves with every slot, so its quote and
+its state never match in a recording.
+
 ### Token risk (CR-025)
 
 `tokenRisk(mint)` (Solana mainnet, with the swap venue) feeds the owner's risk card with facts only:
@@ -188,7 +231,8 @@ the venue's own facts are guard-core's. Tested against mainnet USDC, JUP and PYU
 
 `getLandedChanges(txId)` (Solana) returns what a confirmed transaction really moved for the hot
 wallet: `{ token, delta }[]`, signed atomic deltas netted per mint from the transaction's own pre and
-post token balances, none zero, SOL left out. A swap lands at its own price, never exactly the test
+post balances, none zero, each gross of the network fee and the rent of the accounts it opened. A SOL
+leg (CR-026) is counted in lamports and reported under the wSOL mint. A swap lands at its own price, never exactly the test
 run's, so positions are booked from this. A failed transaction throws `tx_failed`, one the RPC does
 not have yet `tx_not_found`. Tested against the owner's recorded mainnet buy, Close and top-up.
 

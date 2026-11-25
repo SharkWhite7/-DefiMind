@@ -1,7 +1,8 @@
 import type { Amount, PayIntent, RejectCode, SwapQuote } from '@defimind/shared'
 import {
-  TOKEN_2022_PROGRAM_ID,
-  TOKEN_PROGRAM_ID,
+  ACCOUNT_SIZE,
+  getAssociatedTokenAddressSync,
+  NATIVE_MINT,
   unpackAccount,
   unpackMint,
 } from '@solana/spl-token'
@@ -10,13 +11,14 @@ import {
   type AccountInfo,
   type Connection,
   type Keypair,
-  type SimulatedTransactionAccountInfo,
   type VersionedTransaction,
 } from '@solana/web3.js'
 import type { SimulationOutcome } from '../../ChainAdapter.js'
+import { gasMinimum } from '../gas.js'
 import { confirm } from '../squads.js'
+import { fromSimulation, holding, TOKEN_PROGRAMS } from './accounts.js'
 import { swapEffects, type Holding } from './effects.js'
-import { inspectSwap, MAX_PRIORITY_LAMPORTS } from './inspect.js'
+import { inspectSwap, swapFee } from './inspect.js'
 import type { Venue } from './jupiter.js'
 import { expand } from './lookup.js'
 import { mintFacts } from './mint.js'
@@ -31,9 +33,7 @@ export interface SwapDeps {
   venue: Venue
 }
 
-const SIGNATURE_FEE = 5_000n
 const CHECKED_TTL_MS = 90_000
-const TOKEN_PROGRAMS = [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]
 
 /**
  * Swaps through an untrusted venue. Every quote is held to its request and every transaction is
@@ -43,7 +43,10 @@ const TOKEN_PROGRAMS = [TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID]
 export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
   const hot = hotWallet.publicKey
   // A checked transaction is good until its blockhash expires, about a minute; kept no longer.
-  const checked = new Map<string, { tx: VersionedTransaction; at: number }>()
+  const checked = new Map<
+    string,
+    { tx: VersionedTransaction; at: number; cost: bigint; exempt: boolean }
+  >()
   const fresh = (entry?: { at: number }) => !!entry && Date.now() - entry.at < CHECKED_TTL_MS
 
   async function quoteSwap(req: {
@@ -58,10 +61,8 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
       amount: positive(req.amountIn),
       slippageBps: slippage(req.slippageBps),
     }
-    const buy = request.inputMint === dollar.toBase58()
-    if (!buy && request.outputMint !== dollar.toBase58()) {
-      throw new Error('invalid_swap: one side must be the chain dollar')
-    }
+    // Any pair (CR-026). Whatever is bought, unless it is the dollar, meets the buy's checks.
+    const buy = request.outputMint !== dollar.toBase58()
     const quote = checkQuote(await venue.quote(request), request)
     const mints = [new PublicKey(request.inputMint), new PublicKey(request.outputMint)]
     const [infoIn, infoOut] = await connection.getMultipleAccountsInfo(mints)
@@ -141,12 +142,20 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
       return { simulation: { summary, balanceChanges: [] }, rejectReasons: ['SIM_FAILED'] }
     }
     const after = value.accounts.map(fromSimulation)
-    const effects = holdings(watched, before, after, minAmountOut, request)
-    const outcome = {
-      simulation: describe(intent, effects.changes),
-      rejectReasons: effects.reasons,
-    }
-    if (effects.reasons.length === 0) checked.set(intent.id, { tx, at: Date.now() })
+    const fee = swapFee(expanded)
+    const { effects, hadDollar } = await holdings(watched, before, after, {
+      ...request,
+      minAmountOut,
+      fee,
+    })
+    // What the hot wallet's own lamports pay, kept to check the gas reserve again at send time.
+    // The test run has already taken the fee from the hot wallet's lamports.
+    const cost = BigInt(before[0]?.lamports ?? 0) - BigInt(after[0]?.lamports ?? 0)
+    const exempt = await sellOut(request.outputMint, cost, fee, hadDollar)
+    const short = !exempt && BigInt(after[0]?.lamports ?? 0) < (await gasFloor())
+    const reasons: RejectCode[] = [...effects.reasons, ...(short ? (['GAS_RESERVE'] as const) : [])]
+    const outcome = { simulation: describe(intent, effects.changes), rejectReasons: reasons }
+    if (reasons.length === 0) checked.set(intent.id, { tx, at: Date.now(), cost, exempt })
     return outcome
   }
 
@@ -163,16 +172,38 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
     return [...new Map(all.map((key) => [key.toBase58(), key])).values()]
   }
 
-  function holdings(
+  /** The hot wallet must still pay for the next sell after a swap's fees (CR-026). */
+  const gasFloor = async () =>
+    gasMinimum(await connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE))
+
+  /**
+   * A sell to the dollar whose SOL cost is its fee, and at most one token account's rent when the
+   * hot wallet has no dollar account yet, is exempt from the gas reserve (SPEC v0.20): Close
+   * positions must stay the way out of a wallet already short of gas.
+   */
+  async function sellOut(tokenOut: string, cost: bigint, fee: bigint, hadDollar: boolean) {
+    if (tokenOut !== dollar.toBase58()) return false
+    const rent = hadDollar
+      ? 0n
+      : BigInt(await connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE))
+    return cost <= fee + rent
+  }
+
+  async function holdings(
     watched: PublicKey[],
     before: (AccountInfo<Buffer> | null)[],
     after: (AccountInfo<Buffer> | null)[],
-    minAmountOut: bigint,
-    request: { inputMint: string; outputMint: string; amount: bigint },
+    deal: {
+      inputMint: string
+      outputMint: string
+      amount: bigint
+      minAmountOut: bigint
+      fee: bigint
+    },
   ) {
     const was = new Map<string, Holding | null>()
     const now = new Map<string, Holding | null>()
-    let rent = 0n
+    const opened: number[] = []
     watched.forEach((address, i) => {
       const prior = holding(address, before[i] ?? null)
       const next = holding(address, after[i] ?? null)
@@ -180,28 +211,43 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
       if (!ours(prior) && !ours(next)) return
       was.set(address.toBase58(), ours(prior) ? prior : null)
       now.set(address.toBase58(), next)
-      // An account the swap opens for the hot wallet is paid for by the hot wallet.
-      if (!ours(prior) && next) rent += BigInt(after[i]!.lamports)
+      // An account the swap opens for the hot wallet costs it that account's rent, never more:
+      // the account's lamports could hold anything the route put there.
+      if (!ours(prior) && next && next.mint !== NATIVE_MINT.toBase58()) {
+        opened.push(after[i]!.data.length)
+      }
     })
-    const lamports = {
-      before: BigInt(before[0]?.lamports ?? 0),
-      after: BigInt(after[0]?.lamports ?? 0),
-    }
-    return swapEffects(was, now, lamports, {
-      hotWallet: hot.toBase58(),
-      tokenIn: request.inputMint,
-      amountIn: request.amount,
-      tokenOut: request.outputMint,
-      minAmountOut,
-      maxLamports: SIGNATURE_FEE + MAX_PRIORITY_LAMPORTS + rent,
-    })
+    const rents = await Promise.all(
+      opened.map((size) => connection.getMinimumBalanceForRentExemption(size)),
+    )
+    const hadDollar = [...was.values()].some((h) => h?.mint === dollar.toBase58())
+    const effects = swapEffects(
+      was,
+      now,
+      { before: BigInt(before[0]?.lamports ?? 0), after: BigInt(after[0]?.lamports ?? 0) },
+      {
+        hotWallet: hot.toBase58(),
+        tokenIn: deal.inputMint,
+        amountIn: deal.amount,
+        tokenOut: deal.outputMint,
+        minAmountOut: deal.minAmountOut,
+        fee: deal.fee,
+        rent: rents.reduce((sum, rent) => sum + BigInt(rent), 0n),
+        wsolAccount: getAssociatedTokenAddressSync(NATIVE_MINT, hot).toBase58(),
+      },
+    )
+    return { effects, hadDollar }
   }
 
   async function send(intent: PayIntent): Promise<string> {
     const entry = checked.get(intent.id)
     checked.delete(intent.id)
     if (!entry || !fresh(entry)) throw new Error(`swap_not_simulated: ${intent.id}`)
-    const { tx } = entry
+    const { tx, cost, exempt } = entry
+    // Checked again now: another swap or a payment since the test run may have spent the margin.
+    if (!exempt && BigInt(await connection.getBalance(hot)) - cost < (await gasFloor())) {
+      throw new Error(`send_refused: GAS_RESERVE`)
+    }
     tx.sign([hotWallet])
     return confirm(connection, await connection.sendRawTransaction(tx.serialize()))
   }
@@ -229,24 +275,6 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
   return { quoteSwap, simulate, send, getPositions }
 }
 
-/** A token account, read with its own program; anything else is not a holding. */
-function holding(address: PublicKey, info: AccountInfo<Buffer> | null): Holding | null {
-  if (!info || !TOKEN_PROGRAMS.some((program) => info.owner.equals(program))) return null
-  try {
-    const account = unpackAccount(address, info, info.owner)
-    return {
-      mint: account.mint.toBase58(),
-      owner: account.owner.toBase58(),
-      amount: account.amount,
-      delegate: account.delegate?.toBase58() ?? null,
-      closeAuthority: account.closeAuthority?.toBase58() ?? null,
-      frozen: account.isFrozen,
-    }
-  } catch {
-    return null
-  }
-}
-
 function positive(amount: Amount): bigint {
   if (!/^[1-9]\d{0,19}$/.test(amount)) throw new Error(`invalid_amount: ${amount}`)
   return BigInt(amount)
@@ -266,17 +294,5 @@ function describe(intent: PayIntent, changes: { token: string; delta: string }[]
   return {
     summary: `swaps ${intent.amount} of ${intent.token} for at least ${intent.swap?.minAmountOut} of ${intent.swap?.tokenOut}`,
     balanceChanges: changes,
-  }
-}
-
-function fromSimulation(
-  account: SimulatedTransactionAccountInfo | null | undefined,
-): AccountInfo<Buffer> | null {
-  if (!account) return null
-  return {
-    data: Buffer.from(account.data[0] ?? '', 'base64'),
-    owner: new PublicKey(account.owner),
-    lamports: account.lamports,
-    executable: account.executable,
   }
 }

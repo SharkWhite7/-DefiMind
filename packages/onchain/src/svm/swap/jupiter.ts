@@ -43,13 +43,14 @@ export interface Venue {
   swap(quote: JupiterQuote, user: string): Promise<VersionedTransaction>
 }
 
+const WSOL = 'So11111111111111111111111111111111111111112'
+
 // Jupiter's own words for a pair it cannot route, from its error body.
 const NO_ROUTE = /COULD_NOT_FIND_ANY_ROUTE|NO_ROUTES_FOUND|TOKEN_NOT_TRADABLE/
 
 /**
- * The quote and the swap transaction, from Jupiter's HTTP API. Wrapped SOL stays wrapped, so the
- * transaction never closes an account of the hot wallet, and the priority fee is capped in the
- * request as well as checked in the transaction.
+ * The quote and the swap transaction, from Jupiter's HTTP API. Jupiter wraps SOL only for a SOL leg,
+ * and the priority fee is capped in the request as well as checked in the transaction.
  */
 export function jupiter(base = JUPITER_API, fetcher: typeof fetch = fetch): Venue {
   async function call(path: string, init?: RequestInit): Promise<unknown> {
@@ -94,7 +95,8 @@ export function jupiter(base = JUPITER_API, fetcher: typeof fetch = fetch): Venu
         body: JSON.stringify({
           quoteResponse: quote,
           userPublicKey: user,
-          wrapAndUnwrapSol: false,
+          // Only for a SOL leg (CR-026); inspectSwap allows the wrap in one shape alone.
+          wrapAndUnwrapSol: quote.inputMint === WSOL || quote.outputMint === WSOL,
           dynamicComputeUnitLimit: true,
           prioritizationFeeLamports: {
             priorityLevelWithMaxLamports: { priorityLevel: 'medium', maxLamports: 500_000 },
