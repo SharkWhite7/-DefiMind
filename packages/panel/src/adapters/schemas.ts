@@ -309,6 +309,9 @@ export const policy = z.object({
       orders: z
         .object({ enabled: z.boolean(), maxOpen: z.number().int().nonnegative() })
         .optional(),
+      // CR-028: absent, the shield is on and quick first buys are off.
+      rugShield: z.object({ enabled: z.boolean() }).optional(),
+      quickFirstBuy: z.object({ maxUsd: atomic, dailyUsd: atomic }).optional(),
     })
     .optional(),
 })

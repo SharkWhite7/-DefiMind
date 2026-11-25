@@ -1,18 +1,18 @@
 import type { ChainAdapter } from '@defimind/onchain'
-import type { Amount, PayIntent, Policy, RejectCode, SwapQuote } from '@defimind/shared'
+import type { Amount, PayIntent, Policy, RejectCode } from '@defimind/shared'
 import { admit } from '../db/breaker.js'
 import { ownerApprovalMethod, recordOwnerApproval, saveClearance } from '../db/receipts.js'
 import * as repo from '../db/repo.js'
 import { addBought, addSold, addSwapped, bookOf } from '../db/day-book.js'
 import { parseAmount, toAmount } from '../domain/amount.js'
 import { evaluateTrade, expectedOf, type Trade, type TradeVerdict } from '../domain/trading.js'
-import { HttpError } from '../http/errors.js'
-import type { QuoteRequest, SwapRequest } from '../http/schemas.js'
+import type { SwapRequest } from '../http/schemas.js'
 import { askOwner } from './approvals.js'
 import { needsPasskey } from './passkeys.js'
 import { finish, fund, newIntent, reject, shadowed, trip, type PaymentDeps } from './payments.js'
 import { policyHash } from './receipts.js'
 import { simulate } from './simulate.js'
+import { noteQuick, toFloor, wholeExit } from './swap-autopilot.js'
 import { settle } from './swap-settle.js'
 import {
   dollarOf,
@@ -25,38 +25,12 @@ import {
 } from './swap-quote.js'
 import { adapterFor, signerKey } from './wallets.js'
 
+export { quote } from './swap-quote.js'
+
 /** What the owner is shown for a buy that has drawn nothing yet: it is tested once approved. */
 const UNTESTED = {
   summary: 'not tested yet: the hot wallet is funded and the swap tested once you approve',
   balanceChanges: [],
-}
-
-/** POST /v1/agent/quote: read-only, so it decides nothing and records nothing. */
-export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy) {
-  const trading = policy.trading
-  const adapter = adapterFor(deps, req.agentId, req.chain)
-  if (trading === undefined || !trading.enabled) {
-    throw new HttpError(403, 'trading_disabled')
-  }
-  const pair = pairOf(deps, req)
-  if (adapter?.quoteSwap === undefined || pair === undefined) {
-    throw new HttpError(400, 'not_tradable')
-  }
-  const slippage = Math.min(trading.maxSlippageBps, req.maxSlippageBps ?? Infinity)
-  const answer = await fetchQuote(adapter, req, slippage)
-  if (answer === 'no_route') {
-    throw new HttpError(404, 'no_route')
-  }
-  if (pair.side !== 'swap') {
-    return answer
-  }
-  const value = await valueOf(
-    adapter,
-    swapLegs(req, answer.minAmountOut),
-    trading.maxPriceImpactBps,
-    deps.now(),
-  )
-  return value === undefined ? answer : { ...answer, valueUsd: value.toString() }
 }
 
 /**
@@ -137,10 +111,18 @@ export async function swap(
       pair.side === 'swap'
         ? await valueOf(adapter, swapLegs(req, answer.minAmountOut), maxImpact, now())
         : undefined
+    const exit = await wholeExit(
+      deps,
+      adapter,
+      req,
+      pair,
+      answer,
+      shadow || policy.mode === 'shadow',
+    )
     const trade: Trade = {
       ...pair,
       request: req,
-      quote: answer,
+      quote: { ...answer, exitImpactBps: exit },
       ...(valueUsd === undefined ? {} : { valueUsd }),
     }
     const where = { agentId: req.agentId, chain: req.chain, token: pair.token, spends: pair.spends }
@@ -184,32 +166,6 @@ export async function swap(
     recordOwnerApproval(db, intent.id, 'passkey')
     return clearSwap(deps, adapter, priced, how, 'approved')
   })
-}
-
-/**
- * An order's fill, quoted so its own minimum is the order's floor or more (CR-028). The venue's
- * minimum is its expected amount less the slippage asked, so a stop that fires at its trigger
- * would never clear a floor of the trigger less that same slippage: the fill asks for only the
- * room left between the expected amount and the floor. Below the floor it is refused.
- */
-async function toFloor(
-  adapter: ChainAdapter,
-  req: SwapRequest,
-  answer: SwapQuote,
-  floor: { minAmountOut: Amount },
-  slippage: number,
-): Promise<SwapQuote | undefined> {
-  const least = parseAmount(floor.minAmountOut)
-  if (parseAmount(answer.minAmountOut) >= least) {
-    return answer
-  }
-  const expected = parseAmount(answer.expectedOut)
-  const room = expected > least ? Number(((expected - least) * 10_000n) / expected) : 0
-  if (room < 1) {
-    return undefined
-  }
-  const again = await fetchQuote(adapter, req, Math.min(slippage, room))
-  return again === 'no_route' || parseAmount(again.minAmountOut) < least ? undefined : again
 }
 
 /**
@@ -302,6 +258,14 @@ export async function clearSwap(
     approvedBy: owner === undefined ? 'policy' : (ownerApprovalMethod(db, intent.id) ?? 'owner'),
   })
   const day = repo.utcDay(now())
+  if (how.verdict.quick === true) {
+    noteQuick(
+      deps,
+      intent,
+      how.side === 'swap' ? toAmount(how.valueUsd ?? 0n) : intent.amount,
+      how.verdict.flags,
+    )
+  }
   if (how.side === 'buy') {
     addBought(db, intent.agentId, intent.chain, day, intent.amount)
   } else if (how.side === 'swap') {

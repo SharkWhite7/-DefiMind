@@ -181,11 +181,13 @@ export function fromTradingForm(before: Trading | undefined, form: TradingForm):
   }
   const venues = before?.venues ?? []
   // CR-026's limits are set in their own card: this form keeps them as they are.
-  const { tokenLimits, operations, orders } = before ?? {}
+  const { tokenLimits, operations, orders, rugShield, quickFirstBuy } = before ?? {}
   return {
     ...(tokenLimits === undefined ? {} : { tokenLimits }),
     ...(operations === undefined ? {} : { operations }),
     ...(orders === undefined ? {} : { orders }),
+    ...(rugShield === undefined ? {} : { rugShield }),
+    ...(quickFirstBuy === undefined ? {} : { quickFirstBuy }),
     enabled: form.enabled,
     venues: form.enabled && !venues.includes('jupiter') ? [...venues, 'jupiter'] : venues,
     tokens,

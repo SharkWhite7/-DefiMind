@@ -97,3 +97,31 @@ describe('CR-026 limits', () => {
     expect(after.maxTradeUsd).toBe('0')
   })
 })
+
+describe('CR-028 protection', () => {
+  it('counts the shield turned off and quick first buys set or raised as loosening', () => {
+    expect(limitsLoosen({}, { rugShield: { enabled: false } })).toBe(true)
+    expect(limitsLoosen({ rugShield: { enabled: false } }, {})).toBe(false)
+    const quick = (maxUsd: string) => ({ quickFirstBuy: { maxUsd, dailyUsd: '9000000' } })
+    expect(limitsLoosen({}, quick('1000000'))).toBe(true)
+    expect(limitsLoosen(quick('1000000'), quick('2000000'))).toBe(true)
+    expect(limitsLoosen(quick('2000000'), quick('1000000'))).toBe(false)
+    expect(limitsLoosen(quick('2000000'), {})).toBe(false)
+  })
+
+  it('reads quick first buys and the shield from the form, both amounts or neither', () => {
+    const form = toLimitsForm({}, [MINT])
+    expect(form.shield).toBe(true)
+    form.shield = false
+    form.quickBuy = '3'
+    form.quickDay = '10'
+    expect(fromLimitsForm(form)).toMatchObject({
+      rugShield: { enabled: false },
+      quickFirstBuy: { maxUsd: '3000000', dailyUsd: '10000000' },
+    })
+    form.quickDay = ''
+    expect(fromLimitsForm(form)).toBe(
+      'Quick first buys: write both amounts in dollars, or leave both empty to turn them off.',
+    )
+  })
+})

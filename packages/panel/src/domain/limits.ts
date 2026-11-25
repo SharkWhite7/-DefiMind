@@ -14,11 +14,13 @@ export interface OperationLimit {
   dailyMax: string
 }
 
-/** CR-026's additions to Policy.trading. */
+/** CR-026's and CR-028's additions to Policy.trading. */
 export interface Limits {
   tokenLimits?: Record<string, TokenLimit> | undefined
   operations?: Partial<Record<Kind, OperationLimit>> | undefined
   orders?: { enabled: boolean; maxOpen: number } | undefined
+  rugShield?: { enabled: boolean } | undefined
+  quickFirstBuy?: { maxUsd: string; dailyUsd: string } | undefined
 }
 
 const ORDERS = { enabled: false, maxOpen: 10 }
@@ -52,7 +54,20 @@ export function limitsLoosen(before: Limits, after: Limits): boolean {
   })
   const was = before.orders ?? ORDERS
   const now = after.orders ?? ORDERS
-  return tokens || operations || (now.enabled && !was.enabled) || now.maxOpen > was.maxOpen
+  const shieldOff = (before.rugShield?.enabled ?? true) && !(after.rugShield?.enabled ?? true)
+  const quick =
+    after.quickFirstBuy !== undefined &&
+    (before.quickFirstBuy === undefined ||
+      BigInt(after.quickFirstBuy.maxUsd) > BigInt(before.quickFirstBuy.maxUsd) ||
+      BigInt(after.quickFirstBuy.dailyUsd) > BigInt(before.quickFirstBuy.dailyUsd))
+  return (
+    tokens ||
+    operations ||
+    (now.enabled && !was.enabled) ||
+    now.maxOpen > was.maxOpen ||
+    shieldOff ||
+    quick
+  )
 }
 
 /** The limits as the owner types them: dollars, an empty field for the default. */
@@ -61,6 +76,9 @@ export interface LimitsForm {
   operations: Record<Kind, { trade: string; daily: string }>
   ordersEnabled: boolean
   maxOpen: string
+  shield: boolean
+  quickBuy: string
+  quickDay: string
 }
 
 const shown = (amount: string | undefined) => (amount === undefined ? '' : dollarsInput(amount))
@@ -90,6 +108,9 @@ export function toLimitsForm(limits: Limits, mints: string[]): LimitsForm {
     ) as LimitsForm['operations'],
     ordersEnabled: (limits.orders ?? ORDERS).enabled,
     maxOpen: String((limits.orders ?? ORDERS).maxOpen),
+    shield: limits.rugShield?.enabled ?? true,
+    quickBuy: shown(limits.quickFirstBuy?.maxUsd),
+    quickDay: shown(limits.quickFirstBuy?.dailyUsd),
   }
 }
 
@@ -136,10 +157,24 @@ export function fromLimitsForm(form: LimitsForm): Limits | string {
     return 'Open orders: write a whole number, like 10.'
   }
   const maxOpen = Number(open)
+  const quickBuy = amount(form.quickBuy)
+  const quickDay = amount(form.quickDay)
+  if (
+    quickBuy === false ||
+    quickDay === false ||
+    (quickBuy === undefined) !== (quickDay === undefined)
+  ) {
+    return 'Quick first buys: write both amounts in dollars, or leave both empty to turn them off.'
+  }
   return {
     ...(Object.keys(tokenLimits).length === 0 ? {} : { tokenLimits }),
     ...(Object.keys(operations).length === 0 ? {} : { operations }),
     orders: { enabled: form.ordersEnabled, maxOpen },
+    // Absent means on, so only an off shield is written down.
+    ...(form.shield ? {} : { rugShield: { enabled: false } }),
+    ...(quickBuy === undefined || quickDay === undefined
+      ? {}
+      : { quickFirstBuy: { maxUsd: quickBuy, dailyUsd: quickDay } }),
   }
 }
 
@@ -149,5 +184,7 @@ export function withLimits<T extends Limits>(trading: T, limits: Limits): T {
   delete rest.tokenLimits
   delete rest.operations
   delete rest.orders
+  delete rest.rugShield
+  delete rest.quickFirstBuy
   return { ...rest, ...limits }
 }
