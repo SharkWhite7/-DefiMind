@@ -1,5 +1,5 @@
 import type { Order, OrderStatus, RejectCode } from '@defimind/shared'
-import { and, desc, eq, ne } from 'drizzle-orm'
+import { and, desc, eq, inArray, ne } from 'drizzle-orm'
 import type { Db } from './client.js'
 import { orders } from './schema.js'
 
@@ -75,4 +75,19 @@ export function moveOrder(
       .where(and(eq(orders.id, id), eq(orders.status, from)))
       .run().changes > 0
   )
+}
+
+/** Orders whose sell was under way when guard-core stopped: none can still be running. */
+export function triggeredOrders(db: Db): Order[] {
+  return db.select().from(orders).where(eq(orders.status, 'triggered')).all().map(order)
+}
+
+/** What an agent's orders already promise to sell: the open ones and any being filled. */
+export function liveOrders(db: Db, agentId: string): Order[] {
+  return db
+    .select()
+    .from(orders)
+    .where(and(eq(orders.agentId, agentId), inArray(orders.status, ['open', 'triggered'])))
+    .all()
+    .map(order)
 }

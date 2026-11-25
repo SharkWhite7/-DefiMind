@@ -1,5 +1,5 @@
 import type { Order } from '@defimind/shared'
-import { moveOrder, openOrders } from '../db/orders.js'
+import { moveOrder, openOrders, triggeredOrders } from '../db/orders.js'
 import * as repo from '../db/repo.js'
 import { getPosition } from '../db/trades.js'
 import { parseAmount, toAmount } from '../domain/amount.js'
@@ -12,12 +12,14 @@ import { adapterFor } from './wallets.js'
 export interface WatchRules {
   confirmChecks: number
   confirmSeconds: number
+  /** The watcher's own pace: a run of hits with a gap of more than twice this starts over. */
+  checkMs: number
 }
 
 /**
  * The order watcher (CR-026). Each tick quotes every open order for its whole amount through the
- * agent's own wallet, and fills one only after enough consecutive hits. A paused agent's orders
- * stay open and are not even counted; a run of hits is held in memory, so a restart starts it over.
+ * agent's own wallet, and fills one only after enough unbroken hits. A paused agent's orders stay
+ * open and their run starts over; the run is held in memory, so a restart starts it over too.
  */
 export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
   const streaks = new Map<string, Streak>()
@@ -33,6 +35,7 @@ export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
     const policy = repo.getPolicy(db, order.agentId)
     const adapter = adapterFor(deps, order.agentId, order.chain)
     if (policy === undefined || policy.paused || adapter?.quoteSell === undefined) {
+      streaks.delete(order.id)
       return
     }
     const held = getPosition(db, order.agentId, order.chain, order.token).amount
@@ -43,12 +46,13 @@ export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
     }
     const quoted = await adapter.quoteSell(order.token, order.amount).catch(() => undefined)
     if (quoted === undefined) {
+      streaks.delete(order.id)
       return
     }
     const hit = hits(order.kind, parseAmount(quoted.out), parseAmount(order.triggerOut))
     const maxImpact = policy.trading?.maxPriceImpactBps ?? 0
     const check = { hit, priceImpactBps: quoted.priceImpactBps, at: at.getTime() }
-    const streak = step(streaks.get(order.id), check, maxImpact)
+    const streak = step(streaks.get(order.id), check, maxImpact, 2 * rules.checkMs)
     if (streak === undefined) {
       streaks.delete(order.id)
       return
@@ -80,11 +84,14 @@ export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
     try {
       intent = await swap(deps, request, floor)
     } catch (error) {
-      if (!(error instanceof VenueUnavailable)) {
-        throw error
+      if (error instanceof VenueUnavailable) {
+        // The venue went down between the trigger and the sell: the order waits for the next run.
+        moveOrder(deps.db, order.id, 'open', {}, 'triggered')
+        return
       }
-      // The venue went down between the trigger and the sell: the order waits for the next run.
-      moveOrder(deps.db, order.id, 'open', {}, 'triggered')
+      // Never left triggered: Close and kill cancel only open orders, so it would die unseen.
+      deps.log.error({ err: error, orderId: order.id }, 'order fill failed')
+      close(order, 'failed', { failReason: 'SIM_FAILED' }, 'order_failed', 'triggered')
       return
     }
     if (intent.status === 'executed' || intent.status === 'shadowed') {
@@ -112,8 +119,20 @@ export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
     }
   }
 
+  // A sell under way when guard-core stopped cannot be resumed: its order fails, and says so.
+  let recovered = false
+  function recover() {
+    recovered = true
+    for (const order of triggeredOrders(deps.db)) {
+      close(order, 'failed', { failReason: 'SIM_FAILED' }, 'order_failed', 'triggered')
+    }
+  }
+
   return {
     async tick(): Promise<void> {
+      if (!recovered) {
+        recover()
+      }
       for (const order of openOrders(deps.db)) {
         try {
           await check(order)

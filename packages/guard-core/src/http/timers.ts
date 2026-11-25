@@ -45,8 +45,8 @@ export function startTimers(
     every(first, PRICE_EVERY_MS, () => samplePrices(t))
   }
   if (options.orders !== undefined) {
-    const { checkMs, ...rules } = options.orders
-    const watcher = orderWatcher(deps, rules)
+    const { checkMs } = options.orders
+    const watcher = orderWatcher(deps, options.orders)
     // One tick at a time: a slow venue must not stack checks of the same order.
     let running = false
     const timer = setInterval(() => {

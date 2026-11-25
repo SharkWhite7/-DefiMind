@@ -106,6 +106,7 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
       if (result === 'revoked') {
         repo.audit(db, { event: 'agent_revoked', agentId: id, detail: { via } }, now())
       }
+      cancelOpen(deps, `${via}_revoke`, id)
       const ownerTransactions = await killTransactions(deps, log, id)
       return ownerTransactions.length === 0
         ? { agentId: id, revoked: true }
@@ -124,6 +125,9 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
       repo.putPolicy(db, policy, now().toISOString())
       // Read back, so the answer shows the fields this request left as they were.
       const stored = repo.getPolicy(db, policy.agentId)
+      if (stored?.trading?.enabled !== true || stored.trading.orders?.enabled !== true) {
+        cancelOpen(deps, `${via}_orders_off`, policy.agentId)
+      }
       repo.audit(
         db,
         { event: 'policy_updated', agentId: policy.agentId, detail: { policy: stored, via } },

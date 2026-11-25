@@ -45,20 +45,26 @@ describe('the order watcher rules (CR-026)', () => {
     expect(hits('stop_loss', 11n, 10n)).toBe(false)
   })
 
-  it('counts consecutive hits, starts over on a miss, and ignores a check that moves the price', () => {
-    const first = step(undefined, { hit: true, priceImpactBps: 10, at: 0 }, 300)
-    expect(first).toEqual({ checks: 1, since: 0 })
-    const second = step(first, { hit: true, priceImpactBps: 10, at: 15_000 }, 300)
-    expect(second).toEqual({ checks: 2, since: 0 })
-    expect(step(second, { hit: true, priceImpactBps: 301, at: 20_000 }, 300)).toBe(second)
-    expect(step(second, { hit: false, priceImpactBps: 10, at: 30_000 }, 300)).toBeUndefined()
+  it('counts unbroken hits, and starts over on a miss, a high-impact check or a gap', () => {
+    const at = (ms: number, priceImpactBps = 10) => ({ hit: true, priceImpactBps, at: ms })
+    const first = step(undefined, at(0), 300, 30_000)
+    expect(first).toEqual({ checks: 1, since: 0, last: 0 })
+    const second = step(first, at(15_000), 300, 30_000)
+    expect(second).toEqual({ checks: 2, since: 0, last: 15_000 })
+    expect(step(second, at(20_000, 301), 300, 30_000)).toBeUndefined()
+    expect(step(second, { ...at(30_000), hit: false }, 300, 30_000)).toBeUndefined()
+    expect(step(second, at(45_001), 300, 30_000)).toEqual({
+      checks: 1,
+      since: 45_001,
+      last: 45_001,
+    })
   })
 
   it('confirms only enough hits over long enough', () => {
     const rules = { confirmChecks: 3, confirmSeconds: 30 }
-    expect(confirmed({ checks: 3, since: 0 }, 30_000, rules)).toBe(true)
-    expect(confirmed({ checks: 3, since: 0 }, 29_999, rules)).toBe(false)
-    expect(confirmed({ checks: 2, since: 0 }, 60_000, rules)).toBe(false)
+    expect(confirmed({ checks: 3, since: 0, last: 0 }, 30_000, rules)).toBe(true)
+    expect(confirmed({ checks: 3, since: 0, last: 0 }, 29_999, rules)).toBe(false)
+    expect(confirmed({ checks: 2, since: 0, last: 0 }, 60_000, rules)).toBe(false)
     expect(confirmed(undefined, 60_000, rules)).toBe(false)
   })
 

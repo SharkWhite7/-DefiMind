@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { getOrder } from '../src/db/orders.js'
+import { describe, expect, it, vi } from 'vitest'
+import { getOrder, moveOrder } from '../src/db/orders.js'
 import { applyTrade, getPosition } from '../src/db/trades.js'
 import { orderWatcher } from '../src/service/order-watcher.js'
 import type { PaymentDeps } from '../src/service/payments.js'
@@ -8,7 +8,7 @@ import { CHAIN, harness, MINT as USDC, NOW } from './harness.js'
 import { signedIn } from './owner.js'
 import { BONK, trading, Venue } from './venue.js'
 
-const RULES = { confirmChecks: 3, confirmSeconds: 30 }
+const RULES = { confirmChecks: 3, confirmSeconds: 30, checkMs: 15_000 }
 
 /** An agent holding 2,000,000 BONK, with orders on. */
 async function setup(over: object = {}) {
@@ -157,5 +157,86 @@ describe('the order watcher (CR-026)', () => {
       failReason: 'INSUFFICIENT_POSITION',
     })
     expect(getOrder(h.db, expiring.id)?.status).toBe('cancelled')
+  })
+})
+
+describe('orders that cannot be left behind (SPEC #182)', () => {
+  it('fails an order whose sell throws, instead of leaving it triggered', async () => {
+    const { h, chain, run } = await setup()
+    const order = (await h.agent('POST', '/v1/agent/orders', place())).json()
+    vi.spyOn(chain, 'getAllowanceState').mockRejectedValue(new Error('rpc down'))
+    await run()
+    expect(getOrder(h.db, order.id)).toMatchObject({ status: 'failed', failReason: 'SIM_FAILED' })
+    expect(h.auditEvents()).toContain('order_failed')
+  })
+
+  it('fails on start an order found triggered: its sell cannot be resumed', async () => {
+    const { h, watcher } = await setup()
+    const order = (await h.agent('POST', '/v1/agent/orders', place())).json()
+    moveOrder(h.db, order.id, 'triggered')
+    await watcher.tick()
+    expect(getOrder(h.db, order.id)).toMatchObject({ status: 'failed', failReason: 'SIM_FAILED' })
+  })
+
+  it('starts a run of hits over after a pause or a gap in the checks', async () => {
+    const { h, watcher } = await setup()
+    const order = (await h.agent('POST', '/v1/agent/orders', place())).json()
+    const at = async (seconds: number) => {
+      h.clock.now = new Date(NOW.getTime() + seconds * 1000)
+      await watcher.tick()
+    }
+    await at(0)
+    await at(15)
+    // 45 seconds since the last hit, more than twice ORDER_CHECK_MS: the third hit is a first.
+    await at(60)
+    expect(getOrder(h.db, order.id)?.status).toBe('open')
+    const owner = await signedIn(h)
+    await at(75)
+    await owner.call('POST', '/v1/owner/pause', { agentId: 'agent-1' })
+    await at(90)
+    expect(getOrder(h.db, order.id)?.status).toBe('open')
+  })
+
+  it("counts an order being filled in the position's open total", async () => {
+    const { h } = await setup()
+    const first = (await h.agent('POST', '/v1/agent/orders', place({ amount: '1500000' }))).json()
+    moveOrder(h.db, first.id, 'triggered')
+    const over = await h.agent('POST', '/v1/agent/orders', place({ amount: '600000' }))
+    expect(over.json().rejectReasons).toEqual(['INSUFFICIENT_POSITION'])
+  })
+
+  it('binds the owner step-up to the expiry', async () => {
+    const { h } = await setup()
+    const owner = await signedIn(h)
+    const expiresAt = new Date(NOW.getTime() + 3_600_000).toISOString()
+    const signed = await owner.stepUp('place_order', place())
+    const replay = await owner.call('POST', '/v1/owner/orders', {
+      ...place({ expiresAt }),
+      assertion: signed,
+    })
+    expect(replay.statusCode).toBe(401)
+    const res = await owner.call('POST', '/v1/owner/orders', {
+      ...place({ expiresAt }),
+      assertion: await owner.stepUp('place_order', place({ expiresAt })),
+    })
+    expect(res.json()).toMatchObject({ status: 'open', expiresAt })
+  })
+
+  it('cancels open orders when orders are turned off, and when the agent is revoked', async () => {
+    const { h } = await setup()
+    const owner = await signedIn(h)
+    const first = (await h.agent('POST', '/v1/agent/orders', place())).json()
+    const policy = (await owner.call('GET', '/v1/owner/policy/agent-1')).json()
+    const orders = { enabled: false, maxOpen: 3 }
+    await owner.call('PUT', '/v1/owner/policy/agent-1', {
+      policy: { ...policy, trading: { ...policy.trading, orders } },
+    })
+    expect(getOrder(h.db, first.id)?.status).toBe('cancelled')
+
+    const again = await setup()
+    const other = (await again.h.agent('POST', '/v1/agent/orders', place())).json()
+    const admin = await signedIn(again.h)
+    await admin.call('POST', '/v1/owner/agents/agent-1/revoke')
+    expect(getOrder(again.h.db, other.id)?.status).toBe('cancelled')
   })
 })
