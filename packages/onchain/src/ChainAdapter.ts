@@ -91,9 +91,7 @@ export interface ChainAdapter {
    * CR-028: the mint's authorities, extensions and supply, read from the chain alone, with no venue
    * call: the rug shield reads it for every held token, every minute.
    */
-  mintFacts?(
-    mint: Address,
-  ): Promise<{
+  mintFacts?(mint: Address): Promise<{
     freezeAuthority: boolean
     mintAuthority: boolean
     extensions: string[]
