@@ -21,8 +21,11 @@ import { telegram } from './telegram.js'
 // passkey-checked route would: straight into the database.
 import { putPolicy } from '../../../packages/guard-core/src/db/repo.js'
 import { Wallets, type WalletKeys } from '../../../packages/guard-core/src/service/wallets.js'
+import { claude } from '../../../packages/guard-core/src/adapters/claude.js'
 
 const ADMIN_TOKEN = 'a'.repeat(64)
+/** Not a key: the trader only ever reaches the local mock with it. */
+const TRADER_KEY = 'sk-ant-e2e-not-a-key'
 const BOT_TOKEN = 'b'.repeat(64)
 export const WEBHOOK_SECRET = 'w'.repeat(64)
 const AGENT = 'agent-1'
@@ -66,6 +69,8 @@ export async function stack(
     walletKeys?: WalletKeys
     /** guard-core's outbound fetch, for a test that plays a venue's HTTP API. */
     fetch?: typeof fetch
+    /** CR-027: the AI trader runs against this Claude API (a local mock), checked every 20 ms. */
+    claudeUrl?: string
   } = {},
 ) {
   const net = options.net ?? SOLANA
@@ -99,6 +104,7 @@ export async function stack(
     BOT_WEBHOOK_SECRET: WEBHOOK_SECRET,
     LOG_LEVEL: 'fatal',
     ...(options.setupCode === undefined ? {} : { SETUP_CODE: options.setupCode }),
+    ...(options.claudeUrl === undefined ? {} : { ANTHROPIC_API_KEY: TRADER_KEY }),
     // The flows approve through the bot unless they test the panel, its default since CR-012.
     ...(options.panel
       ? { PASSKEY_RP_ID: PANEL_RP.id, PASSKEY_ORIGIN: PANEL_RP.origin }
@@ -110,6 +116,9 @@ export async function stack(
     chains: new Map([[chain.chain, chain]]),
     now,
     sweepMs: 20,
+    ...(options.claudeUrl === undefined
+      ? {}
+      : { traders: { checkMs: 20, claude: claude(TRADER_KEY, { baseURL: options.claudeUrl }) } }),
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     // The settings and agent-wallet routes come with a chain host; nothing here changes the chain.
     ...(wallets === undefined
