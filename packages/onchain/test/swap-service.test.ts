@@ -4,6 +4,7 @@ import {
   ACCOUNT_SIZE,
   AccountState,
   createAssociatedTokenAccountIdempotentInstruction,
+  NATIVE_MINT,
   getAssociatedTokenAddressSync,
   MINT_SIZE,
   MintLayout,
@@ -463,9 +464,22 @@ describe('simulate and send a swap', () => {
 })
 
 describe('getPositions', () => {
+  // (2 token accounts' rent + 10 signatures) × 1.25, at 2,039,280 lamports of rent.
+  const reserve = 5_160_700n
+
   it('lists every token held but the dollar, with decimals from the mint', async () => {
+    balanceNow = () => reserve
     before.set(bonkAccount.toBase58(), account(bonk, 777n))
     expect(await s.getPositions()).toEqual([{ token: bonk.toBase58(), amount: '777', decimals: 5 }])
+  })
+
+  it('counts the SOL above the gas reserve as a position under the wSOL mint, never the reserve', async () => {
+    balanceNow = () => reserve + 14_324_861n
+    expect(await s.getPositions()).toEqual([
+      { token: NATIVE_MINT.toBase58(), amount: '14324861', decimals: 9 },
+    ])
+    balanceNow = () => reserve - 1n
+    expect(await s.getPositions()).toEqual([])
   })
 })
 

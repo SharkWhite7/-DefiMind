@@ -263,13 +263,22 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
         totals.set(mint.toBase58(), (totals.get(mint.toBase58()) ?? 0n) + amount)
       }
     }
+    // SOL bought is unwrapped into the hot wallet's own lamports (CR-026). What is above the gas
+    // reserve counts with any wSOL held; the reserve is never a position, so Close leaves it.
+    const wsol = NATIVE_MINT.toBase58()
+    const spare = BigInt(await connection.getBalance(hot)) - (await gasFloor())
+    const sol = (totals.get(wsol) ?? 0n) + (spare > 0n ? spare : 0n)
+    totals.delete(wsol)
     const mints = [...totals.keys()].map((mint) => new PublicKey(mint))
     const infos = mints.length ? await connection.getMultipleAccountsInfo(mints) : []
-    return mints.map((mint, i) => ({
-      token: mint.toBase58(),
-      amount: totals.get(mint.toBase58())!.toString(),
-      decimals: unpackMint(mint, infos[i] ?? null, infos[i]?.owner).decimals,
-    }))
+    return [
+      ...mints.map((mint, i) => ({
+        token: mint.toBase58(),
+        amount: totals.get(mint.toBase58())!.toString(),
+        decimals: unpackMint(mint, infos[i] ?? null, infos[i]?.owner).decimals,
+      })),
+      ...(sol > 0n ? [{ token: wsol, amount: sol.toString(), decimals: 9 }] : []),
+    ]
   }
 
   return { quoteSwap, simulate, send, getPositions }

@@ -203,6 +203,11 @@ test run, and again just before signing, against the balance then. A sell to the
 whose SOL cost is only its fee, plus at most one token account's rent when the hot wallet has no
 dollar account yet, is exempt: Close positions stays the way out of a wallet already short of gas.
 
+`getPositions` lists SOL under the wSOL mint, at 9 decimals: the hot wallet's lamports above the gas
+reserve, plus any wSOL it holds. SOL bought is unwrapped into those lamports, so without this entry
+it would vanish from the portfolio. The reserve itself is never a position, so Close leaves it.
+Note that SOL the owner sent above the reserve counts as a position too.
+
 ### Sell quotes (CR-026)
 
 `quoteSell(token, amount)` (Solana mainnet, with the swap venue) is what `amount` of a token would
