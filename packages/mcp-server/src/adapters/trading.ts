@@ -74,11 +74,14 @@ export interface SwapOrder extends SwapInput {
 }
 
 /** CR-026. Every field is echoed to the model, so each is bounded and well formed. */
+// A Solana mint, base58; anything else is not echoed to the model.
+const mint = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)
+
 export const order = z.object({
   id: z.uuid(),
   agentId: z.string().min(1).max(64),
   chain: z.string().min(1).max(64),
-  token: z.string().min(1).max(128),
+  token: mint,
   kind: z.enum(['take_profit', 'stop_loss']),
   amount: atomic,
   triggerOut: atomic,

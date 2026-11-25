@@ -13,7 +13,7 @@ import { noTradingYet } from './trading.js'
 const PLACE_DESCRIPTION = `Leave a take-profit or stop-loss on a token the agent holds. DefiMind watches the price of the whole amount and, once it is at or above triggerUsd (take_profit) or at or below it (stop_loss) for several checks in a row, sells it back to USDC under every trading check.
 A stop-loss is not a guarantee: if the sale would get less than triggerUsd minus slippage, it is refused and the tokens stay; the owner is told. Orders do not run while the agent is paused, and Close positions or a kill cancels them. Placing an order never waits for the owner. Place one only when the user asks for it. Solana only.`
 
-const CANCEL_DESCRIPTION = `Cancel one of this agent's open take-profit or stop-loss orders by its id, from place_order or list_orders. Nothing is sold.`
+const CANCEL_DESCRIPTION = `Cancel one of this agent's own open take-profit or stop-loss orders by its id, from place_order or list_orders. Nothing is sold. Orders the owner placed are the owner's to cancel.`
 
 const LIST_DESCRIPTION = `List this agent's take-profit and stop-loss orders: the open ones and the most recent others, with what each will sell, its trigger and its status. Read-only.`
 

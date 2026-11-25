@@ -95,7 +95,9 @@ describe('place_order', () => {
       '- ORDERS_DISABLED: the owner has not turned on take-profit and stop-loss orders',
     )
     expect(text).toContain('Tell the user the owner has to turn orders on.')
-    expect(text).toContain('Cancel an order the user no longer wants with cancel_order')
+    expect(text).toContain(
+      "Only an order this agent placed can be cancelled with cancel_order; the owner's orders are the owner's to cancel.",
+    )
   })
 
   it('says a stop-loss is not a guarantee, and to place orders only when asked', async () => {
@@ -202,5 +204,21 @@ describe("guard-core's 409 order_refused (GC-72)", () => {
     )
     expect(text).toContain('open orders on the token count against it too')
     expect(text).toContain('Tell the user the owner has to turn orders on.')
+  })
+})
+
+describe('advice added with the AI trader codes', () => {
+  it('tells the user the spending wallet needs SOL for fees on GAS_RESERVE', async () => {
+    const { explainStatus } = await import('../src/domain/explain.js')
+    expect(explainStatus('rejected', ['GAS_RESERVE'], 'swap')).toContain(
+      'Tell the user: the spending wallet needs a little SOL for network fees.',
+    )
+  })
+
+  it("never suggests cancelling the owner's orders", async () => {
+    const { adviceFor } = await import('../src/domain/explain.js')
+    const advice = adviceFor(['ORDER_LIMIT_EXCEEDED']).join(' ')
+    expect(advice).not.toMatch(/cancel an order the user/i)
+    expect(advice).toContain("the owner's orders are the owner's to cancel")
   })
 })

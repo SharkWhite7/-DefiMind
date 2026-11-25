@@ -88,7 +88,8 @@ const ADVICE: Partial<Record<RejectCode, string>> = {
     'The token could not be priced reliably just now. Tell the user; do not try another route around it.',
   ORDERS_DISABLED: 'Tell the user the owner has to turn orders on.',
   ORDER_LIMIT_EXCEEDED:
-    'Cancel an order the user no longer wants with cancel_order, or tell the user.',
+    "Tell the user. Only an order this agent placed can be cancelled with cancel_order; the owner's orders are the owner's to cancel.",
+  GAS_RESERVE: 'Tell the user: the spending wallet needs a little SOL for network fees.',
 }
 
 export function explainReject(code: string): string {
