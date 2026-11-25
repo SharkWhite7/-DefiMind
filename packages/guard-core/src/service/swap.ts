@@ -3,9 +3,9 @@ import type { Amount, PayIntent, Policy } from '@defimind/shared'
 import { admit } from '../db/breaker.js'
 import { ownerApprovalMethod, recordOwnerApproval, saveClearance } from '../db/receipts.js'
 import * as repo from '../db/repo.js'
-import { addBought, addSold, addSwapped, bookOf } from '../db/trades.js'
+import { addBought, addSold, addSwapped, bookOf } from '../db/day-book.js'
 import { parseAmount, toAmount } from '../domain/amount.js'
-import { evaluateTrade, type Trade, type TradeVerdict } from '../domain/trading.js'
+import { evaluateTrade, expectedOf, type Trade, type TradeVerdict } from '../domain/trading.js'
 import { HttpError } from '../http/errors.js'
 import type { QuoteRequest, SwapRequest } from '../http/schemas.js'
 import { askOwner } from './approvals.js'
@@ -253,8 +253,8 @@ export async function clearSwap(
     addBought(db, intent.agentId, intent.chain, day, intent.amount)
   } else if (how.side === 'swap') {
     addSwapped(db, intent.agentId, intent.chain, day, toAmount(how.valueUsd ?? 0n))
-  } else if (intent.swap !== undefined) {
-    addSold(db, intent.agentId, intent.chain, day, intent.swap.minAmountOut)
+  } else {
+    addSold(db, intent.agentId, intent.chain, day, toAmount(expectedOf(intent.swap)))
   }
   return settle(deps, adapter, approved, how.side, simulation)
 }

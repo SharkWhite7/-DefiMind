@@ -1,5 +1,5 @@
 import { type ChainAdapter, SwapUnavailable } from '@defimind/onchain'
-import type { PayIntent, SwapQuote } from '@defimind/shared'
+import type { PayIntent, SwapDetails, SwapQuote } from '@defimind/shared'
 import { z } from 'zod'
 import type { Trade } from '../domain/trading.js'
 import { belowGasReserve, swapValue } from '../domain/valuation.js'
@@ -72,19 +72,19 @@ export function withQuote(
   if (!decimals.success) {
     return undefined
   }
-  const { venue, minAmountOut, slippageBps, priceImpactBps, quotedAt } = quote
-  return {
-    ...intent,
-    swap: {
-      venue,
-      tokenOut,
-      minAmountOut,
-      slippageBps,
-      priceImpactBps,
-      quotedAt,
-      ...decimals.data,
-    },
+  const { venue, expectedOut, minAmountOut, slippageBps, priceImpactBps, quotedAt } = quote
+  // expectedOut is kept beside SwapDetails' fields: a sell counts at it (CR-026).
+  const swap: SwapDetails & { expectedOut: string } = {
+    venue,
+    tokenOut,
+    expectedOut,
+    minAmountOut,
+    slippageBps,
+    priceImpactBps,
+    quotedAt,
+    ...decimals.data,
   }
+  return { ...intent, swap }
 }
 
 /**

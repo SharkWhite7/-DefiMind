@@ -60,6 +60,14 @@ describe('swaps on Telegram', () => {
     expect(bare).toContain(`<b>1,843.920113</b> tokens (mint <code>${MINT}</code>)`)
   })
 
+  it('says an untested buy is test-run after approval, instead of an empty simulation', () => {
+    const text = approvalText({ ...approval(buy()), untested: true })
+    expect(text).toContain(
+      'Nothing leaves your vault until you approve. Test run after your approval.',
+    )
+    expect(text).not.toContain('Simulation:')
+  })
+
   it('places the decimal point with bigint', () => {
     expect(tokenAmount('1843920113', 6)).toBe('1,843.920113')
     expect(tokenAmount('912000000000', 5)).toBe('9,120,000')

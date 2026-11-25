@@ -113,6 +113,35 @@ describe('swaps (CR-021)', () => {
     expect(third.json()).toMatchObject({ rejectReasons: ['SELL_DAILY_EXCEEDED'] })
   })
 
+  it("corrects the day's sells to what landed (CR-026)", async () => {
+    const operations = { sell: { maxTradeUsd: '50000', dailyMax: '60000' } }
+    const { h, chain } = await setup({ trading: { operations } })
+    await bought(h)
+    // Each sell lands at three quarters of its quote: 40,000 and 20,000 expected bring 45,000, so
+    // the day has room for one more that, counted at what was expected, it would not.
+    Object.assign(chain, {
+      getLandedChanges: async () => {
+        const amount = BigInt(chain.sent.at(-1)?.amount ?? '0')
+        return [
+          { token: BONK, delta: `-${amount}` },
+          { token: USDC, delta: `${(amount * 3n) / 4000n}` },
+        ]
+      },
+    })
+    await h.agent('POST', '/v1/agent/swap', sell('40000000'))
+    expect((await h.agent('POST', '/v1/agent/swap', sell('20000000'))).json().status).toBe(
+      'executed',
+    )
+    const more = await h.agent('POST', '/v1/agent/swap', sell('10000000'))
+    expect(more.json()).toMatchObject({ status: 'executed' })
+  })
+
+  it('lets shadow mode sell what it never bought: it books no positions (CR-026)', async () => {
+    const { h } = await setup({ mode: 'shadow' })
+    const res = await h.agent('POST', '/v1/agent/swap', sell('1000000'))
+    expect(res.json()).toMatchObject({ status: 'shadowed' })
+  })
+
   it('books what landed, not what the test run promised (GC-66)', async () => {
     const { h, chain } = await setup()
     chain.landed = 994_000_000n
@@ -371,6 +400,18 @@ describe('the owner Close (CR-021)', () => {
     })
     expect(res.json().intents).toEqual([expect.objectContaining({ agentId: 'agent-1' })])
     expect(getPosition(h.db, 'agent-2', CHAIN, BONK).amount).toBe(2_000_000_000n)
+  })
+
+  it('sells more than the agent booked: Close sells what the chain holds (CR-026)', async () => {
+    const { h, chain } = await setup()
+    const owner = await bought(h)
+    chain.held.set(BONK, 2_000_000_000n)
+    const res = await owner.call('POST', '/v1/owner/positions/close', {
+      assertion: await owner.stepUp('close_positions', {}),
+    })
+    expect(res.json().intents).toEqual([
+      expect.objectContaining({ amount: '2000000000', status: 'executed' }),
+    ])
   })
 
   it('sells even when the policy requires mandates: Close is the owner own action', async () => {

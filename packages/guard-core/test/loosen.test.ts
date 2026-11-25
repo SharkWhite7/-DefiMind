@@ -151,6 +151,15 @@ describe('loosened trading (CR-021)', () => {
     expect(change({ operations: { sell: { maxTradeUsd: '1', dailyMax: '1' } } })).toEqual([])
   })
 
+  it('reads a PUT without trading as leaving it as it is', () => {
+    const capped = {
+      ...trades,
+      trading: { ...trading, tokenLimits: { BONK: { maxBuyUsd: '500' } } },
+    }
+    const { trading: _kept, ...without } = capped
+    expect(loosened(capped, without)).toEqual([])
+  })
+
   it('flags turning orders on and allowing more of them (CR-026)', () => {
     const orders = (value: { enabled: boolean; maxOpen: number }) => ({
       ...trades,

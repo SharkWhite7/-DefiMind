@@ -398,8 +398,8 @@ policy without `trading` trades nothing, and an adapter without `quoteSwap` refu
 
 - `operations.{buy,sell,swap}: { maxTradeUsd, dailyMax }`, in the chain's dollar.
   - The buy entry replaces `maxTradeUsd` and `dailyTradeMax`.
-  - A sell entry caps sells. A sell is valued at the minimum its quote promises, and a day's sells are counted as they execute (`SELL_EXCEEDED`, `SELL_DAILY_EXCEEDED`). Without one, sells are not capped.
-- `tokenLimits[mint]: { maxBuyUsd?, maxHeldUsd? }`. It lowers one token's buy and replaces its held limit (`TOKEN_LIMIT_EXCEEDED`).
+  - A sell entry caps sells. A sell is valued at what its quote expects it to bring, so a cap is not slipped under on the slippage, and a day's sells are counted at that value, then corrected to what landed (`SELL_EXCEEDED`, `SELL_DAILY_EXCEEDED`). Without one, sells are not capped.
+- `tokenLimits[mint]: { maxBuyUsd?, maxHeldUsd? }`, at most 64 mints. It lowers one token's buy and replaces its held limit (`TOKEN_LIMIT_EXCEEDED`).
 - `orders: { enabled, maxOpen }`, for take-profit and stop-loss orders.
 
 A sell never spends more than the agent's position holds (`INSUFFICIENT_POSITION`). Shadow mode holds no positions, and the owner's Close sells what the chain holds, so neither is checked this way.

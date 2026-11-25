@@ -49,6 +49,7 @@ const REASONS: Record<RejectCode, string> = {
   ORDERS_DISABLED: 'the owner has not turned on take-profit and stop-loss orders',
   ORDER_LIMIT_EXCEEDED: 'the agent already has as many open orders as the owner allows',
   GAS_RESERVE: 'the trade would leave the spending wallet without SOL for network fees',
+  TRADER_TOKEN_NOT_ALLOWED: "the token is not on the AI trader's own list",
 }
 
 /** Codes where the right next step is not the generic "do not retry". */
