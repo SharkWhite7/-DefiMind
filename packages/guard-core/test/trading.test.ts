@@ -68,7 +68,13 @@ const sell = (q: Partial<SwapQuote> = {}): Trade => ({
   }),
 })
 
-const book: Book = { tradedToday: 0n, positionCost: 0n, boughtBefore: true }
+const book: Book = {
+  tradedToday: 0n,
+  soldToday: 0n,
+  swappedToday: 0n,
+  positionCost: 0n,
+  boughtBefore: true,
+}
 const reasons = (trade: Trade, p = policy(), b = book) => evaluateTrade(trade, p, b, NOW).reasons
 
 describe('evaluateTrade (CR-021)', () => {

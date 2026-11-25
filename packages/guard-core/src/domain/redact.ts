@@ -1,3 +1,20 @@
+/**
+ * A bearer token in a log file is the same as a bearer token in a repository. The Claude API key
+ * lives only inside the SDK client (CR-027); these paths are a second line should one be logged.
+ */
+export const LOG_REDACT = [
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers["x-guard-signature"]',
+  'res.headers["set-cookie"]',
+  'headers.authorization',
+  'headers["x-api-key"]',
+  '*.headers.authorization',
+  '*.headers["x-api-key"]',
+  'apiKey',
+  '*.apiKey',
+]
+
 const URL = /\w+:\/\/\S+/g
 
 /**

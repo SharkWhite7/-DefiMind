@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fork, MAINNET, programs, QUOTE, USDC, WSOL, type Fork } from './support/fork.js'
+import { fork, MAINNET, programs, QUOTE, USDC, WSOL, type Fork, MAX_FEE } from './support/fork.js'
 import { intentIdIn, stack, type Stack } from './support/stack.js'
 
 /**
@@ -51,11 +51,15 @@ describe.skipIf(skipped)(
       expect(f.balance(USDC)).toBe(0n)
 
       const id = intentIdIn(text)
+      const sol = f.lamports()
       await s.telegram.press(id, 'approve')
       await vi.waitFor(async () => expect((await s.intent(id)).status).toBe('executed'))
       expect(f.chain.topUps).toEqual([QUOTE.inAmount])
       expect(f.balance(USDC)).toBe(0n)
-      expect(f.balance(WSOL)).toBeGreaterThanOrEqual(BigInt(QUOTE.otherAmountThreshold))
+      expect(f.balance(WSOL)).toBe(0n)
+      expect(f.lamports() - sol).toBeGreaterThanOrEqual(
+        BigInt(QUOTE.otherAmountThreshold) - MAX_FEE,
+      )
     })
   },
 )

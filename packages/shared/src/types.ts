@@ -246,6 +246,8 @@ export interface SwapDetails {
   venue: string
   tokenOut: Address
   minAmountOut: Amount
+  /** CR-026: what the quote expected; a sell counts this against its limits. Absent on older intents. */
+  expectedOut?: Amount
   slippageBps: number
   priceImpactBps: number
   /** Read from each mint onchain by the adapter, never from a venue. */
@@ -278,6 +280,8 @@ export interface SwapQuote {
   risks: RejectCode[]
   flags: TradingFlag[]
   quotedAt: string
+  /** CR-026, token-to-token only: the higher of the two legs' dollar quotes, which the limits use. */
+  valueUsd?: Amount
 }
 
 /** CR-021: these send a buy to the owner even below the threshold. */
@@ -372,6 +376,9 @@ export type TradingRejectCode =
   | 'VALUATION_UNAVAILABLE'
   | 'ORDERS_DISABLED'
   | 'ORDER_LIMIT_EXCEEDED'
+  | 'GAS_RESERVE'
+  /** CR-027 */
+  | 'TRADER_TOKEN_NOT_ALLOWED'
 
 /** Standing authority an EVM payment must never grant. */
 export type EvmRejectCode = 'APPROVAL_DETECTED' | 'PERMIT_DETECTED' | 'DELEGATION_DETECTED'
@@ -540,4 +547,68 @@ export interface AgentWallet {
   /** The signing page's add-limit for this wallet. */
   addLimitPage: string
   gas: { balance: Amount; minimum: Amount; symbol: string }
+}
+
+export type TraderModel = 'claude-opus-5-5' | 'claude-sonnet-5-5' | 'claude-haiku-5-5'
+
+/** CR-027: the AI trader attached to one agent. Loosening any field needs the passkey. */
+export interface TraderConfig {
+  enabled: boolean
+  mode: 'shadow' | 'live'
+  model: TraderModel
+  effort: 'low' | 'medium' | 'high'
+  cadenceMinutes: 5 | 15 | 60
+  /** Each must also pass the agent's policy. */
+  tokens: Address[]
+  /** The owner's own words, at most 2000 characters. */
+  instructions: string
+  /** The ready-made strategy it started from; instructions hold the trader's own copy. */
+  template?: { id: string; version: number }
+  /** 1 to 5; read tools do not count. */
+  maxActionsPerTick: number
+  maxTicksPerDay: number
+  /** Input plus output tokens. */
+  maxTokensPerTick: number
+  maxTokensPerDay: number
+}
+
+export interface TraderAction {
+  tool: string
+  intentId?: string
+  orderId?: string
+  status?: IntentStatus
+  rejectReasons: RejectCode[]
+}
+
+export interface TraderTick {
+  id: string
+  agentId: string
+  startedAt: string
+  /** The model that served the tick, a fallback included. */
+  model: string
+  outcome: 'acted' | 'held' | 'skipped' | 'error' | 'refused'
+  actions: TraderAction[]
+  /** The model's own words: untrusted, display only, at most 500 characters. */
+  reason: string
+  usage: { input: number; output: number; cacheRead: number; cacheWrite: number }
+  detail?: string
+}
+
+/** Landed amounts only; a shadow trader shows what it would have traded, with no profit or loss. */
+export interface TraderReport {
+  trades: number
+  /** Signed atomic units of the chain's dollar. */
+  realizedPnlUsd?: string
+  positions: Position[]
+  shadow: boolean
+}
+
+export interface TraderStatus {
+  config: TraderConfig
+  state: 'off' | 'running' | 'paused'
+  pausedBy?: 'owner' | 'kill' | 'agent_paused' | 'errors' | 'refusals'
+  /** Whether ANTHROPIC_API_KEY is set; the key itself is never returned. */
+  keySet: boolean
+  today: { ticks: number; tokens: number }
+  report: TraderReport
 }

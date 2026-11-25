@@ -4,6 +4,7 @@ import { schema } from '../src/db/client.js'
 import { applyTrade, getPosition } from '../src/db/trades.js'
 import { activateWallet, addWallet } from '../src/db/wallets.js'
 import { hashToken } from '../src/domain/auth.js'
+import { WSOL } from '../src/domain/valuation.js'
 import { CHAIN, harness, MINT as USDC, NOW, wouldHave } from './harness.js'
 import { signedIn } from './owner.js'
 import { BONK, trading, Venue } from './venue.js'
@@ -92,6 +93,54 @@ describe('swaps (CR-021)', () => {
       amount: 497_500_000n,
       cost: 500_000n,
     })
+  })
+
+  it('refuses to sell more than the agent holds (CR-026)', async () => {
+    const { h } = await setup()
+    await bought(h)
+    const res = await h.agent('POST', '/v1/agent/swap', sell('995000001'))
+    expect(res.json()).toMatchObject({ rejectReasons: ['INSUFFICIENT_POSITION'] })
+  })
+
+  it("holds sells to the sell operation's daily cap, counted as they execute (CR-026)", async () => {
+    const operations = { sell: { maxTradeUsd: '50000', dailyMax: '60000' } }
+    const { h } = await setup({ trading: { operations } })
+    await bought(h)
+    const first = await h.agent('POST', '/v1/agent/swap', sell('40000000'))
+    expect(first.json()).toMatchObject({ status: 'executed' })
+    const second = await h.agent('POST', '/v1/agent/swap', sell('20000000'))
+    expect(second.json()).toMatchObject({ status: 'executed' })
+    const third = await h.agent('POST', '/v1/agent/swap', sell('1000000'))
+    expect(third.json()).toMatchObject({ rejectReasons: ['SELL_DAILY_EXCEEDED'] })
+  })
+
+  it("corrects the day's sells to what landed (CR-026)", async () => {
+    const operations = { sell: { maxTradeUsd: '50000', dailyMax: '60000' } }
+    const { h, chain } = await setup({ trading: { operations } })
+    await bought(h)
+    // Each sell lands at three quarters of its quote: 40,000 and 20,000 expected bring 45,000, so
+    // the day has room for one more that, counted at what was expected, it would not.
+    Object.assign(chain, {
+      getLandedChanges: async () => {
+        const amount = BigInt(chain.sent.at(-1)?.amount ?? '0')
+        return [
+          { token: BONK, delta: `-${amount}` },
+          { token: USDC, delta: `${(amount * 3n) / 4000n}` },
+        ]
+      },
+    })
+    await h.agent('POST', '/v1/agent/swap', sell('40000000'))
+    expect((await h.agent('POST', '/v1/agent/swap', sell('20000000'))).json().status).toBe(
+      'executed',
+    )
+    const more = await h.agent('POST', '/v1/agent/swap', sell('10000000'))
+    expect(more.json()).toMatchObject({ status: 'executed' })
+  })
+
+  it('lets shadow mode sell what it never bought: it books no positions (CR-026)', async () => {
+    const { h } = await setup({ mode: 'shadow' })
+    const res = await h.agent('POST', '/v1/agent/swap', sell('1000000'))
+    expect(res.json()).toMatchObject({ status: 'shadowed' })
   })
 
   it('books what landed, not what the test run promised (GC-66)', async () => {
@@ -230,12 +279,6 @@ describe('swaps (CR-021)', () => {
     expect(chain.quotes).toBe(0)
   })
 
-  it('refuses a pair without the chain dollar on one side', async () => {
-    const { h } = await setup()
-    const res = await h.agent('POST', '/v1/agent/swap', { ...buy(), tokenIn: 'Wif1111111111111' })
-    expect(res.json()).toMatchObject({ rejectReasons: ['TOKEN_NOT_TRADABLE'] })
-  })
-
   it('refuses when the venue has no route, and answers 502 when it is down', async () => {
     const { h, chain } = await setup()
     chain.down = 'no_route'
@@ -358,6 +401,42 @@ describe('the owner Close (CR-021)', () => {
     })
     expect(res.json().intents).toEqual([expect.objectContaining({ agentId: 'agent-1' })])
     expect(getPosition(h.db, 'agent-2', CHAIN, BONK).amount).toBe(2_000_000_000n)
+  })
+
+  it('sells more than the agent booked: Close sells what the chain holds (CR-026)', async () => {
+    const { h, chain } = await setup()
+    const owner = await bought(h)
+    chain.held.set(BONK, 2_000_000_000n)
+    const res = await owner.call('POST', '/v1/owner/positions/close', {
+      assertion: await owner.stepUp('close_positions', {}),
+    })
+    expect(res.json().intents).toEqual([
+      expect.objectContaining({ amount: '2000000000', status: 'executed' }),
+    ])
+  })
+
+  it("sells only the SOL trading bought, never the owner's gas headroom", async () => {
+    const { h, chain } = await setup()
+    const owner = await signedIn(h)
+    const sol = { chain: CHAIN, token: WSOL, amount: 10_000_000n, cost: 1_500_000n, decimals: 9 }
+    applyTrade(h.db, { agentId: 'agent-1', side: 'buy', ...sol }, NOW)
+    chain.held.set(WSOL, 50_000_000n)
+    const res = await owner.call('POST', '/v1/owner/positions/close', {
+      assertion: await owner.stepUp('close_positions', {}),
+    })
+    expect(res.json().intents).toEqual([
+      expect.objectContaining({ token: WSOL, amount: '10000000' }),
+    ])
+  })
+
+  it('leaves SOL alone when trading bought none', async () => {
+    const { h, chain } = await setup()
+    const owner = await signedIn(h)
+    chain.held.set(WSOL, 50_000_000n)
+    const res = await owner.call('POST', '/v1/owner/positions/close', {
+      assertion: await owner.stepUp('close_positions', {}),
+    })
+    expect(res.json().intents).toEqual([])
   })
 
   it('sells even when the policy requires mandates: Close is the owner own action', async () => {

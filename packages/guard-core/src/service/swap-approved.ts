@@ -1,10 +1,11 @@
 import type { PayIntent, SwapQuote } from '@defimind/shared'
 import * as repo from '../db/repo.js'
-import { boughtToday, everHeld, getPosition } from '../db/trades.js'
+import { bookOf } from '../db/day-book.js'
 import { evaluateTrade } from '../domain/trading.js'
 import { reject, type PaymentDeps } from './payments.js'
-import { clearSwap, pairOf } from './swap.js'
-import { adapterFor } from './wallets.js'
+import { clearSwap } from './swap.js'
+import { dollarOf, gasReason, pairOf, swapLegs, valueOf } from './swap-quote.js'
+import { adapterFor, signerKey } from './wallets.js'
 
 /**
  * A swap the owner approved. The policy runs again, since the agent may have been paused or the
@@ -13,7 +14,7 @@ import { adapterFor } from './wallets.js'
  * lower minimum.
  */
 export async function sendApprovedSwap(deps: PaymentDeps, first: PayIntent): Promise<PayIntent> {
-  return deps.serial(first.agentId, async () => {
+  return deps.serial(signerKey(deps, first.agentId, first.chain), async () => {
     const { db, now } = deps
     const intent = repo.getIntent(db, first.id)
     if (intent?.status !== 'approved' || intent.kind !== 'swap' || intent.swap === undefined) {
@@ -48,20 +49,30 @@ export async function sendApprovedSwap(deps: PaymentDeps, first: PayIntent): Pro
       decimalsIn: details.decimalsIn,
       decimalsOut: details.decimalsOut,
     }
-    const verdict = evaluateTrade(
-      { ...pair, request, quote },
-      policy,
-      {
-        tradedToday: boughtToday(db, intent.agentId, intent.chain, repo.utcDay(now())),
-        positionCost: getPosition(db, intent.agentId, intent.chain, pair.token).cost,
-        boughtBefore: everHeld(db, intent.chain, pair.token),
-      },
-      now(),
-    )
+    const gas = await gasReason(adapter, request, pair.side)
+    if (gas !== undefined) {
+      return reject(deps, intent, [gas])
+    }
+    // A swap is valued again: the prices the owner saw may have moved (CR-026).
+    const maxImpact = policy.trading?.maxPriceImpactBps ?? 0
+    const valueUsd =
+      pair.side === 'swap'
+        ? await valueOf(adapter, swapLegs(request, details.minAmountOut), maxImpact, now())
+        : undefined
+    const where = {
+      agentId: intent.agentId,
+      chain: intent.chain,
+      token: pair.token,
+      spends: pair.spends,
+    }
+    const day = repo.utcDay(now())
+    const book = bookOf(db, { ...where, dollar: dollarOf(deps, intent.chain), day }, false)
+    const trade = { ...pair, request, quote, ...(valueUsd === undefined ? {} : { valueUsd }) }
+    const verdict = evaluateTrade(trade, policy, book, now())
     if (verdict.reasons.length > 0) {
       return reject(deps, intent, verdict.reasons)
     }
-    const how = { side: pair.side, verdict, shadow: false, policy }
+    const how = { side: pair.side, verdict, shadow: false, policy, valueUsd: valueUsd ?? 0n }
     return clearSwap(deps, adapter, intent, how, 'approved')
   })
 }

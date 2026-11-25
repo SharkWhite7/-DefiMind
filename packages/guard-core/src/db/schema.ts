@@ -2,6 +2,8 @@ import type {
   Address,
   AgentWalletStatus,
   Mandate,
+  OrderKind,
+  OrderStatus,
   Receipt,
   Amount,
   ChainId,
@@ -358,6 +360,16 @@ export const dailyTrades = sqliteTable(
       .$type<Amount>()
       .notNull()
       .default(sql`'0'`),
+    /** CR-026: sells, at the dollars each was quoted to bring at least. */
+    sold: text('sold')
+      .$type<Amount>()
+      .notNull()
+      .default(sql`'0'`),
+    /** CR-026: token-to-token swaps, at their valuation in the chain's dollar. */
+    swapped: text('swapped')
+      .$type<Amount>()
+      .notNull()
+      .default(sql`'0'`),
   },
   (t) => [primaryKey({ columns: [t.agentId, t.chain, t.day] })],
 )
@@ -412,3 +424,29 @@ export const agentWallets = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.agentId, t.chain] })],
 )
+
+/** CR-026: take-profit and stop-loss orders, each filled as a sell to the chain's dollar. */
+export const orders = sqliteTable(
+  'orders',
+  {
+    id: text('id').primaryKey(),
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id),
+    chain: text('chain').$type<ChainId>().notNull(),
+    token: text('token').$type<Address>().notNull(),
+    kind: text('kind').$type<OrderKind>().notNull(),
+    amount: text('amount').$type<Amount>().notNull(),
+    triggerOut: text('trigger_out').$type<Amount>().notNull(),
+    maxSlippageBps: integer('max_slippage_bps').notNull(),
+    createdBy: text('created_by').$type<'agent' | 'owner'>().notNull(),
+    status: text('status').$type<OrderStatus>().notNull(),
+    createdAt: text('created_at').notNull(),
+    expiresAt: text('expires_at'),
+    filledIntentId: text('filled_intent_id'),
+    failReason: text('fail_reason').$type<RejectCode>(),
+  },
+  (t) => [index('orders_status').on(t.status), index('orders_agent').on(t.agentId)],
+)
+
+export * from './trader-schema.js'

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { addBought, applyTrade } from '../src/db/trades.js'
+import { addBought } from '../src/db/day-book.js'
+import { applyTrade } from '../src/db/trades.js'
 import { CHAIN, harness, NOW } from './harness.js'
 import { signedIn } from './owner.js'
 

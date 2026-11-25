@@ -84,6 +84,26 @@ export const tradeResult = z.object({
   txId: text(128).optional(),
 })
 
+/** CR-026: a take-profit or stop-loss, placed by the agent or the owner. */
+export const order = z.object({
+  id: text(64),
+  agentId,
+  chain: text(64),
+  token: text(128),
+  kind: z.enum(['take_profit', 'stop_loss']),
+  amount: atomic,
+  triggerOut: atomic,
+  maxSlippageBps: bps,
+  createdBy: z.enum(['agent', 'owner']),
+  status: z.enum(['open', 'triggered', 'filled', 'cancelled', 'failed']),
+  createdAt: isoTime,
+  expiresAt: isoTime.optional(),
+  filledIntentId: text(64).optional(),
+  failReason: text(64).optional(),
+})
+
+export const orders = z.object({ orders: z.array(order).max(1000) })
+
 /** SPEC v0.17, CR-022: an agent's own hot wallet on one chain, opt-in. */
 export const agentWallet = z.object({
   chain: text(64),
@@ -135,6 +155,8 @@ export const approvalRequest = z.object({
   approveBefore: isoTime,
   flags: z.array(text(64)).max(8).default([]),
   pinned: z.object({ recipient: text(128), amount: atomic }).optional(),
+  // CR-024: a buy asked before its test run; funded and test-run only once approved.
+  untested: z.literal(true).optional(),
 })
 
 export const mandate = z.object({
@@ -162,6 +184,8 @@ export const overview = z.object({
   mandates: z.array(mandateRequest).max(500),
 })
 
+const operation = z.object({ maxTradeUsd: atomic, dailyMax: atomic })
+
 export const policy = z.object({
   agentId,
   chains: z.array(text(64)).max(16),
@@ -187,6 +211,23 @@ export const policy = z.object({
       maxPositionUsd: atomic,
       maxSlippageBps: bps,
       maxPriceImpactBps: bps,
+      // CR-026: per mint, per kind of trade, and the agent's own orders.
+      tokenLimits: z
+        .record(
+          text(128),
+          z.object({ maxBuyUsd: atomic.optional(), maxHeldUsd: atomic.optional() }),
+        )
+        .optional(),
+      operations: z
+        .object({
+          buy: operation.optional(),
+          sell: operation.optional(),
+          swap: operation.optional(),
+        })
+        .optional(),
+      orders: z
+        .object({ enabled: z.boolean(), maxOpen: z.number().int().nonnegative() })
+        .optional(),
     })
     .optional(),
 })
@@ -393,7 +434,11 @@ export const created = z.object({ agentId, token: z.string().min(16).max(512) })
 export const session = z.object({ expiresAt: isoTime })
 export const pushKey = z.object({ publicKey: z.string().regex(/^[A-Za-z0-9_-]+$/) })
 export const pushId = z.object({ id: text(128) })
-export const problem = z.object({ error: text(64) })
+export const problem = z.object({
+  error: text(64),
+  // CR-026: an order that cannot be placed says why.
+  rejectReasons: z.array(text(64)).max(32).optional(),
+})
 
 export type Overview = z.infer<typeof overview>
 export type ApprovalView = z.infer<typeof approvalRequest>
@@ -404,6 +449,7 @@ export type AgentWalletView = z.infer<typeof agentWallet>
 export type TokenInfo = z.infer<typeof tokenInfo>
 export type TokenRiskView = z.infer<typeof tokenRisk>
 export type QuoteView = z.infer<typeof swapQuote>
+export type OrderView = z.infer<typeof order>
 export type PolicyView = z.infer<typeof policy>
 export type BudgetView = z.infer<typeof budget>
 export type KillView = z.infer<typeof kill>

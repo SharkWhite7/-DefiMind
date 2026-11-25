@@ -37,7 +37,7 @@ importers:
         version: 8.74.0(eslint@9.39.5)(typescript@5.9.3)
       vitest:
         specifier: ^4.1.12
-        version: 4.1.12(@types/node@22.20.5)(@vitest/coverage-v8@4.1.12)(vite@7.3.7(@types/node@22.20.5)(tsx@4.23.15)(yaml@2.9.1))
+        version: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(@vitest/coverage-v8@4.1.12)(vite@7.3.7(@types/node@22.20.5)(tsx@4.23.15)(yaml@2.9.1))
 
   e2e:
     devDependencies:
@@ -64,10 +64,10 @@ importers:
         version: 1.32.2(zod@4.6.7)
       '@solana/kit':
         specifier: ^8.6.0
-        version: 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+        version: 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/spl-token':
         specifier: ^0.4.15
-        version: 0.4.15(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+        version: 0.4.15(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@5.9.3))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/web3.js':
         specifier: ^1.99.0
         version: 1.99.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -76,7 +76,7 @@ importers:
         version: 2.29.0
       '@x402/evm':
         specifier: ^2.29.0
-        version: 2.29.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+        version: 2.29.0(bufferutil@4.1.0)(typescript@5.9.3)
       '@x402/svm':
         specifier: ^2.29.0
         version: 2.29.0(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))(@solana/sysvars@8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
@@ -119,6 +119,9 @@ importers:
 
   packages/guard-core:
     dependencies:
+      '@anthropic-ai/sdk':
+        specifier: 1.8.0
+        version: 1.8.0(zod@4.6.7)
       '@defimind/onchain':
         specifier: workspace:*
         version: link:../onchain
@@ -139,7 +142,7 @@ importers:
         version: 13.0.3
       drizzle-orm:
         specifier: ^0.45.4
-        version: 0.45.4(@types/better-sqlite3@9.6.0)(better-sqlite3@13.0.3)
+        version: 0.45.4(@opentelemetry/api@1.10.0)(@types/better-sqlite3@9.6.0)(better-sqlite3@13.0.3)
       fastify:
         specifier: ^5.12.8
         version: 5.12.8
@@ -207,10 +210,10 @@ importers:
         version: 8.0.11(bufferutil@4.1.0)(typescript@5.9.3)(zod@4.6.7)
       '@solana/kit':
         specifier: ^8.6.0
-        version: 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+        version: 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/spl-token':
         specifier: ^0.4.15
-        version: 0.4.15(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+        version: 0.4.15(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@5.9.3))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/web3.js':
         specifier: ^1.99.0
         version: 1.99.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -222,7 +225,7 @@ importers:
         version: 2.29.0
       '@x402/evm':
         specifier: ^2.29.0
-        version: 2.29.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+        version: 2.29.0(bufferutil@4.1.0)(typescript@5.9.3)
       '@x402/svm':
         specifier: ^2.29.0
         version: 2.29.0(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))(@solana/sysvars@8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
@@ -321,6 +324,15 @@ packages:
 
   '@adraffy/ens-normalize@1.11.1':
     resolution: {integrity: sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ==}
+
+  '@anthropic-ai/sdk@1.8.0':
+    resolution: {integrity: sha512-yDOArk2+Qpd/djEKmZjrv7JZ+pn5iBHARJ9PAdvfhGf4H5wNqTgY/2K0/yDKdQdm8G8hrNQchMlBAHpPK7yBfg==}
+    hasBin: true
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
+    peerDependenciesMeta:
+      zod:
+        optional: true
 
   '@babel/helper-string-parser@7.29.11':
     resolution: {integrity: sha512-snZbO7MEDOof+hvNa97EjEY7qD7h2kwvQr5AJC3ZhQudKW5dnej6k3kP9NQV88hJwaS8vDqRLFo9rivLEhle2g==}
@@ -1068,6 +1080,10 @@ packages:
     resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
     engines: {node: '>= 20.19.0'}
 
+  '@opentelemetry/api@1.10.0':
+    resolution: {integrity: sha512-lMkyes8iHrG+mk6WH7X70MdCLI2RS0FwNBY1PyQ8UemaijE2m5mv5A0Niy3HtbYTFrgkUEQjFMXmSAk2hQDuPQ==}
+    engines: {node: '>=8.0.0'}
+
   '@peculiar/asn1-android@2.11.1':
     resolution: {integrity: sha512-AuUBRDNdWrgtnuJGXARa0Xdtq6OAD8GqezDQz6Qka7kyynMo9fzkcrtpBEHuX984uEB570BrhMZfJfkUDfpQfw==}
     engines: {node: '>=14'}
@@ -1811,6 +1827,9 @@ packages:
   '@sqds/multisig@2.1.4':
     resolution: {integrity: sha512-5w+NmwHOzl96nI50R/fjSD6uFydRLNUquhoEmmWbGepS4D9DnQyF2TKcUBfTyxV3sgJt00ypBt7SXB3y8WOzUQ==}
     engines: {node: '>=14'}
+
+  '@stablelib/base64@1.0.1':
+    resolution: {integrity: sha512-1bnPQqSxSuc3Ii6MhBysoWCg58j97aUjuCSZrGSmDxNqtytIi0k8utUenAwTZN4V5mXXYGsVUI9zeBqy+jBOSQ==}
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
@@ -2606,6 +2625,9 @@ packages:
   fast-querystring@1.1.2:
     resolution: {integrity: sha512-g6KuKWmFXc0fID8WWH0jit4g0AGBoJhCkJMb1RmbsSEUNvQ+ZC8D6CUZ+GtF8nMzSPXnhiePyyqqipzNNEnHjg==}
 
+  fast-sha256@1.3.0:
+    resolution: {integrity: sha512-n11RGP/lrWEFI/bWdygLxhI+pVeo1ZYIVwvvPkW7azl/rOy+F3HYRZ2K5zeE9mmkhQppyv9sQFx0JM9UabnpPQ==}
+
   fast-stable-stringify@1.0.0:
     resolution: {integrity: sha512-wpYMUmFu5f00Sm0cj2pfivpmawLZ0NKdviQ4w9zJeR8JVtOpOxHmLaJuj0vxvGqMJQWyP/COUkF75/57OKyRag==}
 
@@ -2913,6 +2935,10 @@ packages:
 
   json-schema-ref-resolver@3.0.1:
     resolution: {integrity: sha512-w+HwgljXpVwZ3IidoUR1qPZxSOQ+NRQWuVe6a5pe8XbHsNZE4UAwVPUvzZagn7yBKbJtt6UJnRFYbNTRPZI45Q==}
+
+  json-schema-to-ts@3.1.1:
+    resolution: {integrity: sha512-+DWg8jCJG2TEnpy7kOm/7/AxaYoaRbjVB4LFZLySZlWn8exGs3A4OLJR966cVvU26N7X9TWxl+Jsw7dzAqKT6g==}
+    engines: {node: '>=16'}
 
   json-schema-traverse@0.4.1:
     resolution: {integrity: sha512-xbbCH5dCYU5T8LcEhhuh7HJ88HXuW3qsI3Y0zOZFKfZEHcpWiHU/Jxzk629Brsab/mMiHQti9wMP+845RPe3Vg==}
@@ -3469,6 +3495,9 @@ packages:
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
 
+  standardwebhooks@1.3.0:
+    resolution: {integrity: sha512-5W9skHjqAm2dlA9wWvglTP+oX47JX4lFXVk1aJV7+TG1snvTR4QXaVgPscEzvOw9GRreeavMwbqEeL+MGhZHCg==}
+
   statuses@2.0.2:
     resolution: {integrity: sha512-DvEy55V3DB7uknRo+4iOGT5fP1slR8wQohVdknigZPMpMstaKJQWhwiYBACJE3Ul2pTnATihhBYnRhZQHGBiRw==}
     engines: {node: '>= 0.8'}
@@ -3543,6 +3572,9 @@ packages:
 
   tr46@0.0.3:
     resolution: {integrity: sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==}
+
+  ts-algebra@2.0.0:
+    resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
 
   ts-api-utils@2.5.0:
     resolution: {integrity: sha512-OJ/ibxhPlqrMM0UiNHJ/0CKQkoKF243/AEmplt3qpRgkW8VG7IfOS41h7V8TjITqdByHzrjcS/2si+y4lIh8NA==}
@@ -3808,6 +3840,14 @@ packages:
 snapshots:
 
   '@adraffy/ens-normalize@1.11.1': {}
+
+  '@anthropic-ai/sdk@1.8.0(zod@4.6.7)':
+    dependencies:
+      '@opentelemetry/api': 1.10.0
+      json-schema-to-ts: 3.1.1
+      standardwebhooks: 1.3.0
+    optionalDependencies:
+      zod: 4.6.7
 
   '@babel/helper-string-parser@7.29.11': {}
 
@@ -4470,6 +4510,8 @@ snapshots:
 
   '@noble/hashes@2.4.0': {}
 
+  '@opentelemetry/api@1.10.0': {}
+
   '@peculiar/asn1-android@2.11.1':
     dependencies:
       '@peculiar/asn1-schema': 2.11.1
@@ -4707,16 +4749,16 @@ snapshots:
 
   '@solana-program/compute-budget@0.18.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))':
     dependencies:
-      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
 
   '@solana-program/record@0.4.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))':
     dependencies:
       '@solana-program/system': 0.14.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
-      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
 
   '@solana-program/system@0.14.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))':
     dependencies:
-      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
 
   '@solana-program/token-2022@0.16.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))(@solana/sysvars@8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))':
     dependencies:
@@ -4724,18 +4766,18 @@ snapshots:
       '@solana-program/record': 0.4.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
       '@solana-program/system': 0.14.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
       '@solana-program/zk-elgamal-proof': 0.4.0(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
-      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/sysvars': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
 
   '@solana-program/token@0.16.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))':
     dependencies:
       '@solana-program/system': 0.14.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
-      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
 
   '@solana-program/zk-elgamal-proof@0.4.0(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))':
     dependencies:
       '@solana-program/system': 0.14.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
-      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
 
   '@solana/accounts@8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)':
     dependencies:
@@ -4780,7 +4822,7 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@solana/buffer-layout-utils@0.3.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+  '@solana/buffer-layout-utils@0.3.0(bufferutil@4.1.0)(typescript@5.9.3)':
     dependencies:
       '@solana/buffer-layout': 4.0.1
       '@solana/web3.js': 1.99.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -4957,7 +4999,7 @@ snapshots:
     transitivePeerDependencies:
       - fastestsmallesttextencoderdecoder
 
-  '@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+  '@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)':
     dependencies:
       '@solana/accounts': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/addresses': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
@@ -4977,12 +5019,12 @@ snapshots:
       '@solana/rpc-api': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/rpc-parsed-types': 8.6.0(typescript@5.9.3)
       '@solana/rpc-spec-types': 8.6.0(typescript@5.9.3)
-      '@solana/rpc-subscriptions': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/rpc-subscriptions': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/rpc-types': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/signers': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/subscribable': 8.6.0(typescript@5.9.3)
       '@solana/sysvars': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
-      '@solana/transaction-confirmation': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/transaction-confirmation': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/transaction-introspection': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/transaction-messages': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/transactions': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
@@ -5134,7 +5176,7 @@ snapshots:
     transitivePeerDependencies:
       - fastestsmallesttextencoderdecoder
 
-  '@solana/rpc-subscriptions-channel-websocket@8.6.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+  '@solana/rpc-subscriptions-channel-websocket@8.6.0(bufferutil@4.1.0)(typescript@5.9.3)':
     dependencies:
       '@solana/errors': 8.6.0(typescript@5.9.3)
       '@solana/functional': 8.6.0(typescript@5.9.3)
@@ -5156,7 +5198,7 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
 
-  '@solana/rpc-subscriptions@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+  '@solana/rpc-subscriptions@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)':
     dependencies:
       '@solana/errors': 8.6.0(typescript@5.9.3)
       '@solana/fast-stable-stringify': 8.6.0(typescript@5.9.3)
@@ -5164,7 +5206,7 @@ snapshots:
       '@solana/promises': 8.6.0(typescript@5.9.3)
       '@solana/rpc-spec-types': 8.6.0(typescript@5.9.3)
       '@solana/rpc-subscriptions-api': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
-      '@solana/rpc-subscriptions-channel-websocket': 8.6.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/rpc-subscriptions-channel-websocket': 8.6.0(bufferutil@4.1.0)(typescript@5.9.3)
       '@solana/rpc-subscriptions-spec': 8.6.0(typescript@5.9.3)
       '@solana/rpc-transformers': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/rpc-types': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
@@ -5274,10 +5316,10 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@solana/spl-token@0.4.15(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+  '@solana/spl-token@0.4.15(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@5.9.3))(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)':
     dependencies:
       '@solana/buffer-layout': 4.0.1
-      '@solana/buffer-layout-utils': 0.3.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/buffer-layout-utils': 0.3.0(bufferutil@4.1.0)(typescript@5.9.3)
       '@solana/spl-token-group': 0.0.7(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@5.9.3))(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/spl-token-metadata': 0.1.6(@solana/web3.js@1.99.0(bufferutil@4.1.0)(typescript@5.9.3))(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/web3.js': 1.99.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)
@@ -5309,7 +5351,7 @@ snapshots:
     transitivePeerDependencies:
       - fastestsmallesttextencoderdecoder
 
-  '@solana/transaction-confirmation@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+  '@solana/transaction-confirmation@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)':
     dependencies:
       '@solana/addresses': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/codecs-strings': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
@@ -5317,7 +5359,7 @@ snapshots:
       '@solana/keys': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/promises': 8.6.0(typescript@5.9.3)
       '@solana/rpc': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
-      '@solana/rpc-subscriptions': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/rpc-subscriptions': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/rpc-types': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/transaction-messages': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/transactions': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
@@ -5420,6 +5462,8 @@ snapshots:
       - supports-color
       - typescript
       - utf-8-validate
+
+  '@stablelib/base64@1.0.1': {}
 
   '@standard-schema/spec@1.1.0': {}
 
@@ -5580,7 +5624,7 @@ snapshots:
       obug: 2.2.1
       std-env: 4.3.0
       tinyrainbow: 3.2.0
-      vitest: 4.1.12(@types/node@22.20.5)(@vitest/coverage-v8@4.1.12)(vite@7.3.7(@types/node@22.20.5)(tsx@4.23.15)(yaml@2.9.1))
+      vitest: 4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(@vitest/coverage-v8@4.1.12)(vite@7.3.7(@types/node@22.20.5)(tsx@4.23.15)(yaml@2.9.1))
 
   '@vitest/expect@4.1.12':
     dependencies:
@@ -5627,7 +5671,7 @@ snapshots:
     dependencies:
       zod: 4.6.7
 
-  '@x402/evm@2.29.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)':
+  '@x402/evm@2.29.0(bufferutil@4.1.0)(typescript@5.9.3)':
     dependencies:
       '@x402/core': 2.29.0
       viem: 2.57.16(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@6.0.6)(zod@4.6.7)
@@ -5644,7 +5688,7 @@ snapshots:
       '@solana-program/compute-budget': 0.18.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
       '@solana-program/token': 0.16.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
       '@solana-program/token-2022': 0.16.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))(@solana/sysvars@8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
-      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@solana/program-client-core': 8.6.0(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
       '@x402/core': 2.29.0
     transitivePeerDependencies:
@@ -5995,8 +6039,9 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.23.15
 
-  drizzle-orm@0.45.4(@types/better-sqlite3@9.6.0)(better-sqlite3@13.0.3):
+  drizzle-orm@0.45.4(@opentelemetry/api@1.10.0)(@types/better-sqlite3@9.6.0)(better-sqlite3@13.0.3):
     optionalDependencies:
+      '@opentelemetry/api': 1.10.0
       '@types/better-sqlite3': 9.6.0
       better-sqlite3: 13.0.3
 
@@ -6301,6 +6346,8 @@ snapshots:
   fast-querystring@1.1.2:
     dependencies:
       fast-decode-uri-component: 1.0.1
+
+  fast-sha256@1.3.0: {}
 
   fast-stable-stringify@1.0.0: {}
 
@@ -6634,6 +6681,11 @@ snapshots:
     dependencies:
       dequal: 2.0.3
 
+  json-schema-to-ts@3.1.1:
+    dependencies:
+      '@babel/runtime': 7.29.10
+      ts-algebra: 2.0.0
+
   json-schema-traverse@0.4.1: {}
 
   json-schema-traverse@1.0.0: {}
@@ -6701,7 +6753,7 @@ snapshots:
     dependencies:
       '@solana-program/system': 0.14.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
       '@solana-program/token': 0.16.1(@solana/kit@8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3))
-      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)(utf-8-validate@6.0.6)
+      '@solana/kit': 8.6.0(bufferutil@4.1.0)(fastestsmallesttextencoderdecoder@1.0.22)(typescript@5.9.3)
     optionalDependencies:
       litesvm-darwin-arm64: 1.6.1
       litesvm-darwin-x64: 1.6.1
@@ -7238,6 +7290,11 @@ snapshots:
 
   stackback@0.0.2: {}
 
+  standardwebhooks@1.3.0:
+    dependencies:
+      '@stablelib/base64': 1.0.1
+      fast-sha256: 1.3.0
+
   statuses@2.0.2: {}
 
   std-env@4.3.0: {}
@@ -7306,6 +7363,8 @@ snapshots:
   toidentifier@1.0.1: {}
 
   tr46@0.0.3: {}
+
+  ts-algebra@2.0.0: {}
 
   ts-api-utils@2.5.0(typescript@5.9.3):
     dependencies:
@@ -7423,7 +7482,7 @@ snapshots:
       tsx: 4.23.15
       yaml: 2.9.1
 
-  vitest@4.1.12(@types/node@22.20.5)(@vitest/coverage-v8@4.1.12)(vite@7.3.7(@types/node@22.20.5)(tsx@4.23.15)(yaml@2.9.1)):
+  vitest@4.1.12(@opentelemetry/api@1.10.0)(@types/node@22.20.5)(@vitest/coverage-v8@4.1.12)(vite@7.3.7(@types/node@22.20.5)(tsx@4.23.15)(yaml@2.9.1)):
     dependencies:
       '@vitest/expect': 4.1.12
       '@vitest/mocker': 4.1.12(vite@7.3.7(@types/node@22.20.5)(tsx@4.23.15)(yaml@2.9.1))
@@ -7446,6 +7505,7 @@ snapshots:
       vite: 7.3.7(@types/node@22.20.5)(tsx@4.23.15)(yaml@2.9.1)
       why-is-node-running: 2.3.0
     optionalDependencies:
+      '@opentelemetry/api': 1.10.0
       '@types/node': 22.20.5
       '@vitest/coverage-v8': 4.1.12(vitest@4.1.12)
     transitivePeerDependencies:

@@ -18,6 +18,8 @@ import { ownerKeysRoute } from './owner-setup.js'
 import { type ChainHost, ownerSettingsRoutes } from './owner-settings.js'
 import { ownerGuideRoutes } from './owner-guide.js'
 import { ownerTradingRoutes } from './owner-trading.js'
+import { ownerOrderRoutes } from './orders.js'
+import { ownerTraderRoutes } from './trader.js'
 import { jupiterTokens, type TokenSearch } from '../adapters/jupiter-tokens.js'
 import { ownerWalletRoutes, type Signing, withLinks } from './owner-wallets.js'
 import type { PublicKeys } from '../adapters/public-keys.js'
@@ -54,6 +56,8 @@ export function ownerPanelRoutes(
     signing?: Signing
     keys?: PublicKeys
     host?: ChainHost
+    /** Whether ANTHROPIC_API_KEY is set, for the AI trader (CR-027). */
+    traderKey?: boolean
     /** Jupiter's token search; a test passes its own. */
     tokenSearch?: TokenSearch
   },
@@ -88,6 +92,9 @@ export function ownerPanelRoutes(
     await app.register(
       ownerTradingRoutes(deps, setup.tokenSearch ?? jupiterTokens(deps.fetch), stepUp),
     )
+
+    await app.register(ownerOrderRoutes(deps, stepUp))
+    await app.register(ownerTraderRoutes(deps, setup.traderKey ?? false, stepUp))
 
     app.post('/v1/owner/challenge', async (request) => {
       const { action, body } = ownerChallenge.parse(request.body)

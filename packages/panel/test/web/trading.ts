@@ -26,6 +26,12 @@ export function tradingMock(later: string) {
     closes: [] as Bound[],
     quotes: [] as Record<string, unknown>[],
     trades: [] as { body: Record<string, unknown>; bound: Bound }[],
+    orders: [] as Record<string, unknown>[],
+    placed: [] as Bound[],
+    /** CR-026's placing checks, as guard-core would answer them. */
+    refuse: [] as string[],
+    /** A quote for another amount than asked, as a wrong or tampered answer would be. */
+    skew: false,
   }
   const token = (mint: string, verified: boolean) => ({
     chain,
@@ -79,6 +85,7 @@ export function tradingMock(later: string) {
     simulation: { summary: 'Spends 25 USDC; receives at least 1,843.920113 JUP.' },
     approveBefore: later,
     flags: ['NEW_TOKEN', 'MINT_AUTHORITY'],
+    untested: true,
   })
 
   function route(
@@ -99,7 +106,7 @@ export function tradingMock(later: string) {
     }
     if (method === 'POST' && path === '/v1/owner/quote') {
       state.quotes.push(body)
-      const amountIn = String(body['amountIn'])
+      const amountIn = state.skew ? '1' : String(body['amountIn'])
       send(200, {
         venue: 'jupiter',
         tokenIn: body['tokenIn'],
@@ -124,6 +131,45 @@ export function tradingMock(later: string) {
       }
       state.trades.push({ body, bound })
       send(200, { intentId: randomUUID(), status: 'executed', rejectReasons: [], txId: 'sig' })
+      return true
+    }
+    if (method === 'GET' && path === '/v1/owner/orders') {
+      send(200, { orders: state.orders })
+      return true
+    }
+    if (method === 'POST' && path === '/v1/owner/orders') {
+      const bound = stepUp()
+      if (bound?.action !== 'place_order') {
+        send(403, { error: 'step_up_required' })
+        return true
+      }
+      if (state.refuse.length > 0) {
+        send(409, { error: 'order_refused', rejectReasons: state.refuse })
+        return true
+      }
+      state.placed.push(bound)
+      const { assertion: _, ...fields } = body
+      const order = {
+        id: randomUUID(),
+        maxSlippageBps: 100,
+        ...fields,
+        createdBy: 'owner',
+        status: 'open',
+        createdAt: later,
+      }
+      state.orders.push(order)
+      send(200, order)
+      return true
+    }
+    const cancel = /^\/v1\/owner\/orders\/([^/]+)\/cancel$/.exec(path)
+    if (method === 'POST' && cancel) {
+      const order = state.orders.find((o) => o['id'] === cancel[1])
+      if (order === undefined) {
+        send(404, { error: 'not_found' })
+        return true
+      }
+      order['status'] = 'cancelled'
+      send(200, order)
       return true
     }
     if (method === 'GET' && path === '/v1/owner/portfolio') {

@@ -6,13 +6,17 @@ import { z } from 'zod'
  * format.
  */
 
-const atomicAmount = z.string().regex(/^(0|[1-9]\d*)$/, 'expected atomic units as a decimal string')
+export const atomicAmount = z
+  .string()
+  .regex(/^(0|[1-9]\d*)$/, 'expected atomic units as a decimal string')
 
-const caip2 = z.string().regex(/^[-a-z0-9]{3,8}:[-_a-zA-Z0-9]{1,32}$/, 'expected a CAIP-2 chain id')
+export const caip2 = z
+  .string()
+  .regex(/^[-a-z0-9]{3,8}:[-_a-zA-Z0-9]{1,32}$/, 'expected a CAIP-2 chain id')
 
-const address = z.string().min(1).max(128)
+export const address = z.string().min(1).max(128)
 
-const agentId = z.string().min(1).max(64)
+export const agentId = z.string().min(1).max(64)
 
 /** Shown to the owner on Telegram, so it is bounded: an unbounded field is a message-flood vector. */
 const reason = z.string().max(500)
@@ -97,8 +101,11 @@ export const newAgentRequest = z.object({ agentId: newAgentId })
 export const agentRouteParam = z.object({ id: agentId })
 export const intentIdParam = z.object({ id: z.uuid() })
 
+// Strict, as every CR-026 object below: a misspelt cap must fail, never be dropped and read as set.
+const operationLimit = z.strictObject({ maxTradeUsd: atomicAmount, dailyMax: atomicAmount })
+
 /** CR-021. The two bps limits default as SPEC says; every other field must be given. */
-const tradingBody = z.object({
+const tradingBody = z.strictObject({
   enabled: z.boolean(),
   venues: z.array(z.string().min(1).max(32)).max(8),
   tokens: z.array(address).max(64),
@@ -108,6 +115,21 @@ const tradingBody = z.object({
   maxPositionUsd: atomicAmount,
   maxSlippageBps: z.number().int().min(0).max(10_000).default(100),
   maxPriceImpactBps: z.number().int().min(0).max(10_000).default(300),
+  // CR-026. Absent keeps CR-021's behaviour; bounded like the token list.
+  tokenLimits: z
+    .record(
+      address,
+      z.strictObject({ maxBuyUsd: atomicAmount.optional(), maxHeldUsd: atomicAmount.optional() }),
+    )
+    .refine((limits) => Object.keys(limits).length <= 64, 'at most 64 token limits')
+    .optional(),
+  operations: z
+    .strictObject({ buy: operationLimit, sell: operationLimit, swap: operationLimit })
+    .partial()
+    .optional(),
+  orders: z
+    .strictObject({ enabled: z.boolean(), maxOpen: z.number().int().min(0).max(100) })
+    .optional(),
 })
 
 export const policyBody = z.object({
@@ -209,6 +231,9 @@ const OWNER_ACTIONS = [
   'close_positions',
   'agent_wallet',
   'manual_trade',
+  'place_order',
+  'trader_settings',
+  'resume_trader',
 ] as const
 
 /** CR-012. `body` is hashed as sent, so it is only bounded here, never reshaped. */
