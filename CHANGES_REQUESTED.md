@@ -1701,11 +1701,24 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
      - on network proposals (the thresholds, the reward table, the featured strategies).
        Votes are signed and counted off the chain. The results are advisory, and the owner applies
        them.
+  6. **Fixes from the independent review of this CR**, before any code:
+     - the feed only narrows guard-core's own lists, and a mint offered only through the pass always
+       waits for the owner on its first buy;
+     - a new_risk listing needs a change in the chain's history after the report's slot, and the
+       Radar never refuses the dollar, SOL, a token the owner listed, or any sell;
+     - linking uses Sign-In With Solana on guard-core's own signing page, with one credential per
+       wallet;
+     - strategy text is plain printable text with no addresses, cashtags or quoted words, and
+       traders on a network strategy never see candidate names or symbols;
+     - admin actions are signed over the domain, the body and a nonce;
+     - weight snapshots share one slot and a missed read counts as 0;
+     - points need a token that was live before the report, and are capped;
+     - automatic reports carry only the mint, the rule and a slot, after a random delay.
 - **Rows:**
   - network (new package, owner to be assigned by the manager): NET-1 (the service);
   - guard-core: GC-75 (the link, the Radar sync and refusal, shield reports, the pass feed in
     discover_tokens, the marketplace proxy);
-  - onchain: ON-37 (the signing page's sign-message action);
+  - onchain: ON-37 (the signing page's link action, through the wallet's Sign-In With Solana);
   - panel: PANEL-28 (linking, reports, the marketplace, votes, Radar alerts);
   - integrator: INT-54 (SPEC, shared types, the e2e).
 - **Before it goes live (owner):**

@@ -3,24 +3,29 @@ import type { TraderTemplate } from './trader-templates.js'
 
 /**
  * CR-029: the DefiMind Network's shapes. Nothing here can approve, buy or sell: a deployment uses
- * the Radar only to refuse a buy and the feed only to narrow a list.
+ * the Radar only to refuse a buy and the feed only to narrow its own list.
  */
 export type RadarRule = 'new_risk' | 'liquidity_gone'
 
+/** No baseline and no amounts: the network confirms every claim from the chain itself. */
 export interface RadarReport {
   mint: Address
   rule: RadarRule
-  evidence: {
-    slot: number
-    /** The reporter's own baseline. The network confirms a supply jump from the chain, not this. */
-    baseline?: {
-      freezeAuthority: boolean
-      mintAuthority: boolean
-      extensions: string[]
-      supply: Amount
-    }
-    observedAt: string
-  }
+  /** Where the deployment saw it; within RADAR_MAX_LOOKBACK. */
+  slot: number
+}
+
+/** "DefiMind Network admin v1\n" + canonical JSON of the signed fields, by ADMIN_WALLET. */
+export interface AdminSignature {
+  domain: string
+  action: 'clear_listing' | 'remove_strategy' | 'create_proposal'
+  target: string
+  bodySha256: string
+  reason: string
+  at: string
+  nonce: string
+  /** base58 ed25519 signature. */
+  signature: string
 }
 
 export interface RadarListing {
@@ -31,10 +36,13 @@ export interface RadarListing {
   status: 'listed' | 'cleared'
   listedAt: string
   clearedAt?: string
+  /** Required to clear a new_risk listing; guard-core drops a clearance that does not verify. */
+  clearance?: AdminSignature
 }
 
 export interface NetworkStrategy {
   id: string
+  /** Versions share one strategy's votes and its slot. */
   version: number
   /** The holder wallet that published it. */
   creator: Address
@@ -42,7 +50,7 @@ export interface NetworkStrategy {
   name: string
   /** At most 200 characters. */
   summary: string
-  /** At most 2000 characters; the network refuses any mint or address in it. */
+  /** At most 2000 characters of NFKC printable text, with no address, cashtag or quoted word. */
   instructions: string
   suggested: TraderTemplate['suggested']
   /** Held weight in the token's atomic units, not a head count. */
