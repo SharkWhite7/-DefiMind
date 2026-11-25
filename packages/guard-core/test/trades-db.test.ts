@@ -1,14 +1,8 @@
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { describe, expect, it } from 'vitest'
 import { openDb, schema } from '../src/db/client.js'
-import {
-  addBought,
-  applyTrade,
-  boughtToday,
-  everHeld,
-  getPosition,
-  listPositions,
-} from '../src/db/trades.js'
+import { addBought, boughtToday } from '../src/db/day-book.js'
+import { applyTrade, everHeld, getPosition, listPositions } from '../src/db/trades.js'
 import { CHAIN, NOW } from './harness.js'
 
 const BONK = 'Bonk111111111111111111111111111111111111111'

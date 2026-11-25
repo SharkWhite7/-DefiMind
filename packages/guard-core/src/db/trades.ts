@@ -1,79 +1,8 @@
-import type { Amount, ChainId, Position } from '@defimind/shared'
-import { and, eq, like, sql } from 'drizzle-orm'
+import type { ChainId, Position } from '@defimind/shared'
+import { and, eq, sql } from 'drizzle-orm'
 import { parseAmount, toAmount } from '../domain/amount.js'
 import type { Db } from './client.js'
-import { dailyTrades, intents, positions } from './schema.js'
-
-/** In shadow nothing is bought, so the day's limit holds against the buys that would have been. */
-export function shadowBoughtToday(
-  db: Db,
-  agentId: string,
-  chain: ChainId,
-  day: string,
-  dollar: string,
-): bigint {
-  return db
-    .select({ amount: intents.amount })
-    .from(intents)
-    .where(
-      and(
-        eq(intents.agentId, agentId),
-        eq(intents.chain, chain),
-        eq(intents.kind, 'swap'),
-        eq(intents.status, 'shadowed'),
-        eq(intents.token, dollar),
-        like(intents.createdAt, `${day}%`),
-      ),
-    )
-    .all()
-    .reduce((sum, row) => sum + parseAmount(row.amount), 0n)
-}
-
-/** Every chain's buys today, for the portfolio. */
-export function boughtTodayAll(db: Db, agentId: string, day: string): bigint {
-  return db
-    .select({ bought: dailyTrades.bought })
-    .from(dailyTrades)
-    .where(and(eq(dailyTrades.agentId, agentId), eq(dailyTrades.day, day)))
-    .all()
-    .reduce((sum, row) => sum + parseAmount(row.bought), 0n)
-}
-
-export function boughtToday(db: Db, agentId: string, chain: ChainId, day: string): bigint {
-  const row = db
-    .select({ bought: dailyTrades.bought })
-    .from(dailyTrades)
-    .where(
-      and(eq(dailyTrades.agentId, agentId), eq(dailyTrades.chain, chain), eq(dailyTrades.day, day)),
-    )
-    .get()
-  return row === undefined ? 0n : parseAmount(row.bought)
-}
-
-/** Read and written in one transaction, so two buys at once cannot both read the old total. */
-export function addBought(db: Db, agentId: string, chain: ChainId, day: string, amount: Amount) {
-  db.transaction((tx) => {
-    const row = tx
-      .select({ bought: dailyTrades.bought })
-      .from(dailyTrades)
-      .where(
-        and(
-          eq(dailyTrades.agentId, agentId),
-          eq(dailyTrades.chain, chain),
-          eq(dailyTrades.day, day),
-        ),
-      )
-      .get()
-    const bought = toAmount(parseAmount(row?.bought ?? '0') + parseAmount(amount))
-    tx.insert(dailyTrades)
-      .values({ agentId, chain, day, bought })
-      .onConflictDoUpdate({
-        target: [dailyTrades.agentId, dailyTrades.chain, dailyTrades.day],
-        set: { bought },
-      })
-      .run()
-  })
-}
+import { positions } from './schema.js'
 
 export function getPosition(db: Db, agentId: string, chain: ChainId, token: string) {
   const row = db

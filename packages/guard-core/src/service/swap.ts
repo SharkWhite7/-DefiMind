@@ -1,12 +1,12 @@
 import { type ChainAdapter, SwapUnavailable } from '@defimind/onchain'
-import type { Amount, PayIntent, Policy, SwapQuote } from '@defimind/shared'
+import type { Amount, PayIntent, Policy, SwapDetails, SwapQuote } from '@defimind/shared'
 import { z } from 'zod'
 import { admit } from '../db/breaker.js'
 import { ownerApprovalMethod, recordOwnerApproval, saveClearance } from '../db/receipts.js'
 import * as repo from '../db/repo.js'
-import { addBought, boughtToday, everHeld, getPosition, shadowBoughtToday } from '../db/trades.js'
-import { parseAmount } from '../domain/amount.js'
-import { evaluateTrade, type Trade, type TradeVerdict } from '../domain/trading.js'
+import { addBought, addSold, bookOf } from '../db/day-book.js'
+import { parseAmount, toAmount } from '../domain/amount.js'
+import { evaluateTrade, expectedOf, type Trade, type TradeVerdict } from '../domain/trading.js'
 import { HttpError } from '../http/errors.js'
 import type { QuoteRequest, SwapRequest } from '../http/schemas.js'
 import { askOwner } from './approvals.js'
@@ -38,6 +38,9 @@ export function pairOf(deps: PaymentDeps, req: QuoteRequest): Pair | undefined {
   }
   return req.tokenOut === dollar ? { side: 'sell', token: req.tokenIn } : undefined
 }
+
+/** The chain's dollar; a swap is priced only on a chain that has one, as pairOf already checked. */
+export const dollarOf = (deps: PaymentDeps, chain: string) => deps.usdc.get(chain) ?? ''
 
 /** The venue is down or answered nonsense: the route says 502, as for an upstream x402 API. */
 export class VenueUnavailable extends Error {
@@ -76,19 +79,19 @@ export function withQuote(
   if (!decimals.success) {
     return undefined
   }
-  const { venue, minAmountOut, slippageBps, priceImpactBps, quotedAt } = quote
-  return {
-    ...intent,
-    swap: {
-      venue,
-      tokenOut,
-      minAmountOut,
-      slippageBps,
-      priceImpactBps,
-      quotedAt,
-      ...decimals.data,
-    },
+  const { venue, expectedOut, minAmountOut, slippageBps, priceImpactBps, quotedAt } = quote
+  // expectedOut is kept beside SwapDetails' fields: a sell counts at it (CR-026).
+  const swap: SwapDetails & { expectedOut: string } = {
+    venue,
+    tokenOut,
+    expectedOut,
+    minAmountOut,
+    slippageBps,
+    priceImpactBps,
+    quotedAt,
+    ...decimals.data,
   }
+  return { ...intent, swap }
 }
 
 /** What the owner is shown for a buy that has drawn nothing yet: it is tested once approved. */
@@ -173,20 +176,14 @@ export async function swap(
     }
     repo.saveIntent(db, priced)
     const shadow = policy.mode === 'shadow'
-    const day = repo.utcDay(now())
     const trade: Trade = { ...pair, request: req, quote: answer }
-    const verdict = evaluateTrade(
-      trade,
-      policy,
-      {
-        tradedToday: shadow
-          ? shadowBoughtToday(db, req.agentId, req.chain, day, req.tokenIn)
-          : boughtToday(db, req.agentId, req.chain, day),
-        positionCost: getPosition(db, req.agentId, req.chain, pair.token).cost,
-        boughtBefore: everHeld(db, req.chain, pair.token),
-      },
-      now(),
+    const where = { agentId: req.agentId, chain: req.chain, token: pair.token }
+    const book = bookOf(
+      db,
+      { ...where, dollar: dollarOf(deps, req.chain), day: repo.utcDay(now()) },
+      shadow,
     )
+    const verdict = evaluateTrade(trade, policy, book, now())
     repo.audit(
       db,
       {
@@ -285,8 +282,11 @@ export async function clearSwap(
     simulation: simulation.summary,
     approvedBy: owner === undefined ? 'policy' : (ownerApprovalMethod(db, intent.id) ?? 'owner'),
   })
+  const day = repo.utcDay(now())
   if (how.side === 'buy') {
-    addBought(db, intent.agentId, intent.chain, repo.utcDay(now()), intent.amount)
+    addBought(db, intent.agentId, intent.chain, day, intent.amount)
+  } else {
+    addSold(db, intent.agentId, intent.chain, day, toAmount(expectedOf(intent.swap)))
   }
   return settle(deps, adapter, approved, how.side, simulation)
 }

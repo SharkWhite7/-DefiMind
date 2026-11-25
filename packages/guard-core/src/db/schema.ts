@@ -358,6 +358,11 @@ export const dailyTrades = sqliteTable(
       .$type<Amount>()
       .notNull()
       .default(sql`'0'`),
+    /** CR-026: sells, at the dollars each was quoted to bring at least. */
+    sold: text('sold')
+      .$type<Amount>()
+      .notNull()
+      .default(sql`'0'`),
   },
   (t) => [primaryKey({ columns: [t.agentId, t.chain, t.day] })],
 )

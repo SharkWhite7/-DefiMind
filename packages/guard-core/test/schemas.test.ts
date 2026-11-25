@@ -113,3 +113,49 @@ describe('policyBody', () => {
     expect(policyBody.safeParse({ ...valid, dailyMax: '100.00' }).success).toBe(false)
   })
 })
+
+describe('policyBody trading (CR-026)', () => {
+  const trading = {
+    enabled: true,
+    venues: ['jupiter'],
+    tokens: [],
+    maxTradeUsd: '1',
+    dailyTradeMax: '1',
+    maxPositionUsd: '1',
+  }
+  const policy = (extra: object) => ({
+    chains: [],
+    tokens: [],
+    perTxMax: '0',
+    dailyMax: '0',
+    approvalThreshold: '0',
+    allowedRecipients: [],
+    allowedDomains: [],
+    paused: false,
+    trading: { ...trading, ...extra },
+  })
+
+  it('takes token limits, operation limits and orders', () => {
+    const extra = {
+      tokenLimits: { Bonk111111111111111111111111111111111111111: { maxBuyUsd: '5' } },
+      operations: { sell: { maxTradeUsd: '2', dailyMax: '3' } },
+      orders: { enabled: true, maxOpen: 5 },
+    }
+    expect(policyBody.parse(policy(extra)).trading).toMatchObject(extra)
+  })
+
+  it('bounds them', () => {
+    const many = Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`mint${i}`, {}]))
+    expect(policyBody.safeParse(policy({ tokenLimits: many })).success).toBe(false)
+    expect(policyBody.safeParse(policy({ orders: { enabled: true, maxOpen: 101 } })).success).toBe(
+      false,
+    )
+    // A misspelt cap fails rather than being dropped and read as set.
+    expect(policyBody.safeParse(policy({ operations: { sells: {} } })).success).toBe(false)
+    const typo = { tokenLimits: { Bonk111111111111111111111111111111111111111: { maxHeld: '1' } } }
+    expect(policyBody.safeParse(policy(typo)).success).toBe(false)
+    expect(policyBody.safeParse(policy({ tokenLimit: {} })).success).toBe(false)
+    const negative = { sell: { maxTradeUsd: '-1', dailyMax: '1' } }
+    expect(policyBody.safeParse(policy({ operations: negative })).success).toBe(false)
+  })
+})
