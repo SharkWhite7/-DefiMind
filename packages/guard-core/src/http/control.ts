@@ -9,6 +9,7 @@ import { summarise } from '../domain/report.js'
 import { budget } from '../service/budget.js'
 import { doctor, type DoctorDeps } from '../service/doctor.js'
 import { killTransactions, type KillTransaction } from '../service/kill.js'
+import { cancelOpen } from '../service/orders.js'
 import type { PaymentDeps } from '../service/payments.js'
 import { HttpError } from './errors.js'
 import { REPORT_DEFAULT_SPAN_MS, REPORT_MAX_SPAN_MS, reportQuery } from './schemas.js'
@@ -104,6 +105,7 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
       if (result === 'revoked') {
         repo.audit(db, { event: 'agent_revoked', agentId: id, detail: { via } }, now())
       }
+      cancelOpen(deps, `${via}_revoke`, id)
       const ownerTransactions = await killTransactions(deps, log, id)
       return ownerTransactions.length === 0
         ? { agentId: id, revoked: true }
@@ -122,6 +124,9 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
       repo.putPolicy(db, policy, now().toISOString())
       // Read back, so the answer shows the fields this request left as they were.
       const stored = repo.getPolicy(db, policy.agentId)
+      if (stored?.trading?.enabled !== true || stored.trading.orders?.enabled !== true) {
+        cancelOpen(deps, `${via}_orders_off`, policy.agentId)
+      }
       repo.audit(
         db,
         { event: 'policy_updated', agentId: policy.agentId, detail: { policy: stored, via } },
@@ -147,6 +152,7 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
     // guard-core has stopped signing.
     async kill(log: Log) {
       const pausedAgents = repo.pauseAll(db, now().toISOString())
+      cancelOpen(deps, `${via}_kill`)
       const ownerTransactions = await killTransactions(deps, log)
       repo.audit(
         db,
@@ -162,6 +168,7 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
       if (!repo.setPaused(db, agentId, true, now().toISOString())) {
         throw new HttpError(404, 'not_found')
       }
+      cancelOpen(deps, `${via}_kill`, agentId)
       const ownerTransactions = await killTransactions(deps, log, agentId)
       repo.audit(
         db,

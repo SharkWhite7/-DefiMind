@@ -6,13 +6,17 @@ import { z } from 'zod'
  * format.
  */
 
-const atomicAmount = z.string().regex(/^(0|[1-9]\d*)$/, 'expected atomic units as a decimal string')
+export const atomicAmount = z
+  .string()
+  .regex(/^(0|[1-9]\d*)$/, 'expected atomic units as a decimal string')
 
-const caip2 = z.string().regex(/^[-a-z0-9]{3,8}:[-_a-zA-Z0-9]{1,32}$/, 'expected a CAIP-2 chain id')
+export const caip2 = z
+  .string()
+  .regex(/^[-a-z0-9]{3,8}:[-_a-zA-Z0-9]{1,32}$/, 'expected a CAIP-2 chain id')
 
-const address = z.string().min(1).max(128)
+export const address = z.string().min(1).max(128)
 
-const agentId = z.string().min(1).max(64)
+export const agentId = z.string().min(1).max(64)
 
 /** Shown to the owner on Telegram, so it is bounded: an unbounded field is a message-flood vector. */
 const reason = z.string().max(500)
@@ -227,6 +231,7 @@ const OWNER_ACTIONS = [
   'close_positions',
   'agent_wallet',
   'manual_trade',
+  'place_order',
 ] as const
 
 /** CR-012. `body` is hashed as sent, so it is only bounded here, never reshaped. */

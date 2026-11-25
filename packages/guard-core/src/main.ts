@@ -93,6 +93,11 @@ const [app, publicApp] = await buildServers(
     keys,
     host,
     wallets,
+    orders: {
+      checkMs: config.ORDER_CHECK_MS,
+      confirmChecks: config.ORDER_CONFIRM_CHECKS,
+      confirmSeconds: config.ORDER_CONFIRM_SECONDS,
+    },
     backups: {
       databaseUrl: config.DATABASE_URL,
       hour: config.BACKUP_HOUR_UTC,
