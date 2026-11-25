@@ -44,13 +44,18 @@ const inputs = {
   token_risk: z.strictObject({ mint }),
   recent_prices: z.strictObject({ mint }),
   swap: pair.extend({ maxSlippageBps: slippage, reason: z.string() }),
-  place_order: z.strictObject({
-    token: mint,
-    kind: z.enum(['take_profit', 'stop_loss']),
-    amount: atomicAmount,
-    triggerUsd: z.string().regex(/^(0|[1-9]\d*)(\.\d{1,6})?$/),
-    maxSlippageBps: slippage,
-  }),
+  place_order: z
+    .strictObject({
+      token: mint,
+      kind: z.enum(['take_profit', 'stop_loss', 'trailing_stop']),
+      amount: atomicAmount,
+      triggerUsd: z.string().regex(/^(0|[1-9]\d*)(\.\d{1,6})?$/),
+      maxSlippageBps: slippage,
+      trailBps: z.number().int().min(100).max(5000).optional(),
+    })
+    // CR-028: a trail only on a trailing stop, whose trigger is a floor that may be zero.
+    .refine((o) => (o.kind === 'trailing_stop') === (o.trailBps !== undefined))
+    .refine((o) => o.kind === 'trailing_stop' || parseDollars(o.triggerUsd) > 0n),
   cancel_order: z.strictObject({ orderId: z.string().min(1).max(64) }),
   hold: z.strictObject({ reason: z.string() }),
 }

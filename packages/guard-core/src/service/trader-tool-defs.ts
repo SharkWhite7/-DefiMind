@@ -63,13 +63,17 @@ export const TOOLS: BetaTool[] = [
   ),
   tool(
     'place_order',
-    'A take-profit or stop-loss that sells `amount` of `token` for the dollar once the whole order would bring `triggerUsd` (at or above for take_profit, at or below for stop_loss).',
+    'A take-profit, stop-loss or trailing stop that sells `amount` of `token` for the dollar once the whole order would bring `triggerUsd` (at or above for take_profit, at or below for stop_loss). A trailing_stop sells once the whole order falls `trailBps` below its confirmed high; its `triggerUsd` is a floor, "0" for none.',
     {
       token: { type: 'string', description: 'The token mint address.' },
-      kind: { type: 'string', enum: ['take_profit', 'stop_loss'] },
+      kind: { type: 'string', enum: ['take_profit', 'stop_loss', 'trailing_stop'] },
       amount: { type: 'string', description: 'Atomic units of the token to sell.' },
       triggerUsd: { type: 'string', description: 'A decimal dollar amount, e.g. "12.50".' },
       maxSlippageBps: slippage,
+      trailBps: {
+        type: 'integer',
+        description: 'trailing_stop only: 100 to 5000 basis points below the high.',
+      },
     },
     ['token', 'kind', 'amount', 'triggerUsd'],
   ),

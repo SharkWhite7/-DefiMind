@@ -18,6 +18,7 @@ export type OwnerAction =
   | 'trader_settings'
   | 'resume_trader'
   | 'place_order'
+  | 'cancel_order'
 
 /** A swap for one agent, as the owner set it up: amountIn in tokenIn's base units. */
 export interface Order {
@@ -171,14 +172,27 @@ export function ownerApi(passkey: Authenticator, fetchImpl: typeof fetch = fetch
       ),
 
     policy: (id: string) => get(s.policy, `/v1/owner/policy/${agent(id)}`),
-    /** loose: the change loosens the policy, so it goes with a passkey assertion. */
-    putPolicy: (policy: s.PolicyView, loose: boolean) => {
+    /**
+     * loose: the change loosens the policy, so it goes with a passkey assertion. guard-core may also
+     * ask for one the panel cannot foresee, such as turning orders off over an open stop (CR-028).
+     */
+    putPolicy: async (policy: s.PolicyView, loose: boolean) => {
       const path = `/v1/owner/policy/${agent(policy.agentId)}`
-      return loose
-        ? stepUp('loosen_policy', { agentId: policy.agentId, policy }, (assertion) =>
-            call(s.policy, 'PUT', path, { policy, assertion }),
-          )
-        : call(s.policy, 'PUT', path, { policy })
+      const signed = () =>
+        stepUp('loosen_policy', { agentId: policy.agentId, policy }, (assertion) =>
+          call(s.policy, 'PUT', path, { policy, assertion }),
+        )
+      if (loose) {
+        return signed()
+      }
+      try {
+        return await call(s.policy, 'PUT', path, { policy })
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'step_up_required') {
+          return signed()
+        }
+        throw error
+      }
     },
     budget: (id: string) => get(s.budget, `/v1/owner/budget/${agent(id)}`),
 
@@ -249,8 +263,13 @@ export function ownerApi(passkey: Authenticator, fetchImpl: typeof fetch = fetch
       stepUp('place_order', { ...order }, (assertion) =>
         post(s.order, '/v1/owner/orders', { ...order, assertion }),
       ),
-    /** Session only: cancelling never loosens anything. */
-    cancelOrder: (id: string) => post(s.order, `/v1/owner/orders/${encodeURIComponent(id)}/cancel`),
+    /** A take-profit with the session; a stop is protection, so it takes the passkey (CR-028). */
+    cancelOrder: (id: string, kind: string) => {
+      const path = `/v1/owner/orders/${encodeURIComponent(id)}/cancel`
+      return kind === 'take_profit'
+        ? post(s.order, path)
+        : stepUp('cancel_order', { orderId: id }, (assertion) => post(s.order, path, { assertion }))
+    },
 
     agentWallets: (id: string) => get(s.agentWallets, `/v1/owner/agents/${agent(id)}/wallets`),
     createAgentWallet: (agentId: string, chain: string) =>

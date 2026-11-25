@@ -16,6 +16,7 @@ export interface OrderInput {
   triggerOut: Amount
   maxSlippageBps?: number | undefined
   expiresAt?: string | undefined
+  trailBps?: number | undefined
 }
 
 /**
@@ -64,6 +65,7 @@ export function placeOrder(
     status: 'open',
     createdAt: now().toISOString(),
     ...(input.expiresAt === undefined ? {} : { expiresAt: input.expiresAt }),
+    ...(input.trailBps === undefined ? {} : { trailBps: input.trailBps }),
   }
   saveOrder(db, order)
   const { id, kind, token, amount } = order
@@ -79,7 +81,7 @@ export function placeOrder(
   return order
 }
 
-/** Cancels one open order; cancelling only tightens, so it needs no passkey. */
+/** Cancels one open order. The owner's routes ask for the passkey on a stop first (CR-028). */
 export function cancelOrder(deps: PaymentDeps, order: Order, via: string): void {
   if (moveOrder(deps.db, order.id, 'cancelled')) {
     repo.audit(

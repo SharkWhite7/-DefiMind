@@ -445,6 +445,9 @@ export const orders = sqliteTable(
     expiresAt: text('expires_at'),
     filledIntentId: text('filled_intent_id'),
     failReason: text('fail_reason').$type<RejectCode>(),
+    /** CR-028, trailing_stop only. */
+    trailBps: integer('trail_bps'),
+    peakOut: text('peak_out').$type<Amount>(),
   },
   (t) => [index('orders_status').on(t.status), index('orders_agent').on(t.agentId)],
 )

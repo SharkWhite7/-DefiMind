@@ -175,4 +175,22 @@ describe('loosened trading (CR-021)', () => {
       loosened(orders({ enabled: true, maxOpen: 10 }), orders({ enabled: false, maxOpen: 2 })),
     ).toEqual([])
   })
+
+  it('flags anything that would disarm an open stop (CR-028)', () => {
+    const on = {
+      ...trades,
+      mode: 'live' as const,
+      trading: { ...trading, orders: { enabled: true, maxOpen: 10 } },
+    }
+    const ordersOff = { ...on, trading: { ...on.trading, orders: { enabled: false, maxOpen: 10 } } }
+    const tradingOff = { ...on, trading: { ...on.trading, enabled: false } }
+    const shadow = { ...on, mode: 'shadow' as const }
+    const noVenue = { ...on, trading: { ...on.trading, venues: [] } }
+    const noChain = { ...on, chains: [] }
+    const thin = { ...on, trading: { ...on.trading, maxPriceImpactBps: 1 } }
+    for (const change of [ordersOff, tradingOff, shadow, noVenue, noChain, thin]) {
+      expect(loosened(on, change, true)).toContain('stops')
+      expect(loosened(on, change, false)).not.toContain('stops')
+    }
+  })
 })

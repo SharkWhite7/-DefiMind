@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import { stopsOpen } from '../db/orders.js'
 import { loosened } from '../domain/loosen.js'
 import type { X402Deps } from '../service/x402.js'
 import { controls } from './control.js'
@@ -39,7 +40,7 @@ export function botControlRoutes(deps: X402Deps, setup: { botUrl: string; databa
           : { approvalThreshold: change.approvalThreshold }),
       }
       // The same rule as the panel's passkey, applied to the result: nothing here may loosen.
-      if (loosened(before, after).length > 0) {
+      if (loosened(before, after, stopsOpen(deps.db, after.agentId)).length > 0) {
         throw new HttpError(403, 'loosen_in_panel')
       }
       return control.putPolicy(after)

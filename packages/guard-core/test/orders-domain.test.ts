@@ -1,6 +1,14 @@
 import type { Order, Policy } from '@defimind/shared'
 import { describe, expect, it } from 'vitest'
-import { confirmed, fillFloor, hits, placeReasons, step } from '../src/domain/orders.js'
+import {
+  climb,
+  confirmed,
+  fillFloor,
+  hits,
+  placeReasons,
+  step,
+  triggerOf,
+} from '../src/domain/orders.js'
 import { basePolicy } from './harness.js'
 import { BONK, trading } from './venue.js'
 
@@ -39,10 +47,11 @@ describe('placing orders (CR-026)', () => {
 
 describe('the order watcher rules (CR-026)', () => {
   it('fires a take-profit at or above its price, a stop-loss at or below it', () => {
-    expect(hits('take_profit', 10n, 10n)).toBe(true)
-    expect(hits('take_profit', 9n, 10n)).toBe(false)
-    expect(hits('stop_loss', 10n, 10n)).toBe(true)
-    expect(hits('stop_loss', 11n, 10n)).toBe(false)
+    const at = (kind: Order['kind']) => ({ kind, triggerOut: '10' })
+    expect(hits(at('take_profit'), 10n)).toBe(true)
+    expect(hits(at('take_profit'), 9n)).toBe(false)
+    expect(hits(at('stop_loss'), 10n)).toBe(true)
+    expect(hits(at('stop_loss'), 11n)).toBe(false)
   })
 
   it('counts unbroken hits, and starts over on a miss, a high-impact check or a gap', () => {
@@ -69,6 +78,90 @@ describe('the order watcher rules (CR-026)', () => {
   })
 
   it('fills for no less than the trigger less its slippage, rounded down', () => {
-    expect(fillFloor({ triggerOut: '1001', maxSlippageBps: 100 })).toBe(990n)
+    expect(fillFloor({ kind: 'stop_loss', triggerOut: '1001', maxSlippageBps: 100 })).toBe(990n)
+  })
+})
+
+describe('trailing stops (CR-028)', () => {
+  const trail = (peakOut?: string, triggerOut = '0') =>
+    ({
+      kind: 'trailing_stop',
+      triggerOut,
+      trailBps: 1000,
+      maxSlippageBps: 100,
+      ...(peakOut === undefined ? {} : { peakOut }),
+    }) as const
+
+  it('fires 10% under its confirmed high, never under its floor, and not at all with neither', () => {
+    expect(triggerOf(trail('1000'))).toBe(900n)
+    expect(triggerOf(trail('1000', '950'))).toBe(950n)
+    expect(triggerOf(trail(undefined, '500'))).toBe(500n)
+    expect(hits(trail('1000'), 900n)).toBe(true)
+    expect(hits(trail('1000'), 901n)).toBe(false)
+    expect(hits(trail(), 0n)).toBe(false)
+    expect(fillFloor(trail('1000'))).toBe(891n)
+  })
+
+  const rules = { confirmChecks: 3, confirmSeconds: 30, maxImpactBps: 300, maxGapMs: 30_000 }
+  const run = (outs: [number, number, number?][]) =>
+    outs.reduce<{ rise: { out: bigint; at: number }[]; level?: bigint }>(
+      (acc, [out, at, impact]) =>
+        climb(acc.rise, { out: BigInt(out), at, priceImpactBps: impact ?? 10 }, rules),
+      { rise: [] },
+    )
+
+  it('raises the high to the lowest quote of a confirming run', () => {
+    expect(
+      run([
+        [1000, 0],
+        [1200, 15_000],
+        [1100, 30_000],
+      ]).level,
+    ).toBe(1000n)
+    expect(
+      run([
+        [1000, 0],
+        [1200, 15_000],
+        [1100, 30_000],
+        [1300, 45_000],
+      ]).level,
+    ).toBe(1100n)
+  })
+
+  it('is never moved by one spiked quote, a short run, a high-impact check or a gap', () => {
+    expect(
+      run([
+        [1000, 0],
+        [9999, 15_000],
+        [1000, 30_000],
+      ]).level,
+    ).toBe(1000n)
+    expect(
+      run([
+        [1000, 0],
+        [1000, 15_000],
+      ]).level,
+    ).toBeUndefined()
+    expect(
+      run([
+        [1000, 0],
+        [1000, 10_000],
+        [1000, 20_000],
+      ]).level,
+    ).toBeUndefined()
+    expect(
+      run([
+        [1000, 0],
+        [1000, 15_000, 301],
+        [1000, 30_000],
+      ]).level,
+    ).toBeUndefined()
+    expect(
+      run([
+        [1000, 0],
+        [1000, 15_000],
+        [1000, 45_001],
+      ]).level,
+    ).toBeUndefined()
   })
 })

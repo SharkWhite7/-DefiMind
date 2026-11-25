@@ -234,6 +234,7 @@ const OWNER_ACTIONS = [
   'place_order',
   'trader_settings',
   'resume_trader',
+  'cancel_order',
 ] as const
 
 /** CR-012. `body` is hashed as sent, so it is only bounded here, never reshaped. */

@@ -22,12 +22,22 @@ export class Venue extends StubChain {
   down: 'venue_unavailable' | 'no_route' | undefined
   received: bigint | undefined
   held = new Map<string, bigint>()
+  /** Stamps quotes at the test's clock instead of NOW, for tests that run past a quote's age. */
+  clock: (() => Date) | undefined
 
   constructor(balance = 100_000_000n) {
     super(CHAIN, balance)
   }
 
-  async quoteSwap(req: { tokenIn: string; tokenOut: string; amountIn: string }) {
+  /** A sell to the dollar quotes at sellOut and keeps the slippage it was asked for, as Jupiter does. */
+  realistic = false
+
+  async quoteSwap(req: {
+    tokenIn: string
+    tokenOut: string
+    amountIn: string
+    slippageBps?: number
+  }) {
     this.quotes += 1
     if (this.down !== undefined) {
       throw new SwapUnavailable(this.down, 'test venue')
@@ -35,17 +45,21 @@ export class Venue extends StubChain {
     const buy = req.tokenIn === USDC
     // One token for one token on a swap (CR-026); 1 USDC = 1000 of any token otherwise.
     const swap = !buy && req.tokenOut !== USDC
+    const market = this.realistic && !buy && !swap && this.sellOut !== undefined
     const out = buy
       ? BigInt(req.amountIn) * 1000n
       : swap
         ? BigInt(req.amountIn)
-        : BigInt(req.amountIn) / 1000n
+        : market
+          ? BigInt(this.sellOut ?? '0')
+          : BigInt(req.amountIn) / 1000n
+    const slippageBps = this.realistic ? (req.slippageBps ?? 50) : 50
     const quote: SwapQuote = {
       venue: 'jupiter',
       ...req,
       expectedOut: `${out}`,
-      minAmountOut: `${(out * 995n) / 1000n}`,
-      slippageBps: 50,
+      minAmountOut: `${(out * BigInt(10_000 - slippageBps)) / 10_000n}`,
+      slippageBps,
       priceImpactBps: 10,
       exitImpactBps: 12,
       risks: [],
@@ -53,6 +67,7 @@ export class Venue extends StubChain {
       quotedAt: NOW.toISOString(),
       decimalsIn: buy ? 6 : 5,
       decimalsOut: buy ? 5 : 6,
+      ...(this.clock === undefined ? {} : { quotedAt: this.clock().toISOString() }),
     }
     return quote
   }

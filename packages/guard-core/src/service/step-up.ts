@@ -17,6 +17,7 @@ export type OwnerAction =
   | 'agent_wallet'
   | 'trader_settings'
   | 'resume_trader'
+  | 'cancel_order'
 
 const STEP_UP_MS = 5 * 60_000
 type Address = Pick<PasskeySetup, 'rpId' | 'origin'>

@@ -7,6 +7,7 @@ import {
   ORDER_KINDS,
   ORDER_STATUS,
   orderFloor,
+  orderTrigger,
   REFUSALS,
   WHEN,
 } from '../domain/orders.js'
@@ -45,8 +46,13 @@ function orderItem(ctx: Context, order: OrderView, held: Position | undefined) {
       'dl',
       {},
       row('Sells', mono(amountOf(order, held))),
-      row(WHEN[order.kind], mono(formatUsd(order.triggerOut))),
-      row('Receives at least', mono(formatUsd(orderFloor(order.triggerOut, order.maxSlippageBps)))),
+      order.trailBps !== undefined && row('Trails its high by', `${order.trailBps / 100}%`),
+      order.peakOut !== undefined && row('Confirmed high', mono(formatUsd(order.peakOut))),
+      row(WHEN[order.kind], mono(formatUsd(orderTrigger(order)))),
+      row(
+        'Receives at least',
+        mono(formatUsd(orderFloor(orderTrigger(order), order.maxSlippageBps))),
+      ),
       row('Placed by', order.createdBy === 'owner' ? 'You' : 'The agent'),
       row('Placed', when(order.createdAt)),
       order.expiresAt !== undefined && row('Expires', when(order.expiresAt)),
@@ -56,7 +62,7 @@ function orderItem(ctx: Context, order: OrderView, held: Position | undefined) {
     ),
     open &&
       button('Cancel order', async () => {
-        await ctx.api.cancelOrder(order.id)
+        await ctx.api.cancelOrder(order.id, order.kind)
         await ctx.go({ name: 'orders', id: order.agentId }, true)
         ctx.say('Order cancelled.', 'done')
       }),
@@ -225,7 +231,7 @@ export async function ordersScreen(ctx: Context, agentId: string): Screen {
     el(
       'p',
       { class: 'muted' },
-      'An order sells a token back to dollars when its price gets where you set it. Placing one asks for your passkey; cancelling does not.',
+      'An order sells a token back to dollars when its price gets where you set it. Placing one asks for your passkey, and so does cancelling a stop.',
     ),
     ...placing(ctx, agentId, policy, solana),
     card(

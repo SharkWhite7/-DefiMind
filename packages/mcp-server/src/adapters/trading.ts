@@ -82,10 +82,12 @@ export const order = z.object({
   agentId: z.string().min(1).max(64),
   chain: z.string().min(1).max(64),
   token: mint,
-  kind: z.enum(['take_profit', 'stop_loss']),
+  kind: z.enum(['take_profit', 'stop_loss', 'trailing_stop']),
   amount: atomic,
   triggerOut: atomic,
   maxSlippageBps: bps,
+  trailBps: bps.optional(),
+  peakOut: atomic.optional(),
   createdBy: z.enum(['agent', 'owner']),
   status: z.enum(['open', 'triggered', 'filled', 'cancelled', 'failed']),
   createdAt: z.iso.datetime({ offset: true }),
@@ -102,8 +104,10 @@ export type PlacedOrder = z.infer<typeof order>
 export interface OrderInput {
   chain: string
   token: string
-  kind: 'take_profit' | 'stop_loss'
+  kind: 'take_profit' | 'stop_loss' | 'trailing_stop'
   amount: string
   triggerOut: string
   maxSlippageBps?: number
+  /** CR-028, trailing_stop only. */
+  trailBps?: number
 }
