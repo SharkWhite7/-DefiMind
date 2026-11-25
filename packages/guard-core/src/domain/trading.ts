@@ -7,7 +7,6 @@ import type {
   TradingFlag,
   TradingPolicy,
 } from '@defimind/shared'
-import { z } from 'zod'
 import { parseAmount } from './amount.js'
 import { type Book, limitReasons } from './trade-limits.js'
 
@@ -153,13 +152,7 @@ function buyFlags(quote: SwapQuote, book: Book): TradingFlag[] {
   return book.boughtBefore ? flags : ['NEW_TOKEN', ...flags]
 }
 
-const stored = z.object({ expectedOut: z.string().regex(/^\d+$/) })
-
-/**
- * What a recorded swap was expected to bring: kept beside its SwapDetails since CR-026. A swap
- * recorded before that counts at its minimum, the only figure it kept.
- */
+/** What a recorded swap was expected to bring. One recorded before CR-026 kept only its minimum. */
 export function expectedOf(swap: SwapDetails | undefined): bigint {
-  const kept = stored.safeParse(swap)
-  return kept.success ? BigInt(kept.data.expectedOut) : parseAmount(swap?.minAmountOut ?? '0')
+  return parseAmount(swap?.expectedOut ?? swap?.minAmountOut ?? '0')
 }

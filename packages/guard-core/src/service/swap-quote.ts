@@ -73,8 +73,8 @@ export function withQuote(
     return undefined
   }
   const { venue, expectedOut, minAmountOut, slippageBps, priceImpactBps, quotedAt } = quote
-  // expectedOut is kept beside SwapDetails' fields: a sell counts at it (CR-026).
-  const swap: SwapDetails & { expectedOut: string } = {
+  // A sell counts at expectedOut (CR-026).
+  const swap: SwapDetails = {
     venue,
     tokenOut,
     expectedOut,

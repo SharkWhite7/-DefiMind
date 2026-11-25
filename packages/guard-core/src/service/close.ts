@@ -5,6 +5,7 @@ import * as repo from '../db/repo.js'
 import { applyTrade, listPositions } from '../db/trades.js'
 import { listWallets } from '../db/wallets.js'
 import { evaluateTrade } from '../domain/trading.js'
+import { WSOL } from '../domain/valuation.js'
 import { newIntent, reject, type PaymentDeps } from './payments.js'
 import { signerKey } from './wallets.js'
 import { clearSwap } from './swap.js'
@@ -64,6 +65,13 @@ async function sell(
     .filter((p) => owner !== undefined || !separate.has(p.agentId))
     .sort((a, b) => (BigInt(b.amount) > BigInt(a.amount) ? 1 : -1))
   const agentId = owner ?? holders[0]?.agentId ?? listAgents(db)[0]?.agentId
+  // SOL above the gas reserve may be the owner's own headroom: only what trading bought is sold.
+  const booked = holders.reduce((sum, p) => sum + BigInt(p.amount), 0n)
+  const amount =
+    held.token === WSOL && booked < BigInt(held.amount) ? booked.toString() : held.amount
+  if (amount === '0') {
+    return undefined
+  }
   const policy = agentId === undefined ? undefined : repo.getPolicy(db, agentId)
   if (agentId === undefined || policy === undefined) {
     return undefined
@@ -76,14 +84,14 @@ async function sell(
       chain: held.chain,
       tokenIn: held.token,
       tokenOut: held.dollar,
-      amountIn: held.amount,
+      amountIn: amount,
     }
     const intent = newIntent(
       {
         ...request,
         kind: 'swap',
         token: held.token,
-        amount: held.amount,
+        amount,
         recipient: (await trader.getAllowanceState()).delegate,
         reason: REASON,
       },
