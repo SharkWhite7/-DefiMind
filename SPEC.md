@@ -406,7 +406,7 @@ POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, sing
     | "change_settings" (CR-019) | "close_positions" (CR-021, body {})
     | "agent_wallet" (CR-022, body { agentId, chain })
     | "manual_trade" (CR-025, body { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut })
-    | "place_order" (CR-026, body { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps })
+    | "place_order" (CR-026, body { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps? })
     | "trader_settings" (CR-027, body { agentId, config }) | "resume_trader" (CR-027, body { agentId })
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
@@ -765,6 +765,10 @@ POST /v1/owner/orders/:id/cancel -> Order   session only: cancelling only tighte
 GET  /v1/owner/orders -> { orders: Order[] }   session only
 The agent routes take the agent's key, as for swaps. An agent's order follows its own policy;
 placing one never waits for the owner, since a fill only sells.
+An order that cannot be placed answers 409 { error: "order_refused", rejectReasons }, with the codes
+from the placing checks above. The owner's step-up body carries maxSlippageBps only when the owner
+sent one, so the passkey signs exactly what was asked. order_filled and order_failed are Web Push
+kinds only, not bot alerts.
 
 ## The AI trader (CR-027)
 Solana mainnet, spot, through Jupiter. The AI trader is an agent that runs inside guard-core on a
