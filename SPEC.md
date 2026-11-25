@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.20 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.21 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -223,6 +223,8 @@ SELL_EXCEEDED, SELL_DAILY_EXCEEDED, SWAP_EXCEEDED, SWAP_DAILY_EXCEEDED, INSUFFIC
 or swapping more than the agent holds), VALUATION_UNAVAILABLE (a leg cannot be priced back to the
 dollar within the limits), ORDERS_DISABLED, ORDER_LIMIT_EXCEEDED, GAS_RESERVE (the trade would
 leave the hot wallet without SOL for fees).
+The AI trader (CR-027): TRADER_TOKEN_NOT_ALLOWED (the trader asked for a token outside its own
+list).
 
 ## ChainAdapter (packages/onchain/src/ChainAdapter.ts)
 guard-core depends on this interface only and never imports a chain SDK directly.
@@ -405,6 +407,7 @@ POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, sing
     | "agent_wallet" (CR-022, body { agentId, chain })
     | "manual_trade" (CR-025, body { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut })
     | "place_order" (CR-026, body { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps })
+    | "trader_settings" (CR-027, body { agentId, config }) | "resume_trader" (CR-027, body { agentId })
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
 GET  /v1/owner/deposit -> { chains: { chain, vault, token, balance, dailyCap?, depositPage? }[] }
@@ -434,7 +437,8 @@ DELETE /v1/owner/push/:id
 GET  /v1/owner/push/key -> { publicKey }   the VAPID public key, base64url; session only (CR-014)
   Web Push with VAPID (VAPID_PRIVATE_KEY_FILE, VAPID_SUBJECT) and RFC 8291 encryption. Payload
   { kind: "approval" | "mandate" | "executed" | "attack" | "breaker" | "passkey_enrolled" | "kill"
-  | "chain_broken" (CR-013) | "backup_failed" (CR-024) | "order_filled" | "order_failed" (CR-026),
+  | "chain_broken" (CR-013) | "backup_failed" (CR-024) | "order_filled" | "order_failed" (CR-026)
+  | "trader_paused" (CR-027),
   agentId?, chain?, amount?, intentId?, sentAt } and never a recipient or URL. A 404 or 410 from the
   push service deletes the subscription.
 GET  /panel/enrol#code=…   the first-passkey page; src/scripts/passkey-code.ts prints the link
@@ -700,6 +704,9 @@ whole transaction: tokenIn falls by at most amountIn, tokenOut rises by at least
 other token account of the hot wallet nets to zero or more (route intermediates included), and SOL
 falls by fees and rent only, plus amountIn when SOL is tokenIn. A trade never leaves the hot wallet's
 SOL below getHotWalletGas().minimum after fees (GAS_RESERVE), so it can still pay for the next sell.
+A sell to the chain's dollar is exempt, as long as the hot wallet can pay its fee, so a wallet low
+on SOL can always sell and Close positions stays the way out. guard-core checks the reserve again
+just before signing, since two trades checked in the same window could pass it together.
 
 Orders. guard-core stores take-profit and stop-loss orders and fills each one as a sell to the
 chain's dollar under every CR-021 check.
@@ -757,6 +764,153 @@ POST /v1/owner/orders/:id/cancel -> Order   session only: cancelling only tighte
 GET  /v1/owner/orders -> { orders: Order[] }   session only
 The agent routes take the agent's key, as for swaps. An agent's order follows its own policy;
 placing one never waits for the owner, since a fill only sells.
+
+## The AI trader (CR-027)
+Solana mainnet, spot, through Jupiter. The AI trader is an agent that runs inside guard-core on a
+schedule and decides its own trades with a Claude model. It is attached to one agent, at most one
+per agent, and trades with that agent's wallet and policy. Each action it takes is an intent through
+the CR-021 and CR-026 pipeline, exactly as an MCP agent's:
+- the policy and every limit;
+- the risk reads;
+- the inspection and the test run;
+- the approval rules and orders.
+Its sells never wait. What the model writes, its reasons included, is shown to the owner and never
+used in a decision.
+
+```ts
+interface TraderConfig {
+  enabled: boolean
+  mode: "shadow" | "live"          // shadow until the owner goes live with the passkey
+  model: "claude-opus-5-5" | "claude-sonnet-5-5" | "claude-haiku-5-5"   // default the first
+  effort: "low" | "medium" | "high"                                     // default "medium"
+  cadenceMinutes: 5 | 15 | 60
+  tokens: Address[]                // what it may trade; each must also pass the policy
+  instructions: string             // the owner's, plain words, at most 2000 characters
+  template?: { id: string, version: number }   // the ready-made strategy it started from
+  maxActionsPerTick: number        // 1 to 5, default 3
+  maxTicksPerDay: number           // default 24 × 60 / cadenceMinutes
+  maxTokensPerTick: number         // input plus output, default 200000
+  maxTokensPerDay: number          // default 2000000
+}
+
+interface TraderTick {
+  id: string
+  agentId: string
+  startedAt: string
+  model: string                    // the model that served the tick, fallbacks included
+  outcome: "acted" | "held" | "skipped" | "error" | "refused"
+  actions: { tool: string, intentId?: string, orderId?: string, status?: IntentStatus,
+             rejectReasons: RejectCode[] }[]
+  reason: string                   // the model's own words; untrusted, display only, 500 characters
+  usage: { input: number, output: number, cacheRead: number, cacheWrite: number }
+  detail?: string                  // why a tick was skipped, errored or refused
+}
+
+interface TraderStatus {
+  config: TraderConfig
+  state: "off" | "running" | "paused"
+  pausedBy?: "owner" | "kill" | "agent_paused" | "errors" | "refusals"
+  keySet: boolean                  // whether ANTHROPIC_API_KEY is set; the key is never returned
+  today: { ticks: number, tokens: number }
+  report: TraderReport
+}
+
+interface TraderReport {
+  trades: number                   // landed trades; shadowed ones when shadow
+  realizedPnlUsd?: string          // signed atomic units of the chain's dollar; absent in shadow
+  positions: Position[]            // the agent's, at cost
+  shadow: boolean
+}
+```
+
+The model. guard-core calls the Claude API through the official TypeScript SDK (@anthropic-ai/sdk),
+with the owner's own ANTHROPIC_API_KEY, a secret on the deployment like the others: it is never
+logged, never returned, and never stored in the database. Without it the trader cannot be turned on.
+Each request has:
+- the chosen model, with adaptive thinking;
+- an explicit effort in output_config;
+- the trader's tools with strict: true and tool_choice auto, since a forced tool_choice is refused
+  on these models.
+On claude-opus-5-5 and claude-sonnet-5-5 it opts into server-side refusal fallbacks (beta
+server-side-fallback-2026-07-01, fallbacks "default"). claude-haiku-5-5 has none. The stop_reason
+is checked before any tool runs:
+- "refusal" ends the tick as refused;
+- "max_tokens" ends it as an error and runs nothing.
+Prompt caching covers the frozen part:
+- the tool list;
+- the fixed system prompt;
+- the owner's instructions, which change only with the passkey.
+The tick's data comes after the last breakpoint. The guard-core session reads the current SDK and
+API documentation before writing this code, and does not rely on memory.
+
+Ready-made strategies. TRADER_TEMPLATES in @defimind/shared holds the DefiMind strategies the owner
+can pick instead of writing instructions. Each one has an id, a version, a name, a summary, the
+instruction text, and suggested values for the cadence, the actions per tick, the trading limits and
+whether orders are on. The first set is:
+- "Accumulate on dips" (accumulate-dips);
+- "Trend follower with tight stops" (trend-stops);
+- "Degen: new tokens, small size, quick exits" (degen-quick);
+- "Keep a steady balance" (steady-balance).
+Picking one copies its text into instructions and records { id, version }. The owner may edit the
+text and every value before saving. Saving follows the passkey rules, and a suggested limit never
+goes past the policy without them. A new version of a template never changes a trader that
+already runs it. Every view calls them "ready-made" and makes no claim of performance. "Tested" is
+reserved for a template with a recorded shadow-mode history the panel can show, which this CR does
+not add.
+
+A tick. Every cadenceMinutes, while the trader is running and within its caps, guard-core starts a
+fresh conversation:
+- a system prompt that states the tools, the limits, that nothing it writes can change the policy,
+  and that this is not financial advice;
+- the owner's instructions;
+- a user message with the time, the portfolio and the day's budgets.
+The model calls tools until it ends its turn, holds, or reaches maxActionsPerTick. The read tools
+do not count toward that cap. A tick that would pass maxTicksPerDay or maxTokensPerDay is skipped;
+one that passes maxTokensPerTick mid-turn stops there and runs nothing further.
+
+Tools:
+- get_portfolio {} -> positions at cost and the day's trade budget;
+- quote { from, to, amount } -> SwapQuote, read-only;
+- token_risk { mint } -> TokenRisk (CR-025);
+- recent_prices { mint } -> up to 96 samples { at, priceUsd } from the last 24 hours;
+- swap { from, to, amount, maxSlippageBps?, reason } -> { intentId, status, rejectReasons };
+- place_order and cancel_order, as the CR-026 MCP tools;
+- hold { reason } -> ends the tick with no action.
+swap and place_order only take tokens in config.tokens (or the chain's dollar or SOL), and a
+token outside that list is refused with TRADER_TOKEN_NOT_ALLOWED, whatever the policy allows.
+
+recent_prices reads samples guard-core records: every 15 minutes, for each token in any trader's
+list, the price of a quoteSell for 10 USD worth. They are kept for 7 days and never used in a
+decision outside the model.
+
+Untrusted text. Every venue field (names, symbols, the venue's own facts) and every tool result
+reaches the model as JSON inside a delimited block. The system prompt says it is data, never
+instructions. The model's reasons are bounded to 500 characters and shown as plain text.
+
+Pausing. The trader pauses itself and tells the owner with Web Push "trader_paused":
+- after 3 ticks in a row that end in an API error (pausedBy "errors");
+- after 3 in a row that end refused, by the model or by the pipeline (pausedBy "refusals").
+Its trades also stop when:
+- the agent is paused (pausedBy "agent_paused");
+- Stop everything or kill is used (pausedBy "kill");
+- Close positions is used, which turns the trader off.
+A rate-limited or overloaded API answer is retried by the SDK, then counts as one error.
+
+Shadow mode. A trader in shadow mode, or attached to an agent in shadow mode, has every trade
+shadowed. Its report has shadow: true and no realizedPnlUsd, and every view labels it "Shadow:
+nothing was traded".
+
+Routes (every route needs the owner's session; no agent route exists):
+GET  /v1/owner/trader/:agentId -> TraderStatus
+PUT  /v1/owner/trader/:agentId { config, assertion? } -> TraderStatus
+  step-up, OwnerAction "trader_settings" over { agentId, config }, except when the change only
+  turns the trader off or lowers a cap
+POST /v1/owner/trader/:agentId/pause -> TraderStatus   session only
+POST /v1/owner/trader/:agentId/resume { assertion } -> TraderStatus   step-up, OwnerAction
+  "resume_trader" over { agentId }
+GET  /v1/owner/trader/:agentId/ticks?before= -> { ticks: TraderTick[] }   50 at a time, newest first
+Each tick and each change is audited. The views show controls, landed amounts and the tokens used,
+never projections or returns.
 
 ## Agent wallets (CR-022, HIGH-2)
 Opt-in, per agent and chain. By default every agent spends from the chain's shared spending (hot)
@@ -864,6 +1018,10 @@ list: it is funded and test-run only once approved.
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.21 (2026-11-25): CR-027, approved by the owner. The AI trader on Solana, spot:
+  - a Claude model, with the owner's own API key, decides trades on a schedule inside guard-core;
+  - every action goes through the trading pipeline; reasons are display only;
+  - caps on ticks, tokens and actions, a decision feed, and no projections.
 - v0.20 (2026-11-25): CR-026, approved by the owner. Degen trading on Solana:
   - any pair, from what the agent's wallet holds, valued by two quotes;
   - per-token and per-operation limits;
