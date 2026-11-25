@@ -1531,3 +1531,49 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     rather than sold at any price: the owner is told, and the position stays.
   - "Any token" admits tokens the owner has never looked at. The onchain risk checks and the per-token
     and per-operation limits still apply, and a first buy still waits for the owner.
+
+### CR-027 — Trading bots on Solana: recurring buy (DCA) and grid
+
+- **From:** integrator, from the owner's request relayed by the manager
+- **Date:** 2026-11-25
+- **Status:** approved by the owner on 2026-11-25 (relayed by the manager). His words, translated:
+  "something that pleases degens and investors while keeping it easy to use", and "the user gives
+  the pairs, sets the limit, and it keeps trading". He picked recurring buy (DCA) and grid. No
+  leverage and no perpetuals: spot on Solana through Jupiter. Specified in SPEC v0.21, "Trading
+  bots". It builds on CR-026.
+- **Why:** owners want a strategy that keeps trading inside the limits they set, without an agent
+  deciding each trade.
+- **Scope:** Solana mainnet, spot, through Jupiter. A bot is a strategy attached to an agent: it
+  trades with that agent's wallet and policy, and every trade goes through the CR-021 and CR-026
+  pipeline (policy and limits, the risk reads, the inspection, the test run, the approval rules).
+  Sells never wait. Nothing about payments changes.
+- **What changes:**
+  1. **Bots**, run by guard-core. The owner creates, changes and resumes one in the panel with the
+     passkey, as a loosening. Pausing, stopping and deleting need the session only, as a tightening.
+     Stop everything and kill pause every bot. In shadow mode a bot runs on paper, labelled as such.
+  2. **DCA:** a pair (from the dollar or SOL to an allowed token), an amount per buy, an interval of
+     at least one hour, an optional budget or end date, and optional take-profit and stop-loss on
+     the bot's position (CR-026 orders).
+  3. **Grid:** a token against the dollar, a price range, 3 to 20 levels and an amount per level. It
+     buys at each level crossed downward and sells that lot one level up, with an optional stop
+     below the range. The capital it needs, levels × amount per level, must fit the limits, or the
+     bot is refused. Prices come from the CR-026 watcher, with the same confirmation, price-impact
+     and minimum-out rules.
+  4. **Reporting** per bot: its trades, realized profit and loss from landed amounts, its open
+     position at cost, and its status. No projections. A shadow bot shows what it would have traded,
+     with no profit and loss.
+  5. **Routes and tools:** owner routes for bots; read-only agent routes; MCP `list_bots` and
+     `get_bot`; a Bots tab in the panel.
+- **Rows:**
+  - guard-core: GC-73 (the bot engine, the scheduler and DCA), GC-74 (grid);
+  - panel: PANEL-26 (the Bots tab: a create wizard of strategy, pair with the risk card, amounts,
+    review and passkey; a list; a detail);
+  - mcp: MCP-35 (`list_bots`, `get_bot`, read-only);
+  - integrator: INT-52 (SPEC, shared types and the fork e2e).
+- **Risks for the owner to accept:**
+  - A bot trades without asking, inside the limits. The limits, the vault's onchain cap and the
+    approval rules are the bound, not the strategy.
+  - A grid loses when the price leaves the range downward: it holds every lot it bought. The stop
+    below the range sells under the CR-026 stop-loss floor, and can be refused rather than sell at
+    any price.
+  - DCA buys at whatever the price is at each interval.

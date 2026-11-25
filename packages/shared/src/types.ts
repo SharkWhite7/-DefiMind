@@ -375,6 +375,9 @@ export type TradingRejectCode =
   | 'ORDERS_DISABLED'
   | 'ORDER_LIMIT_EXCEEDED'
   | 'GAS_RESERVE'
+  /** CR-027 */
+  | 'BOT_CAPITAL_ABOVE_LIMIT'
+  | 'BOT_LIMIT_EXCEEDED'
 
 /** Standing authority an EVM payment must never grant. */
 export type EvmRejectCode = 'APPROVAL_DETECTED' | 'PERMIT_DETECTED' | 'DELEGATION_DETECTED'
@@ -544,3 +547,63 @@ export interface AgentWallet {
   addLimitPage: string
   gas: { balance: Amount; minimum: Amount; symbol: string }
 }
+
+/** CR-027: a strategy guard-core runs for an agent, trading through the same pipeline. */
+export interface Bot {
+  id: string
+  agentId: string
+  chain: ChainId
+  config: DcaConfig | GridConfig
+  status: 'active' | 'paused' | 'stopped' | 'completed'
+  pausedBy?: 'owner' | 'kill' | 'agent_paused' | 'refusals'
+  createdAt: string
+  updatedAt: string
+  /** DCA only. */
+  nextRunAt?: string
+}
+
+export interface DcaConfig {
+  kind: 'dca'
+  /** The chain's dollar or wSOL. */
+  tokenIn: Address
+  tokenOut: Address
+  /** Atomic units of tokenIn, per buy. */
+  amountIn: Amount
+  /** At least 3600. */
+  intervalSeconds: number
+  /** Atomic units of tokenIn, over the bot's life. */
+  budget?: Amount
+  endsAt?: string
+  takeProfitBps?: number
+  stopLossBps?: number
+}
+
+export interface GridConfig {
+  kind: 'grid'
+  /** Traded against the chain's dollar. */
+  token: Address
+  /** Prices: the chain's dollar, atomic, per whole token. */
+  low: Amount
+  high: Amount
+  /** 3 to 20. */
+  levels: number
+  perLevelUsd: Amount
+  /** A price under low. */
+  stopBelow?: Amount
+  maxSlippageBps?: number
+}
+
+/** Landed amounts only; a shadow bot reports what it would have traded, with no profit or loss. */
+export interface BotReport {
+  trades: number
+  spentUsd: Amount
+  receivedUsd: Amount
+  /** Signed atomic units of the chain's dollar. */
+  realizedPnlUsd?: string
+  /** The bot's own lots, at cost. */
+  position: { amount: Amount; cost: Amount }
+  shadow: boolean
+  lastTradeAt?: string
+}
+
+export type BotView = Bot & { report: BotReport }

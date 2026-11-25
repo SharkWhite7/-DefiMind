@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.20 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.21 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -223,6 +223,8 @@ SELL_EXCEEDED, SELL_DAILY_EXCEEDED, SWAP_EXCEEDED, SWAP_DAILY_EXCEEDED, INSUFFIC
 or swapping more than the agent holds), VALUATION_UNAVAILABLE (a leg cannot be priced back to the
 dollar within the limits), ORDERS_DISABLED, ORDER_LIMIT_EXCEEDED, GAS_RESERVE (the trade would
 leave the hot wallet without SOL for fees).
+Trading bots (CR-027): BOT_CAPITAL_ABOVE_LIMIT (the capital a bot needs does not fit the limits),
+BOT_LIMIT_EXCEEDED (the agent already has 10 bots that are not stopped).
 
 ## ChainAdapter (packages/onchain/src/ChainAdapter.ts)
 guard-core depends on this interface only and never imports a chain SDK directly.
@@ -405,6 +407,8 @@ POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, sing
     | "agent_wallet" (CR-022, body { agentId, chain })
     | "manual_trade" (CR-025, body { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut })
     | "place_order" (CR-026, body { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps })
+    | "create_bot" (CR-027, body { agentId, chain, config }) | "change_bot" (CR-027, body { botId, config })
+    | "resume_bot" (CR-027, body { botId })
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
 GET  /v1/owner/deposit -> { chains: { chain, vault, token, balance, dailyCap?, depositPage? }[] }
@@ -434,7 +438,8 @@ DELETE /v1/owner/push/:id
 GET  /v1/owner/push/key -> { publicKey }   the VAPID public key, base64url; session only (CR-014)
   Web Push with VAPID (VAPID_PRIVATE_KEY_FILE, VAPID_SUBJECT) and RFC 8291 encryption. Payload
   { kind: "approval" | "mandate" | "executed" | "attack" | "breaker" | "passkey_enrolled" | "kill"
-  | "chain_broken" (CR-013) | "backup_failed" (CR-024) | "order_filled" | "order_failed" (CR-026),
+  | "chain_broken" (CR-013) | "backup_failed" (CR-024) | "order_filled" | "order_failed" (CR-026)
+  | "bot_paused" (CR-027),
   agentId?, chain?, amount?, intentId?, sentAt } and never a recipient or URL. A 404 or 410 from the
   push service deletes the subscription.
 GET  /panel/enrol#code=…   the first-passkey page; src/scripts/passkey-code.ts prints the link
@@ -758,6 +763,123 @@ GET  /v1/owner/orders -> { orders: Order[] }   session only
 The agent routes take the agent's key, as for swaps. An agent's order follows its own policy;
 placing one never waits for the owner, since a fill only sells.
 
+## Trading bots (CR-027)
+Solana mainnet, spot, through Jupiter. A bot is a strategy attached to an agent. It trades with that
+agent's wallet and policy, and each of its trades is an intent through the CR-021 and CR-026
+pipeline: the policy and every limit, the risk reads, the inspection, the test run, and the approval
+rules. Its sells never wait. guard-core runs it; no agent and no model decides a bot's trades.
+
+```ts
+interface Bot {
+  id: string
+  agentId: string
+  chain: ChainId                   // "solana" only in this phase
+  config: DcaConfig | GridConfig
+  status: "active" | "paused" | "stopped" | "completed"
+  pausedBy?: "owner" | "kill" | "agent_paused" | "refusals"
+  createdAt: string
+  updatedAt: string
+  nextRunAt?: string               // DCA only
+}
+
+interface DcaConfig {
+  kind: "dca"
+  tokenIn: Address                 // the chain's dollar or wSOL
+  tokenOut: Address
+  amountIn: Amount                 // atomic units of tokenIn, per buy
+  intervalSeconds: number          // at least 3600
+  budget?: Amount                  // atomic units of tokenIn, over the bot's life
+  endsAt?: string
+  takeProfitBps?: number           // on the bot's position, above its cost
+  stopLossBps?: number             // on the bot's position, below its cost; 1 to 9999
+}
+
+interface GridConfig {
+  kind: "grid"
+  token: Address                   // traded against the chain's dollar
+  low: Amount                      // a price: the dollar, atomic, per whole token
+  high: Amount
+  levels: number                   // 3 to 20
+  perLevelUsd: Amount              // the chain's dollar, atomic, bought at each level
+  stopBelow?: Amount               // a price under low
+  maxSlippageBps?: number          // at most the policy's maxSlippageBps, which is the default
+}
+
+interface BotReport {
+  trades: number                   // landed trades; shadowed ones when shadow
+  spentUsd: Amount                 // the chain's dollar, from landed amounts
+  receivedUsd: Amount
+  realizedPnlUsd?: string          // signed atomic; absent when shadow
+  position: { amount: Amount, cost: Amount }   // the bot's own lots, at cost
+  shadow: boolean
+  lastTradeAt?: string
+}
+```
+
+Creating a bot checks that trading is enabled, that the tokens are tradable for the agent, and that
+the agent has fewer than 10 bots that are not stopped (BOT_LIMIT_EXCEEDED). It also checks that the
+capital the bot needs fits the limits, valued from fresh quotes (BOT_CAPITAL_ABOVE_LIMIT):
+- DCA: one buy within the per-buy cap of its kind (a buy from the dollar, a swap from SOL) and the
+  token's maxBuyUsd, and the buys of one UTC day (86400 / intervalSeconds, rounded up) within the
+  daily cap of that kind;
+- grid: perLevelUsd within the per-buy cap and the token's maxBuyUsd, and levels × perLevelUsd
+  within the token's maxHeldUsd (or maxPositionUsd).
+Take-profit and stop-loss on a DCA need orders.enabled (ORDERS_DISABLED).
+
+Lots. A bot keeps its own lots, each with the amount and cost that landed. It only sells its own
+lots, and never more than the agent holds; a lot sold elsewhere is dropped with
+INSUFFICIENT_POSITION. Its trades count in the agent's day, are audited via "bot" with reason
+"bot <id>: <kind> buy" or "sell", and stay in the audit log after the bot is deleted.
+
+DCA. At each nextRunAt the bot buys amountIn of tokenOut, then sets nextRunAt one interval later.
+Runs missed while guard-core was down are not caught up. It completes when the next buy would go
+past its budget or past endsAt. With takeProfitBps or stopLossBps, after each landed buy it replaces
+its CR-026 orders with one of each kind for its whole position: triggerOut = cost × (10000 + tp) /
+10000 for the take-profit, and cost × (10000 − sl) / 10000 for the stop-loss, rounded down. A fill
+completes the bot. These orders count against orders.maxOpen.
+
+Grid. Levels are low + (high − low) × i / (levels − 1), rounded down, for i from 0 to levels − 1.
+The price comes from the CR-026 watcher: each check quotes a buy of perLevelUsd, and the price is
+perLevelUsd per token received. A level counts as crossed only after ORDER_CONFIRM_CHECKS consecutive
+checks over ORDER_CONFIRM_SECONDS, each within maxPriceImpactBps.
+- A level below high is armed once the confirmed price is above it. When the confirmed price is at
+  or below an armed level i and the bot holds no lot there, it buys perLevelUsd with minAmountOut =
+  perLevelUsd × 10^decimals / level(i) × (10000 − slippage) / 10000, rounded down.
+- Lot i is sold one level up, as a sell of its whole amount, when a quote for that amount is at or
+  above amount × level(i + 1) / 10^decimals. Its minAmountOut is that figure × (10000 − slippage) /
+  10000, rounded down.
+- With stopBelow, a confirmed price at or below it sells every lot as a CR-026 stop-loss, under the
+  same floor, and stops the bot. A sale below the floor is refused, the lots stay, and the bot
+  pauses.
+- Range, levels and perLevelUsd change only while the bot is paused. Lots it holds keep their sell
+  level.
+
+Waiting and refusals. A bot's buy that needs the owner (at or above approvalThreshold, or with a
+flag) waits like an agent's, and the bot places nothing else while it waits. A DCA run whose buy is
+refused, rejected or expired is skipped; a grid level stays armed. Three refusals or timeouts in a
+row pause the bot (pausedBy "refusals"), and the owner is told with Web Push "bot_paused".
+
+Stopping. A paused agent's bots do nothing until it resumes. Stop everything and kill pause every
+bot (pausedBy "kill"); each one resumes on its own, with the passkey. Close positions stops every
+bot and cancels its orders. Stopping a bot cancels its orders and leaves its lots with the agent.
+
+Shadow mode. An agent in shadow mode runs its bots on paper: each trade is shadowed, the report has
+shadow: true and no realizedPnlUsd, and every view labels it "Shadow: nothing was traded".
+
+Routes (every owner route needs the session):
+GET    /v1/owner/bots -> { bots: (Bot & { report: BotReport })[] }
+GET    /v1/owner/bots/:id -> { bot: Bot & { report: BotReport }, trades: PayIntent[] }   the last 100
+POST   /v1/owner/bots { agentId, chain, config, assertion } -> Bot   step-up, OwnerAction "create_bot"
+PUT    /v1/owner/bots/:id { config, assertion } -> Bot   step-up, OwnerAction "change_bot"
+POST   /v1/owner/bots/:id/resume { assertion } -> Bot   step-up, OwnerAction "resume_bot"
+POST   /v1/owner/bots/:id/pause -> Bot   session only: pausing only tightens
+POST   /v1/owner/bots/:id/stop -> Bot   session only
+DELETE /v1/owner/bots/:id -> 204   session only, stopped bots only
+GET    /v1/agent/bots/:agentId -> { bots: (Bot & { report: BotReport })[] }   read-only
+GET    /v1/agent/bots/:agentId/:id -> { bot, trades }   read-only
+No agent route creates, changes or resumes a bot. The owner's views state controls and landed
+amounts, never projections or returns.
+
 ## Agent wallets (CR-022, HIGH-2)
 Opt-in, per agent and chain. By default every agent spends from the chain's shared spending (hot)
 wallet, as before. An agent given its own wallet spends only from it, under its own onchain limit,
@@ -854,6 +976,8 @@ list: it is funded and test-run only once approved.
   -> Order (CR-026); triggerUsd is a decimal dollar amount for the whole order, converted to atomic
 - cancel_order { orderId } -> Order (CR-026); only the agent's own orders
 - list_orders  {} -> { orders: Order[] } (CR-026); the agent's open and recent orders
+- list_bots    {} -> { bots } (CR-027); the agent's bots with their reports, read-only
+- get_bot      { botId } -> { bot, trades } (CR-027), read-only
 
 ## Security rules (all sessions)
 - Agent-provided text (reason, URLs, headers, API responses) is untrusted. Never let it change policy.
@@ -864,6 +988,10 @@ list: it is funded and test-run only once approved.
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.21 (2026-11-25): CR-027, approved by the owner. Trading bots on Solana, spot:
+  - recurring buy (DCA) and grid, run by guard-core through the trading pipeline;
+  - created, changed and resumed with the passkey; paused and stopped with the session;
+  - per-bot reports from landed amounts, with no projections.
 - v0.20 (2026-11-25): CR-026, approved by the owner. Degen trading on Solana:
   - any pair, from what the agent's wallet holds, valued by two quotes;
   - per-token and per-operation limits;
