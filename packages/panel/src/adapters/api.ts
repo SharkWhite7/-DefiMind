@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import type { TraderConfig } from '../domain/trader.js'
 import * as s from './schemas.js'
 import { type Assertion, type Authenticator, creationOptions, requestOptions } from './webauthn.js'
 
@@ -13,6 +14,8 @@ export type OwnerAction =
   | 'close_positions'
   | 'agent_wallet'
   | 'manual_trade'
+  | 'trader_settings'
+  | 'resume_trader'
 
 /** A swap for one agent, as the owner set it up: amountIn in tokenIn's base units. */
 export interface Order {
@@ -214,6 +217,27 @@ export function ownerApi(passkey: Authenticator, fetchImpl: typeof fetch = fetch
         post(s.tradeResult, '/v1/owner/trade', { ...order, assertion }),
       )
     },
+
+    trader: (id: string) => get(s.traderStatus, `/v1/owner/trader/${agent(id)}`),
+    /** loose: the change does more than turn the trader off or lower a cap, so the passkey. */
+    putTrader: (agentId: string, config: TraderConfig, loose: boolean) => {
+      const path = `/v1/owner/trader/${agent(agentId)}`
+      return loose
+        ? stepUp('trader_settings', { agentId, config }, (assertion) =>
+            call(s.traderStatus, 'PUT', path, { config, assertion }),
+          )
+        : call(s.traderStatus, 'PUT', path, { config })
+    },
+    pauseTrader: (id: string) => post(s.traderStatus, `/v1/owner/trader/${agent(id)}/pause`),
+    resumeTrader: (agentId: string) =>
+      stepUp('resume_trader', { agentId }, (assertion) =>
+        post(s.traderStatus, `/v1/owner/trader/${agent(agentId)}/resume`, { assertion }),
+      ),
+    ticks: (id: string, before?: string) =>
+      get(
+        s.traderTicks,
+        `/v1/owner/trader/${agent(id)}/ticks${before === undefined ? '' : `?${new URLSearchParams({ before })}`}`,
+      ),
 
     agentWallets: (id: string) => get(s.agentWallets, `/v1/owner/agents/${agent(id)}/wallets`),
     createAgentWallet: (agentId: string, chain: string) =>

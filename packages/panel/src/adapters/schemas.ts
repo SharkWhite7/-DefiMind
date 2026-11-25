@@ -84,6 +84,86 @@ export const tradeResult = z.object({
   txId: text(128).optional(),
 })
 
+/** CR-027: the AI trader. Its reasons are the model's own words: bounded, shown as text only. */
+export const traderConfig = z.object({
+  enabled: z.boolean(),
+  mode: z.enum(['shadow', 'live']),
+  model: text(64),
+  effort: z.enum(['low', 'medium', 'high']),
+  cadenceMinutes: z.union([z.literal(5), z.literal(15), z.literal(60)]),
+  tokens: z.array(text(128)).max(64),
+  instructions: text(2000),
+  template: z.object({ id: text(64), version: z.number().int() }).optional(),
+  maxActionsPerTick: z.number().int().min(1).max(5),
+  maxTicksPerDay: z.number().int().nonnegative(),
+  maxTokensPerTick: z.number().int().nonnegative(),
+  maxTokensPerDay: z.number().int().nonnegative(),
+})
+
+export const traderStatus = z.object({
+  config: traderConfig,
+  state: z.enum(['off', 'running', 'paused']),
+  pausedBy: text(32).optional(),
+  keySet: z.boolean(),
+  today: z.object({
+    ticks: z.number().int().nonnegative(),
+    tokens: z.number().int().nonnegative(),
+  }),
+  report: z.object({
+    trades: z.number().int().nonnegative(),
+    realizedPnlUsd: z
+      .string()
+      .regex(/^-?(0|[1-9]\d*)$/)
+      .optional(),
+    positions: z
+      .array(
+        z.object({
+          chain: text(64),
+          token: text(128),
+          amount: atomic,
+          cost: atomic,
+          decimals: z.number().int().min(0).max(255),
+          symbol: text(32).optional(),
+        }),
+      )
+      .max(256),
+    shadow: z.boolean(),
+  }),
+})
+
+export const traderTicks = z.object({
+  ticks: z
+    .array(
+      z.object({
+        id: text(64),
+        agentId,
+        startedAt: isoTime,
+        model: text(64),
+        outcome: z.enum(['acted', 'held', 'skipped', 'error', 'refused']),
+        actions: z
+          .array(
+            z.object({
+              tool: text(64),
+              intentId: text(64).optional(),
+              orderId: text(64).optional(),
+              status: text(32).optional(),
+              rejectReasons: z.array(text(64)).max(32),
+            }),
+          )
+          .max(16),
+        reason: text(500),
+        usage: z.object({
+          input: z.number().int().nonnegative(),
+          output: z.number().int().nonnegative(),
+          cacheRead: z.number().int().nonnegative(),
+          cacheWrite: z.number().int().nonnegative(),
+        }),
+        detail: text(500).optional(),
+      }),
+    )
+    .max(50),
+})
+
 /** SPEC v0.17, CR-022: an agent's own hot wallet on one chain, opt-in. */
 export const agentWallet = z.object({
   chain: text(64),
@@ -400,6 +480,8 @@ export type ApprovalView = z.infer<typeof approvalRequest>
 export type MandateView = z.infer<typeof mandateRequest>
 export type AgentView = z.infer<typeof agentSummary>
 export type KeysView = z.infer<typeof keys>
+export type TraderView = z.infer<typeof traderStatus>
+export type TickView = z.infer<typeof traderTicks>['ticks'][number]
 export type AgentWalletView = z.infer<typeof agentWallet>
 export type TokenInfo = z.infer<typeof tokenInfo>
 export type TokenRiskView = z.infer<typeof tokenRisk>

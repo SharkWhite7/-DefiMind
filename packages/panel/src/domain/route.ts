@@ -10,6 +10,7 @@ export type Route =
   | { name: 'agents' }
   | { name: 'agent'; id: string }
   | { name: 'trade'; id: string }
+  | { name: 'trader'; id?: string }
   | { name: 'report' }
   | { name: 'doctor' }
   | { name: 'executions' }
@@ -76,6 +77,9 @@ export function parseRoute(pathname: string, hash = ''): Route {
     if (first === 'start') {
       return { name: 'guide' }
     }
+    if (first === 'trader') {
+      return { name: 'trader' }
+    }
     const simple = SIMPLE.find((name) => name === first)
     return simple ? { name: simple } : { name: 'missing' }
   }
@@ -88,6 +92,9 @@ export function parseRoute(pathname: string, hash = ''): Route {
   }
   if (first === 'agents' && id !== undefined && AGENT_ID.test(id)) {
     return { name: 'agent', id }
+  }
+  if (first === 'trader' && id !== undefined && AGENT_ID.test(id)) {
+    return { name: 'trader', id }
   }
   if (first === 'start' && id !== undefined && isStep(id)) {
     return { name: 'guide', step: id }
@@ -111,6 +118,8 @@ export function href(route: Route): string {
       return `${BASE}agents/${encodeURIComponent(route.id)}`
     case 'trade':
       return `${BASE}agents/${encodeURIComponent(route.id)}/trade`
+    case 'trader':
+      return `${BASE}trader${route.id === undefined ? '' : `/${encodeURIComponent(route.id)}`}`
     case 'guide':
       return `${BASE}start${route.step === undefined ? '' : `/${route.step}`}`
     default:
