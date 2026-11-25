@@ -1,7 +1,7 @@
 import type { Amount, Order, OrderKind, RejectCode } from '@defimind/shared'
 import { isSvm } from '@defimind/shared'
 import { randomUUID } from 'node:crypto'
-import { moveOrder, openOrders, saveOrder } from '../db/orders.js'
+import { liveOrders, moveOrder, openOrders, saveOrder } from '../db/orders.js'
 import * as repo from '../db/repo.js'
 import { getPosition } from '../db/trades.js'
 import { placeReasons } from '../domain/orders.js'
@@ -44,7 +44,8 @@ export function placeOrder(
     policy.mode === 'shadow'
       ? undefined
       : getPosition(db, input.agentId, input.chain, input.token).amount
-  const open = openOrders(db, input.agentId)
+  // An order being filled still holds its share of the position.
+  const open = liveOrders(db, input.agentId)
   const reasons = placeReasons(policy, { ...input, maxSlippageBps }, open, held)
   if (reasons.length > 0) {
     return reasons

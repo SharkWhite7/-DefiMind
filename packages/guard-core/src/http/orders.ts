@@ -81,9 +81,12 @@ export function ownerOrderRoutes(
   }
 }
 
-/** SPEC's step-up body for place_order; maxSlippageBps only when the owner set one. */
+/**
+ * SPEC's step-up body for place_order. maxSlippageBps and expiresAt only when sent, so a captured
+ * assertion cannot be replayed with another expiry.
+ */
 function bound(input: OrderInput) {
-  const { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps } = input
+  const { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps, expiresAt } = input
   return {
     agentId,
     chain,
@@ -92,5 +95,6 @@ function bound(input: OrderInput) {
     amount,
     triggerOut,
     ...(maxSlippageBps === undefined ? {} : { maxSlippageBps }),
+    ...(expiresAt === undefined ? {} : { expiresAt }),
   }
 }

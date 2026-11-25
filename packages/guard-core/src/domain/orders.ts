@@ -47,24 +47,25 @@ export interface Streak {
   checks: number
   /** When the first of these consecutive hits was seen, in ms. */
   since: number
+  /** When the last one was, so a gap in the checks breaks the run. */
+  last: number
 }
 
 /**
- * One check of an order's price. A miss starts over; a check whose impact is above the policy's
- * limit does not count either way, so a thin pool cannot fake or break a run of hits.
+ * One check of an order's price. A run of hits must be unbroken: a miss, a check whose impact is
+ * above the policy's limit, or a gap longer than `maxGapMs` since the last hit starts it over.
  */
 export function step(
   streak: Streak | undefined,
   check: { hit: boolean; priceImpactBps: number; at: number },
   maxImpactBps: number,
+  maxGapMs: number,
 ): Streak | undefined {
-  if (check.priceImpactBps > maxImpactBps) {
-    return streak
-  }
-  if (!check.hit) {
+  if (!check.hit || check.priceImpactBps > maxImpactBps) {
     return undefined
   }
-  return { checks: (streak?.checks ?? 0) + 1, since: streak?.since ?? check.at }
+  const run = streak !== undefined && check.at - streak.last <= maxGapMs ? streak : undefined
+  return { checks: (run?.checks ?? 0) + 1, since: run?.since ?? check.at, last: check.at }
 }
 
 /** Enough consecutive hits, over long enough, that one block's price cannot fire the order. */
