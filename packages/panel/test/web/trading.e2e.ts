@@ -48,6 +48,7 @@ describe.each([390, 1280])('trading at %i px', (width) => {
       'MINT_AUTHORITY: The token can still be minted: its supply is not fixed.',
     ])
     await app.getByText('Nothing leaves your vault until you approve.').waitFor()
+    await app.getByText('Test run after your approval.').waitFor()
     expect(await fits(page)).toBeLessThanOrEqual(width)
 
     await page.getByRole('button', { name: 'Approve with passkey' }).click()
