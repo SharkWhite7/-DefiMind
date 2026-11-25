@@ -18,6 +18,7 @@ import { ownerKeysRoute } from './owner-setup.js'
 import { type ChainHost, ownerSettingsRoutes } from './owner-settings.js'
 import { ownerGuideRoutes } from './owner-guide.js'
 import { ownerTradingRoutes } from './owner-trading.js'
+import { ownerOrderRoutes } from './orders.js'
 import { jupiterTokens, type TokenSearch } from '../adapters/jupiter-tokens.js'
 import { ownerWalletRoutes, type Signing, withLinks } from './owner-wallets.js'
 import type { PublicKeys } from '../adapters/public-keys.js'
@@ -88,6 +89,8 @@ export function ownerPanelRoutes(
     await app.register(
       ownerTradingRoutes(deps, setup.tokenSearch ?? jupiterTokens(deps.fetch), stepUp),
     )
+
+    await app.register(ownerOrderRoutes(deps, stepUp))
 
     app.post('/v1/owner/challenge', async (request) => {
       const { action, body } = ownerChallenge.parse(request.body)

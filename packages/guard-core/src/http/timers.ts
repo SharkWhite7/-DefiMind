@@ -6,6 +6,10 @@ import { sweep } from '../service/sweep.js'
 import type { BucketConfig } from '../adapters/bucket.js'
 import { scheduleBackups } from '../service/backup.js'
 import { alert } from '../service/events.js'
+import { orderWatcher } from '../service/order-watcher.js'
+
+/** The order watcher (CR-026): off when unset, as in tests that tick it directly. */
+export type Watch = { checkMs: number; confirmChecks: number; confirmSeconds: number }
 
 /** The daily backup (CR-024): off when unset, as in tests. */
 export type Backups = { databaseUrl: string; hour: number; bucket?: BucketConfig | undefined }
@@ -18,8 +22,26 @@ export function startTimers(
     anchorPublisher?: AnchorPublisher
     sweepMs?: number
     backups?: Backups
+    orders?: Watch
   },
 ): void {
+  if (options.orders !== undefined) {
+    const { checkMs } = options.orders
+    const watcher = orderWatcher(deps, options.orders)
+    // One tick at a time: a slow venue must not stack checks of the same order.
+    let running = false
+    const timer = setInterval(() => {
+      if (running) {
+        return
+      }
+      running = true
+      void watcher.tick().finally(() => {
+        running = false
+      })
+    }, checkMs)
+    timer.unref()
+    first.addHook('onClose', async () => clearInterval(timer))
+  }
   if (options.backups !== undefined) {
     const { databaseUrl, hour, bucket } = options.backups
     const failed = (what: 'backup' | 'upload') =>

@@ -416,6 +416,15 @@ A swap's `tokenIn` and `tokenOut` can both be tokens other than the chain's doll
 - **Cost basis.** Cost moves from the sold position to the bought one in proportion to the amount sold, rounded down, with the remainder left on the sold position until it closes. A swap realises no profit or loss.
 - **Gas.** No trade may leave the hot wallet's SOL below the next sell's fees (`GAS_RESERVE`).
 
+### Take-profit and stop-loss orders (CR-026)
+
+An order is filled as a sell to the chain's dollar, under every trading check, through the agent's own wallet.
+
+- **Routes.** Agents use `POST /v1/agent/orders`, `POST /v1/agent/orders/:id/cancel` and `GET /v1/agent/orders/:agentId`, for their own orders only. The owner uses `POST /v1/owner/orders` (step-up `place_order`), `POST /v1/owner/orders/:id/cancel` (session alone) and `GET /v1/owner/orders`. A refused order answers 409 `{ error: "order_refused", rejectReasons }`.
+- **Placing.** It needs `trading.orders.enabled`, fewer open orders than `orders.maxOpen` (default 10), and open orders on the token that add up to no more than the position. The order's slippage may not exceed the policy's.
+- **Filling.** The watcher quotes every open order every `ORDER_CHECK_MS` (default 15 s) for its whole amount. It fires after `ORDER_CONFIRM_CHECKS` (default 3) consecutive hits spanning at least `ORDER_CONFIRM_SECONDS` (default 30). The hits must be unbroken: a miss, a failed quote, a check above `maxPriceImpactBps`, a pause, or a gap of more than twice `ORDER_CHECK_MS` starts the count over. The sell must bring at least `triggerOut × (10000 − maxSlippageBps) / 10000`; below that the order fails with that reason and the position stays. Filled and failed orders are audited and pushed as `order_filled` and `order_failed`.
+- **Ending.** A paused agent's orders stay open and are not checked. An order whose position was sold elsewhere fails with `INSUFFICIENT_POSITION`, and an expired one is cancelled. A sell that throws fails its order with `SIM_FAILED` (a venue that is down puts it back to open instead), and an order found triggered when the watcher starts fails the same way: its sell cannot be resumed. Close positions, every kill, revoking the agent and turning `orders.enabled` off cancel the open orders. The count of hits lives in memory, so a restart starts it over.
+
 ### Owner trading tools (CR-025)
 
 Every route needs the owner's session. These routes serve Solana mainnet through Jupiter only.

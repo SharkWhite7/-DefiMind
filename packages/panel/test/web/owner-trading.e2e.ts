@@ -125,7 +125,7 @@ describe.each([390, 1280])('owner trading tools at %i px (CR-025)', (width) => {
     await signIn(page, guard.origin)
     await page.goto(`${guard.origin}/panel/agents/research-bot/trade`)
     await page.getByLabel('Trade', { exact: true }).selectOption('sell')
-    await page.getByLabel("Sell, in the token's units").fill('1,5')
+    await page.getByLabel("Amount, in the token's units").fill('1,5')
     await page.getByRole('button', { name: 'Get quote' }).click()
     await page.getByRole('heading', { name: 'Confirm' }).waitFor()
     expect(guard.trading!.state.quotes[0]).toMatchObject({

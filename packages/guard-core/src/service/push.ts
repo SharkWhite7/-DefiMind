@@ -1,4 +1,4 @@
-import type { ApprovalRequest, MandateApprovalRequest, PayIntent } from '@defimind/shared'
+import type { ApprovalRequest, MandateApprovalRequest, Order, PayIntent } from '@defimind/shared'
 import type { FastifyBaseLogger } from 'fastify'
 import type { PushService } from '../adapters/push.js'
 import type { Db } from '../db/client.js'
@@ -18,6 +18,8 @@ export interface PushPayload {
     | 'kill'
     | 'chain_broken'
     | 'backup_failed'
+    | 'order_filled'
+    | 'order_failed'
   agentId?: string
   chain?: string
   amount?: string
@@ -90,6 +92,11 @@ export function pusher(deps: PushDeps) {
   return {
     send,
     kill: () => send({ kind: 'kill' }),
+    /** CR-026: an order filled, or could not be filled at its floor and was failed. */
+    order(kind: 'order_filled' | 'order_failed', order: Order, intentId?: string) {
+      const { agentId, chain, amount } = order
+      send({ kind, agentId, chain, amount, ...(intentId === undefined ? {} : { intentId }) })
+    },
     approval(request: ApprovalRequest | MandateApprovalRequest) {
       if ('mandate' in request) {
         const { agentId, budget } = request.mandate

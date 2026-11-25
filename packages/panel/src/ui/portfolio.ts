@@ -26,6 +26,8 @@ function holdings(agent: PortfolioView) {
         el('span', {}, `Cost ${formatUsd(position.cost)} on ${chainName(position.chain)}`),
       ),
     ),
+    positions.length > 0 &&
+      el('a', { href: href({ name: 'orders', id: agent.agentId }) }, 'Take profit and stop loss'),
   )
 }
 
