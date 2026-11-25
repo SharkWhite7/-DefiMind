@@ -87,10 +87,14 @@ const wallet = (lamports: number): AccountInfo<Buffer> => ({
 let before: Map<string, AccountInfo<Buffer>>
 let after: Map<string, AccountInfo<Buffer>>
 let sent: Buffer[]
+/** The hot wallet's lamports when send() reads them: what the test run left, unless a test says. */
+const fromBefore = (key: PublicKey) => BigInt(before.get(key.toBase58())?.lamports ?? 0)
+let balanceNow = fromBefore
 
 const connection = {
   getSlot: async () => 1_000,
   getMinimumBalanceForRentExemption: async () => 2_039_280,
+  getBalance: async (key: PublicKey) => Number(balanceNow(key)),
   getMultipleAccountsInfo: async (keys: PublicKey[]) =>
     keys.map((k) => before.get(k.toBase58()) ?? null),
   getTokenAccountsByOwner: async (_owner: PublicKey, { programId }: { programId: PublicKey }) => ({
@@ -143,10 +147,13 @@ function routeData(slippageBps = 50) {
 const route = (extra: { pubkey: PublicKey; isSigner: boolean; isWritable: boolean }[] = []) =>
   new TransactionInstruction({
     programId: JUPITER_PROGRAM_ID,
+    // route's layout: token program, signer, source, destination, then Jupiter's id for none.
     keys: [
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: hot, isSigner: true, isWritable: true },
       { pubkey: usdcAccount, isSigner: false, isWritable: true },
       { pubkey: bonkAccount, isSigner: false, isWritable: true },
+      { pubkey: JUPITER_PROGRAM_ID, isSigner: false, isWritable: false },
       ...extra,
     ],
     data: routeData(),
@@ -197,6 +204,7 @@ let v: ReturnType<typeof fakeVenue>
 let s: ReturnType<typeof swaps>
 
 beforeEach(() => {
+  balanceNow = fromBefore
   before = new Map([
     [hot.toBase58(), wallet(100_000_000)],
     [usdc.toBase58(), mint(6)],
@@ -363,6 +371,13 @@ describe('simulate and send a swap', () => {
     before.set(hot.toBase58(), wallet(7_000_000))
     after.set(hot.toBase58(), wallet(7_000_000 - 5_000 - 2_039_280))
     expect((await s.simulate(buy())).rejectReasons).toEqual(['GAS_RESERVE'])
+  })
+
+  it('checks the gas reserve again when it signs: another spend may have come in between', async () => {
+    expect((await s.simulate(buy())).rejectReasons).toEqual([])
+    balanceNow = () => 6_000_000n
+    await expect(s.send(buy())).rejects.toThrow('send_refused: GAS_RESERVE')
+    expect(sent).toEqual([])
   })
 
   it('refuses a transaction whose route would accept less than the approved minimum', async () => {

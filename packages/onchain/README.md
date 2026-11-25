@@ -185,10 +185,20 @@ Native SOL can be either side of a swap; its mint is wSOL. Jupiter wraps it for 
 - when SOL is sold, exactly amountIn moved into it from the hot wallet, then SyncNative;
 - that account closed back to the hot wallet in the same transaction.
 
-The test run counts the lamports and the hot wallet's wSOL as one leg. Selling SOL, they may fall
-by amountIn plus fees and rent. Buying SOL, they must rise by the minimum less those. Every swap is
-refused with `GAS_RESERVE` if it would leave the hot wallet below `getHotWalletGas().minimum`
-after fees, so it can still pay for the next sell.
+The wrap must come in that order around one route. The route must be signed by the hot wallet,
+spend from its own tokenIn account and pay into its own tokenOut account, so it cannot park the
+proceeds anywhere else.
+
+The test run counts a SOL leg in lamports alone: the hot wallet's own, plus those of every wSOL
+account it owns, rent included. SOL moved between them nets to nothing, and only SOL that leaves
+the hot wallet counts. Only the hot wallet's own wSOL account may close. Selling SOL, the leg may
+fall by amountIn plus the fee actually paid (the signature and the priority on the units the
+transaction asks for) plus the rent-exempt minimum of each account it opens. Buying SOL, the leg
+must rise by the minimum less those.
+
+Every swap is refused with `GAS_RESERVE` if it would leave the hot wallet below
+`getHotWalletGas().minimum` after fees, so it can still pay for the next sell. It is checked at the
+test run, and again just before signing, against the balance then.
 
 ### Sell quotes (CR-026)
 

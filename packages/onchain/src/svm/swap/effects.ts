@@ -5,6 +5,8 @@ export interface Holding {
   mint: string
   owner: string
   amount: bigint
+  /** For wSOL these are the wrapped SOL plus the rent: a SOL leg is counted in them. */
+  lamports: bigint
   delegate: string | null
   closeAuthority: string | null
   frozen: boolean
@@ -16,8 +18,12 @@ export interface Deal {
   amountIn: bigint
   tokenOut: string
   minAmountOut: bigint
-  /** Fees and the rent of accounts the swap may create: all the SOL it may cost. */
-  maxLamports: bigint
+  /** What the transaction pays in fees. */
+  fee: bigint
+  /** The rent-exempt minimum of each account the swap opens for the hot wallet, wSOL aside. */
+  rent: bigint
+  /** The hot wallet's own wSOL account: the one a SOL leg may close. */
+  wsolAccount: string
 }
 
 export interface Effects {
@@ -33,8 +39,10 @@ const WSOL = 'So11111111111111111111111111111111111111112'
  * 4). tokenIn falls by at most amountIn, tokenOut rises by at least minAmountOut, no other account
  * loses anything, SOL pays fees and rent only, and every account stays the hot wallet's alone: no
  * delegate, no close authority, not frozen, not closed. Anything else is SIM_UNEXPECTED_EFFECT.
- * With a SOL leg (CR-026) the lamports and the hot wallet's wSOL count as one leg, and its wSOL
- * account may close, back into those lamports.
+ *
+ * A SOL leg (CR-026) is counted in lamports alone: the hot wallet's, and those of every wSOL account
+ * it owns, rent included, so moving SOL between them nets to nothing and only SOL that leaves the
+ * hot wallet counts. Only its own wSOL account may close.
  */
 export function swapEffects(
   before: Map<string, Holding | null>,
@@ -49,11 +57,16 @@ export function swapEffects(
   for (const address of new Set([...before.keys(), ...after.keys()])) {
     const was = before.get(address) ?? null
     const now = after.get(address) ?? null
+    const wsol = !!sol && (now ?? was)?.mint === WSOL
+    if (wsol) {
+      if (now) ok &&= isPlain(now, deal.hotWallet)
+      else ok &&= address === deal.wsolAccount
+      add(WSOL, (now?.lamports ?? 0n) - (was?.lamports ?? 0n))
+      continue
+    }
     if (!now) {
-      // Never held, or gone: a closed account of the hot wallet is an effect no swap needs, but
-      // the unwrap of a SOL leg.
-      if (sol && was?.mint === WSOL) add(WSOL, -was.amount)
-      else ok &&= was === null
+      // Never held, or gone: a closed account of the hot wallet is an effect no swap needs.
+      ok &&= was === null
       continue
     }
     if (was && was.mint !== now.mint) ok = false
@@ -62,12 +75,13 @@ export function swapEffects(
     if (delta < 0n && now.mint !== deal.tokenIn) ok = false
     add(now.mint, delta)
   }
+  const cost = deal.fee + deal.rent
   const lamportsDelta = lamports.after - lamports.before
   if (sol) add(WSOL, lamportsDelta)
-  else ok &&= -lamportsDelta <= deal.maxLamports
-  // A SOL leg's lamports also pay the fees and rent, so they are allowed for on that side.
-  const spent = -(net.get(deal.tokenIn) ?? 0n) - (sol === 'in' ? deal.maxLamports : 0n)
-  const bought = (net.get(deal.tokenOut) ?? 0n) + (sol === 'out' ? deal.maxLamports : 0n)
+  else ok &&= -lamportsDelta <= cost
+  // A SOL leg's lamports also pay the fees and rent, so those are allowed for on that side.
+  const spent = -(net.get(deal.tokenIn) ?? 0n) - (sol === 'in' ? cost : 0n)
+  const bought = (net.get(deal.tokenOut) ?? 0n) + (sol === 'out' ? cost : 0n)
   ok &&= spent <= deal.amountIn && bought >= deal.minAmountOut
   return {
     reasons: ok ? [] : ['SIM_UNEXPECTED_EFFECT'],

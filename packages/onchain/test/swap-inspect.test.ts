@@ -8,6 +8,8 @@ import {
   getAssociatedTokenAddressSync,
   NATIVE_MINT,
 } from '@solana/spl-token'
+import type {
+  PublicKey} from '@solana/web3.js';
 import {
   ComputeBudgetProgram,
   Keypair,
@@ -25,22 +27,40 @@ const tokenOut = key()
 const sides = { hotWallet, tokenIn, tokenOut, amountIn: 10_000_000n, minAmountOut: 995_000n }
 const inAccount = getAssociatedTokenAddressSync(tokenIn, hotWallet)
 
-/** A Jupiter route instruction as v6 encodes it: discriminator, route plan, then its terms. */
+/**
+ * A Jupiter route instruction as v6 encodes it: discriminator, route plan, then its terms, with its
+ * accounts where each variant keeps them (route: signer 1, source 2, destination 3, none 4;
+ * shared_accounts_route: signer 2, source 3, destination 6).
+ */
 function routeWith({
   discriminator = [229, 23, 203, 151, 122, 227, 173, 42],
   inAmount = 10_000_000n,
   quotedOut = 1_000_000n,
   slippageBps = 50,
   feeBps = 0,
+  from = tokenIn,
+  to = tokenOut,
 } = {}) {
   const terms = Buffer.alloc(19)
   terms.writeBigUInt64LE(inAmount, 0)
   terms.writeBigUInt64LE(quotedOut, 8)
   terms.writeUInt16LE(slippageBps, 16)
   terms.writeUInt8(feeBps, 18)
+  const meta = (pubkey: PublicKey, isSigner = false) => ({ pubkey, isSigner, isWritable: true })
+  const [source, destination] = [from, to].map((mint) =>
+    getAssociatedTokenAddressSync(mint, hotWallet),
+  ) as [PublicKey, PublicKey]
+  const shared = discriminator[0] === 193
+  const keys = shared
+    ? [key(), key(), hotWallet, source, key(), key(), destination].map((k) =>
+        meta(k, k.equals(hotWallet)),
+      )
+    : [key(), hotWallet, source, destination, JUPITER_PROGRAM_ID].map((k) =>
+        meta(k, k.equals(hotWallet)),
+      )
   return new TransactionInstruction({
     programId: JUPITER_PROGRAM_ID,
-    keys: [{ pubkey: hotWallet, isSigner: true, isWritable: true }],
+    keys,
     data: Buffer.concat([Buffer.from(discriminator), Buffer.from([1, 0, 0, 0, 9, 9, 9]), terms]),
   })
 }
@@ -153,6 +173,16 @@ describe('a swap transaction, read before the test run', () => {
     expect(check([routeWith(terms)])).toEqual([reason])
   })
 
+  it("refuses a route spending from, or paying into, anything but the hot wallet's own accounts", () => {
+    const stranger = key()
+    expect(check([...budget, create(), routeWith({ to: stranger })])).toEqual([
+      'SIM_UNEXPECTED_EFFECT',
+    ])
+    expect(check([...budget, create(), routeWith({ from: stranger })])).toEqual([
+      'SIM_UNEXPECTED_EFFECT',
+    ])
+  })
+
   it('passes the shared-accounts route, and refuses one too short to hold its terms', () => {
     const shared = routeWith({ discriminator: [193, 32, 155, 51, 65, 214, 156, 129] })
     expect(check([shared])).toEqual([])
@@ -169,6 +199,7 @@ describe('a SOL leg (CR-026), in its one shape', () => {
     SystemProgram.transfer({ fromPubkey: hotWallet, toPubkey: wsol, lamports })
   const sync = createSyncNativeInstruction(wsol)
   const unwrap = createCloseAccountInstruction(wsol, hotWallet, hotWallet)
+  const sell = routeWith({ from: NATIVE_MINT })
   const run = (instructions: TransactionInstruction[], with_ = selling) => {
     const expanded = new TransactionMessage({
       payerKey: hotWallet,
@@ -179,19 +210,23 @@ describe('a SOL leg (CR-026), in its one shape', () => {
   }
 
   it('passes selling SOL: its own wSOL account, amountIn in, synced, route, closed back', () => {
-    expect(run([...budget, create(NATIVE_MINT), wrap(), sync, create(), route, unwrap])).toEqual([])
+    expect(run([...budget, create(NATIVE_MINT), wrap(), sync, create(), sell, unwrap])).toEqual([])
   })
 
   it('passes buying SOL: the route into its own wSOL account, closed back', () => {
-    const shape = [...budget, create(tokenIn), create(NATIVE_MINT), route, unwrap]
+    const buy = routeWith({ to: NATIVE_MINT })
+    const shape = [...budget, create(tokenIn), create(NATIVE_MINT), buy, unwrap]
     expect(run(shape, buying)).toEqual([])
   })
 
   it.each([
+    ['the wrap after the route', [create(NATIVE_MINT), sell, wrap(), sync, unwrap]],
+    ['the close before the route', [create(NATIVE_MINT), wrap(), sync, unwrap, sell]],
     [
-      'more SOL wrapped than amountIn',
-      [create(NATIVE_MINT), wrap(10_000_001), sync, route, unwrap],
+      'the output routed elsewhere',
+      [create(NATIVE_MINT), wrap(), sync, routeWith({ from: NATIVE_MINT, to: tokenIn }), unwrap],
     ],
+    ['more SOL wrapped than amountIn', [create(NATIVE_MINT), wrap(10_000_001), sync, sell, unwrap]],
     [
       'SOL sent anywhere else',
       [
@@ -202,7 +237,7 @@ describe('a SOL leg (CR-026), in its one shape', () => {
         unwrap,
       ],
     ],
-    ['no close back', [create(NATIVE_MINT), wrap(), sync, route]],
+    ['no close back', [create(NATIVE_MINT), wrap(), sync, sell]],
     [
       'a close to someone else',
       [
@@ -213,7 +248,7 @@ describe('a SOL leg (CR-026), in its one shape', () => {
         createCloseAccountInstruction(wsol, key(), hotWallet),
       ],
     ],
-    ['a second wrap', [create(NATIVE_MINT), wrap(), wrap(), sync, route, unwrap]],
+    ['a second wrap', [create(NATIVE_MINT), wrap(), wrap(), sync, sell, unwrap]],
   ])('refuses %s', (_case, instructions) => {
     expect(run([...budget, ...instructions])).not.toEqual([])
   })
