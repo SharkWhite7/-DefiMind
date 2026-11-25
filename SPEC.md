@@ -755,7 +755,9 @@ interface Order {
 - A paused agent's orders do not execute; they stay open. Close positions and kill cancel every open
   order. Turning orders.enabled off, or revoking the agent, cancels its open orders.
 - An order whose fill stops part-way (any error, or a restart) is failed with SIM_FAILED and the
-  owner is told with "order_failed": it never stays triggered. On start, guard-core fails every
+  owner is told with "order_failed": it never stays triggered. A venue that is down before the sell
+  is built puts the order back to open instead, with its run of checks started over, so a stop-loss
+  outlives a passing outage. On start, guard-core fails every
   order it finds triggered. The open orders on a token count triggered ones against the position. An order whose position was sold elsewhere is failed with INSUFFICIENT_POSITION. An expired
   order is cancelled. Orders are Solana only and need trading.enabled.
 - In shadow mode a fill is simulated and shadowed, like any swap.
