@@ -704,8 +704,9 @@ whole transaction: tokenIn falls by at most amountIn, tokenOut rises by at least
 other token account of the hot wallet nets to zero or more (route intermediates included), and SOL
 falls by fees and rent only, plus amountIn when SOL is tokenIn. A trade never leaves the hot wallet's
 SOL below getHotWalletGas().minimum after fees (GAS_RESERVE), so it can still pay for the next sell.
-A sell to the chain's dollar is exempt, as long as the hot wallet can pay its fee, so a wallet low
-on SOL can always sell and Close positions stays the way out. guard-core checks the reserve again
+A sell to the chain's dollar whose SOL cost is only its fee, plus at most one token account's rent
+when the hot wallet has no dollar account yet, is exempt. A wallet low on SOL can then always sell,
+and Close positions stays the way out. A sell the wallet cannot pay for fails at the RPC, with no loss. guard-core checks the reserve again
 just before signing, since two trades checked in the same window could pass it together.
 
 Orders. guard-core stores take-profit and stop-loss orders and fills each one as a sell to the
