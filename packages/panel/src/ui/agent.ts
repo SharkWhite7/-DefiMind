@@ -213,6 +213,9 @@ export async function agent(ctx: Context, id: string): Screen {
     tools &&
       policy.trading?.enabled === true &&
       el('a', { href: href({ name: 'trade', id }), class: 'button' }, 'Trade by hand'),
+    tools &&
+      policy.trading?.enabled === true &&
+      el('a', { href: href({ name: 'orders', id }), class: 'button' }, 'Take profit and stop loss'),
     wallets !== undefined && walletsCard(ctx, id, known, wallets),
     wallets !== undefined && stopAgentCard(ctx, id),
     card(
