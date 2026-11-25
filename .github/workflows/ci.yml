@@ -7,7 +7,9 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Only a PR's older runs are cancelled. On main every push must finish: Deploy compares each
+  # commit with the one before it, so a cancelled run on main would skip that commit's deploy.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
