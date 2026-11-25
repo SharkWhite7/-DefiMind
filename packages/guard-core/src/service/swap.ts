@@ -3,9 +3,9 @@ import type { Amount, PayIntent, Policy } from '@defimind/shared'
 import { admit } from '../db/breaker.js'
 import { ownerApprovalMethod, recordOwnerApproval, saveClearance } from '../db/receipts.js'
 import * as repo from '../db/repo.js'
-import { addBought, addSold, addSwapped, bookOf } from '../db/trades.js'
+import { addBought, addSold, addSwapped, bookOf } from '../db/day-book.js'
 import { parseAmount, toAmount } from '../domain/amount.js'
-import { evaluateTrade, type Trade, type TradeVerdict } from '../domain/trading.js'
+import { evaluateTrade, expectedOf, type Trade, type TradeVerdict } from '../domain/trading.js'
 import { HttpError } from '../http/errors.js'
 import type { QuoteRequest, SwapRequest } from '../http/schemas.js'
 import { askOwner } from './approvals.js'
@@ -23,7 +23,7 @@ import {
   valueOf,
   withQuote,
 } from './swap-quote.js'
-import { adapterFor } from './wallets.js'
+import { adapterFor, signerKey } from './wallets.js'
 
 /** What the owner is shown for a buy that has drawn nothing yet: it is tested once approved. */
 const UNTESTED = {
@@ -69,7 +69,7 @@ export async function swap(
   req: SwapRequest,
   floor?: { minAmountOut: Amount; by: 'owner' | 'order' },
 ): Promise<PayIntent> {
-  return deps.serial(req.agentId, async () => {
+  return deps.serial(signerKey(deps, req.agentId, req.chain), async () => {
     const { db, now } = deps
     const adapter = adapterFor(deps, req.agentId, req.chain)
     const intent = newIntent(
@@ -116,7 +116,7 @@ export async function swap(
       return reject(deps, priced, ['SLIPPAGE_TOO_HIGH'])
     }
     repo.saveIntent(db, priced)
-    const gas = await gasReason(adapter, req)
+    const gas = await gasReason(adapter, req, pair.side)
     if (gas !== undefined) {
       return reject(deps, priced, [gas])
     }
@@ -235,6 +235,12 @@ export async function clearSwap(
     const passkey = needsPasskey(deps.passkey, intent)
     return askOwner(deps, intent, simulation, { flags: how.verdict.flags, passkey })
   }
+  // Again just before signing, once the owner has answered: another trade may have spent the
+  // fee coin since the first check. Nothing is counted yet, so a refusal leaves no trace.
+  const gas = await gasReason(adapter, { tokenIn: intent.token, amountIn: intent.amount }, how.side)
+  if (gas !== undefined) {
+    return reject(deps, intent, [gas])
+  }
   const limit = how.policy.maxPaymentsPerMinute ?? 10
   // The owner's Close is not an agent looping, so the breaker does not count it.
   if (owner !== 'close' && !admit(db, intent, limit, now())) {
@@ -253,8 +259,8 @@ export async function clearSwap(
     addBought(db, intent.agentId, intent.chain, day, intent.amount)
   } else if (how.side === 'swap') {
     addSwapped(db, intent.agentId, intent.chain, day, toAmount(how.valueUsd ?? 0n))
-  } else if (intent.swap !== undefined) {
-    addSold(db, intent.agentId, intent.chain, day, intent.swap.minAmountOut)
+  } else {
+    addSold(db, intent.agentId, intent.chain, day, toAmount(expectedOf(intent.swap)))
   }
   return settle(deps, adapter, approved, how.side, simulation)
 }

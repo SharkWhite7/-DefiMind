@@ -1,11 +1,11 @@
 import type { PayIntent, SwapQuote } from '@defimind/shared'
 import * as repo from '../db/repo.js'
-import { bookOf } from '../db/trades.js'
+import { bookOf } from '../db/day-book.js'
 import { evaluateTrade } from '../domain/trading.js'
 import { reject, type PaymentDeps } from './payments.js'
 import { clearSwap } from './swap.js'
 import { dollarOf, gasReason, pairOf, swapLegs, valueOf } from './swap-quote.js'
-import { adapterFor } from './wallets.js'
+import { adapterFor, signerKey } from './wallets.js'
 
 /**
  * A swap the owner approved. The policy runs again, since the agent may have been paused or the
@@ -14,7 +14,7 @@ import { adapterFor } from './wallets.js'
  * lower minimum.
  */
 export async function sendApprovedSwap(deps: PaymentDeps, first: PayIntent): Promise<PayIntent> {
-  return deps.serial(first.agentId, async () => {
+  return deps.serial(signerKey(deps, first.agentId, first.chain), async () => {
     const { db, now } = deps
     const intent = repo.getIntent(db, first.id)
     if (intent?.status !== 'approved' || intent.kind !== 'swap' || intent.swap === undefined) {
@@ -49,7 +49,7 @@ export async function sendApprovedSwap(deps: PaymentDeps, first: PayIntent): Pro
       decimalsIn: details.decimalsIn,
       decimalsOut: details.decimalsOut,
     }
-    const gas = await gasReason(adapter, request)
+    const gas = await gasReason(adapter, request, pair.side)
     if (gas !== undefined) {
       return reject(deps, intent, [gas])
     }

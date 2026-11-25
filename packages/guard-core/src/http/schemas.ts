@@ -101,10 +101,11 @@ export const newAgentRequest = z.object({ agentId: newAgentId })
 export const agentRouteParam = z.object({ id: agentId })
 export const intentIdParam = z.object({ id: z.uuid() })
 
-const operationLimit = z.object({ maxTradeUsd: atomicAmount, dailyMax: atomicAmount })
+// Strict, as every CR-026 object below: a misspelt cap must fail, never be dropped and read as set.
+const operationLimit = z.strictObject({ maxTradeUsd: atomicAmount, dailyMax: atomicAmount })
 
 /** CR-021. The two bps limits default as SPEC says; every other field must be given. */
-const tradingBody = z.object({
+const tradingBody = z.strictObject({
   enabled: z.boolean(),
   venues: z.array(z.string().min(1).max(32)).max(8),
   tokens: z.array(address).max(64),
@@ -118,15 +119,17 @@ const tradingBody = z.object({
   tokenLimits: z
     .record(
       address,
-      z.object({ maxBuyUsd: atomicAmount.optional(), maxHeldUsd: atomicAmount.optional() }),
+      z.strictObject({ maxBuyUsd: atomicAmount.optional(), maxHeldUsd: atomicAmount.optional() }),
     )
     .refine((limits) => Object.keys(limits).length <= 64, 'at most 64 token limits')
     .optional(),
   operations: z
-    .object({ buy: operationLimit, sell: operationLimit, swap: operationLimit })
+    .strictObject({ buy: operationLimit, sell: operationLimit, swap: operationLimit })
     .partial()
     .optional(),
-  orders: z.object({ enabled: z.boolean(), maxOpen: z.number().int().min(0).max(100) }).optional(),
+  orders: z
+    .strictObject({ enabled: z.boolean(), maxOpen: z.number().int().min(0).max(100) })
+    .optional(),
 })
 
 export const policyBody = z.object({

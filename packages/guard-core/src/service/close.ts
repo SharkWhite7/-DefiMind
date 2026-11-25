@@ -7,6 +7,7 @@ import { listWallets } from '../db/wallets.js'
 import { evaluateTrade } from '../domain/trading.js'
 import { cancelOpen } from './orders.js'
 import { newIntent, reject, type PaymentDeps } from './payments.js'
+import { signerKey } from './wallets.js'
 import { clearSwap } from './swap.js'
 import { fetchQuote, VenueUnavailable, withQuote } from './swap-quote.js'
 
@@ -70,7 +71,9 @@ async function sell(
   if (agentId === undefined || policy === undefined) {
     return undefined
   }
-  return deps.serial(agentId, async () => {
+  const key =
+    owner === undefined ? `wallet:shared:${held.chain}` : signerKey(deps, owner, held.chain)
+  return deps.serial(key, async () => {
     const request = {
       agentId,
       chain: held.chain,
@@ -106,6 +109,7 @@ async function sell(
     const verdict = evaluateTrade(
       { side: 'sell', token: held.token, request, quote },
       closing(quote.venue, slippage),
+      // No positionAmount: Close sells what the chain says the wallet holds, booked or not.
       { tradedToday: 0n, soldToday: 0n, swappedToday: 0n, positionCost: 0n, boughtBefore: true },
       now(),
     )
