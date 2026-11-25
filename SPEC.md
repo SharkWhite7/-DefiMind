@@ -223,8 +223,8 @@ SELL_EXCEEDED, SELL_DAILY_EXCEEDED, SWAP_EXCEEDED, SWAP_DAILY_EXCEEDED, INSUFFIC
 or swapping more than the agent holds), VALUATION_UNAVAILABLE (a leg cannot be priced back to the
 dollar within the limits), ORDERS_DISABLED, ORDER_LIMIT_EXCEEDED, GAS_RESERVE (the trade would
 leave the hot wallet without SOL for fees).
-Trading bots (CR-027): BOT_CAPITAL_ABOVE_LIMIT (the capital a bot needs does not fit the limits),
-BOT_LIMIT_EXCEEDED (the agent already has 10 bots that are not stopped).
+The AI trader (CR-027): TRADER_TOKEN_NOT_ALLOWED (the trader asked for a token outside its own
+list).
 
 ## ChainAdapter (packages/onchain/src/ChainAdapter.ts)
 guard-core depends on this interface only and never imports a chain SDK directly.
@@ -407,8 +407,7 @@ POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, sing
     | "agent_wallet" (CR-022, body { agentId, chain })
     | "manual_trade" (CR-025, body { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut })
     | "place_order" (CR-026, body { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps })
-    | "create_bot" (CR-027, body { agentId, chain, config }) | "change_bot" (CR-027, body { botId, config })
-    | "resume_bot" (CR-027, body { botId })
+    | "trader_settings" (CR-027, body { agentId, config }) | "resume_trader" (CR-027, body { agentId })
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
 GET  /v1/owner/deposit -> { chains: { chain, vault, token, balance, dailyCap?, depositPage? }[] }
@@ -439,7 +438,7 @@ GET  /v1/owner/push/key -> { publicKey }   the VAPID public key, base64url; sess
   Web Push with VAPID (VAPID_PRIVATE_KEY_FILE, VAPID_SUBJECT) and RFC 8291 encryption. Payload
   { kind: "approval" | "mandate" | "executed" | "attack" | "breaker" | "passkey_enrolled" | "kill"
   | "chain_broken" (CR-013) | "backup_failed" (CR-024) | "order_filled" | "order_failed" (CR-026)
-  | "bot_paused" (CR-027),
+  | "trader_paused" (CR-027),
   agentId?, chain?, amount?, intentId?, sentAt } and never a recipient or URL. A 404 or 410 from the
   push service deletes the subscription.
 GET  /panel/enrol#code=…   the first-passkey page; src/scripts/passkey-code.ts prints the link
@@ -763,122 +762,136 @@ GET  /v1/owner/orders -> { orders: Order[] }   session only
 The agent routes take the agent's key, as for swaps. An agent's order follows its own policy;
 placing one never waits for the owner, since a fill only sells.
 
-## Trading bots (CR-027)
-Solana mainnet, spot, through Jupiter. A bot is a strategy attached to an agent. It trades with that
-agent's wallet and policy, and each of its trades is an intent through the CR-021 and CR-026
-pipeline: the policy and every limit, the risk reads, the inspection, the test run, and the approval
-rules. Its sells never wait. guard-core runs it; no agent and no model decides a bot's trades.
+## The AI trader (CR-027)
+Solana mainnet, spot, through Jupiter. The AI trader is an agent that runs inside guard-core on a
+schedule and decides its own trades with a Claude model. It is attached to one agent, at most one
+per agent, and trades with that agent's wallet and policy. Each action it takes is an intent through
+the CR-021 and CR-026 pipeline, exactly as an MCP agent's:
+- the policy and every limit;
+- the risk reads;
+- the inspection and the test run;
+- the approval rules and orders.
+Its sells never wait. What the model writes, its reasons included, is shown to the owner and never
+used in a decision.
 
 ```ts
-interface Bot {
+interface TraderConfig {
+  enabled: boolean
+  mode: "shadow" | "live"          // shadow until the owner goes live with the passkey
+  model: "claude-opus-5-5" | "claude-sonnet-5-5" | "claude-haiku-5-5"   // default the first
+  effort: "low" | "medium" | "high"                                     // default "medium"
+  cadenceMinutes: 5 | 15 | 60
+  tokens: Address[]                // what it may trade; each must also pass the policy
+  instructions: string             // the owner's, plain words, at most 2000 characters
+  maxActionsPerTick: number        // 1 to 5, default 3
+  maxTicksPerDay: number           // default 24 × 60 / cadenceMinutes
+  maxTokensPerTick: number         // input plus output, default 200000
+  maxTokensPerDay: number          // default 2000000
+}
+
+interface TraderTick {
   id: string
   agentId: string
-  chain: ChainId                   // "solana" only in this phase
-  config: DcaConfig | GridConfig
-  status: "active" | "paused" | "stopped" | "completed"
-  pausedBy?: "owner" | "kill" | "agent_paused" | "refusals"
-  createdAt: string
-  updatedAt: string
-  nextRunAt?: string               // DCA only
+  startedAt: string
+  model: string                    // the model that served the tick, fallbacks included
+  outcome: "acted" | "held" | "skipped" | "error" | "refused"
+  actions: { tool: string, intentId?: string, orderId?: string, status?: IntentStatus,
+             rejectReasons: RejectCode[] }[]
+  reason: string                   // the model's own words; untrusted, display only, 500 characters
+  usage: { input: number, output: number, cacheRead: number, cacheWrite: number }
+  detail?: string                  // why a tick was skipped, errored or refused
 }
 
-interface DcaConfig {
-  kind: "dca"
-  tokenIn: Address                 // the chain's dollar or wSOL
-  tokenOut: Address
-  amountIn: Amount                 // atomic units of tokenIn, per buy
-  intervalSeconds: number          // at least 3600
-  budget?: Amount                  // atomic units of tokenIn, over the bot's life
-  endsAt?: string
-  takeProfitBps?: number           // on the bot's position, above its cost
-  stopLossBps?: number             // on the bot's position, below its cost; 1 to 9999
+interface TraderStatus {
+  config: TraderConfig
+  state: "off" | "running" | "paused"
+  pausedBy?: "owner" | "kill" | "agent_paused" | "errors" | "refusals"
+  keySet: boolean                  // whether ANTHROPIC_API_KEY is set; the key is never returned
+  today: { ticks: number, tokens: number }
+  report: TraderReport
 }
 
-interface GridConfig {
-  kind: "grid"
-  token: Address                   // traded against the chain's dollar
-  low: Amount                      // a price: the dollar, atomic, per whole token
-  high: Amount
-  levels: number                   // 3 to 20
-  perLevelUsd: Amount              // the chain's dollar, atomic, bought at each level
-  stopBelow?: Amount               // a price under low
-  maxSlippageBps?: number          // at most the policy's maxSlippageBps, which is the default
-}
-
-interface BotReport {
+interface TraderReport {
   trades: number                   // landed trades; shadowed ones when shadow
-  spentUsd: Amount                 // the chain's dollar, from landed amounts
-  receivedUsd: Amount
-  realizedPnlUsd?: string          // signed atomic; absent when shadow
-  position: { amount: Amount, cost: Amount }   // the bot's own lots, at cost
+  realizedPnlUsd?: string          // signed atomic units of the chain's dollar; absent in shadow
+  positions: Position[]            // the agent's, at cost
   shadow: boolean
-  lastTradeAt?: string
 }
 ```
 
-Creating a bot checks that trading is enabled, that the tokens are tradable for the agent, and that
-the agent has fewer than 10 bots that are not stopped (BOT_LIMIT_EXCEEDED). It also checks that the
-capital the bot needs fits the limits, valued from fresh quotes (BOT_CAPITAL_ABOVE_LIMIT):
-- DCA: one buy within the per-buy cap of its kind (a buy from the dollar, a swap from SOL) and the
-  token's maxBuyUsd, and the buys of one UTC day (86400 / intervalSeconds, rounded up) within the
-  daily cap of that kind;
-- grid: perLevelUsd within the per-buy cap and the token's maxBuyUsd, and levels × perLevelUsd
-  within the token's maxHeldUsd (or maxPositionUsd).
-Take-profit and stop-loss on a DCA need orders.enabled (ORDERS_DISABLED).
+The model. guard-core calls the Claude API through the official TypeScript SDK (@anthropic-ai/sdk),
+with the owner's own ANTHROPIC_API_KEY, a secret on the deployment like the others: it is never
+logged, never returned, and never stored in the database. Without it the trader cannot be turned on.
+Each request has:
+- the chosen model, with adaptive thinking;
+- an explicit effort in output_config;
+- the trader's tools with strict: true and tool_choice auto, since a forced tool_choice is refused
+  on these models.
+On claude-opus-5-5 and claude-sonnet-5-5 it opts into server-side refusal fallbacks (beta
+server-side-fallback-2026-07-01, fallbacks "default"). claude-haiku-5-5 has none. The stop_reason
+is checked before any tool runs:
+- "refusal" ends the tick as refused;
+- "max_tokens" ends it as an error and runs nothing.
+Prompt caching covers the frozen part:
+- the tool list;
+- the fixed system prompt;
+- the owner's instructions, which change only with the passkey.
+The tick's data comes after the last breakpoint. The guard-core session reads the current SDK and
+API documentation before writing this code, and does not rely on memory.
 
-Lots. A bot keeps its own lots, each with the amount and cost that landed. It only sells its own
-lots, and never more than the agent holds; a lot sold elsewhere is dropped with
-INSUFFICIENT_POSITION. Its trades count in the agent's day, are audited via "bot" with reason
-"bot <id>: <kind> buy" or "sell", and stay in the audit log after the bot is deleted.
+A tick. Every cadenceMinutes, while the trader is running and within its caps, guard-core starts a
+fresh conversation:
+- a system prompt that states the tools, the limits, that nothing it writes can change the policy,
+  and that this is not financial advice;
+- the owner's instructions;
+- a user message with the time, the portfolio and the day's budgets.
+The model calls tools until it ends its turn, holds, or reaches maxActionsPerTick. The read tools
+do not count toward that cap. A tick that would pass maxTicksPerDay or maxTokensPerDay is skipped;
+one that passes maxTokensPerTick mid-turn stops there and runs nothing further.
 
-DCA. At each nextRunAt the bot buys amountIn of tokenOut, then sets nextRunAt one interval later.
-Runs missed while guard-core was down are not caught up. It completes when the next buy would go
-past its budget or past endsAt. With takeProfitBps or stopLossBps, after each landed buy it replaces
-its CR-026 orders with one of each kind for its whole position: triggerOut = cost × (10000 + tp) /
-10000 for the take-profit, and cost × (10000 − sl) / 10000 for the stop-loss, rounded down. A fill
-completes the bot. These orders count against orders.maxOpen.
+Tools:
+- get_portfolio {} -> positions at cost and the day's trade budget;
+- quote { from, to, amount } -> SwapQuote, read-only;
+- token_risk { mint } -> TokenRisk (CR-025);
+- recent_prices { mint } -> up to 96 samples { at, priceUsd } from the last 24 hours;
+- swap { from, to, amount, maxSlippageBps?, reason } -> { intentId, status, rejectReasons };
+- place_order and cancel_order, as the CR-026 MCP tools;
+- hold { reason } -> ends the tick with no action.
+swap and place_order only take tokens in config.tokens (or the chain's dollar or SOL), and a
+token outside that list is refused with TRADER_TOKEN_NOT_ALLOWED, whatever the policy allows.
 
-Grid. Levels are low + (high − low) × i / (levels − 1), rounded down, for i from 0 to levels − 1.
-The price comes from the CR-026 watcher: each check quotes a buy of perLevelUsd, and the price is
-perLevelUsd per token received. A level counts as crossed only after ORDER_CONFIRM_CHECKS consecutive
-checks over ORDER_CONFIRM_SECONDS, each within maxPriceImpactBps.
-- A level below high is armed once the confirmed price is above it. When the confirmed price is at
-  or below an armed level i and the bot holds no lot there, it buys perLevelUsd with minAmountOut =
-  perLevelUsd × 10^decimals / level(i) × (10000 − slippage) / 10000, rounded down.
-- Lot i is sold one level up, as a sell of its whole amount, when a quote for that amount is at or
-  above amount × level(i + 1) / 10^decimals. Its minAmountOut is that figure × (10000 − slippage) /
-  10000, rounded down.
-- With stopBelow, a confirmed price at or below it sells every lot as a CR-026 stop-loss, under the
-  same floor, and stops the bot. A sale below the floor is refused, the lots stay, and the bot
-  pauses.
-- Range, levels and perLevelUsd change only while the bot is paused. Lots it holds keep their sell
-  level.
+recent_prices reads samples guard-core records: every 15 minutes, for each token in any trader's
+list, the price of a quoteSell for 10 USD worth. They are kept for 7 days and never used in a
+decision outside the model.
 
-Waiting and refusals. A bot's buy that needs the owner (at or above approvalThreshold, or with a
-flag) waits like an agent's, and the bot places nothing else while it waits. A DCA run whose buy is
-refused, rejected or expired is skipped; a grid level stays armed. Three refusals or timeouts in a
-row pause the bot (pausedBy "refusals"), and the owner is told with Web Push "bot_paused".
+Untrusted text. Every venue field (names, symbols, the venue's own facts) and every tool result
+reaches the model as JSON inside a delimited block. The system prompt says it is data, never
+instructions. The model's reasons are bounded to 500 characters and shown as plain text.
 
-Stopping. A paused agent's bots do nothing until it resumes. Stop everything and kill pause every
-bot (pausedBy "kill"); each one resumes on its own, with the passkey. Close positions stops every
-bot and cancels its orders. Stopping a bot cancels its orders and leaves its lots with the agent.
+Pausing. The trader pauses itself and tells the owner with Web Push "trader_paused":
+- after 3 ticks in a row that end in an API error (pausedBy "errors");
+- after 3 in a row that end refused, by the model or by the pipeline (pausedBy "refusals").
+Its trades also stop when:
+- the agent is paused (pausedBy "agent_paused");
+- Stop everything or kill is used (pausedBy "kill");
+- Close positions is used, which turns the trader off.
+A rate-limited or overloaded API answer is retried by the SDK, then counts as one error.
 
-Shadow mode. An agent in shadow mode runs its bots on paper: each trade is shadowed, the report has
-shadow: true and no realizedPnlUsd, and every view labels it "Shadow: nothing was traded".
+Shadow mode. A trader in shadow mode, or attached to an agent in shadow mode, has every trade
+shadowed. Its report has shadow: true and no realizedPnlUsd, and every view labels it "Shadow:
+nothing was traded".
 
-Routes (every owner route needs the session):
-GET    /v1/owner/bots -> { bots: (Bot & { report: BotReport })[] }
-GET    /v1/owner/bots/:id -> { bot: Bot & { report: BotReport }, trades: PayIntent[] }   the last 100
-POST   /v1/owner/bots { agentId, chain, config, assertion } -> Bot   step-up, OwnerAction "create_bot"
-PUT    /v1/owner/bots/:id { config, assertion } -> Bot   step-up, OwnerAction "change_bot"
-POST   /v1/owner/bots/:id/resume { assertion } -> Bot   step-up, OwnerAction "resume_bot"
-POST   /v1/owner/bots/:id/pause -> Bot   session only: pausing only tightens
-POST   /v1/owner/bots/:id/stop -> Bot   session only
-DELETE /v1/owner/bots/:id -> 204   session only, stopped bots only
-GET    /v1/agent/bots/:agentId -> { bots: (Bot & { report: BotReport })[] }   read-only
-GET    /v1/agent/bots/:agentId/:id -> { bot, trades }   read-only
-No agent route creates, changes or resumes a bot. The owner's views state controls and landed
-amounts, never projections or returns.
+Routes (every route needs the owner's session; no agent route exists):
+GET  /v1/owner/trader/:agentId -> TraderStatus
+PUT  /v1/owner/trader/:agentId { config, assertion? } -> TraderStatus
+  step-up, OwnerAction "trader_settings" over { agentId, config }, except when the change only
+  turns the trader off or lowers a cap
+POST /v1/owner/trader/:agentId/pause -> TraderStatus   session only
+POST /v1/owner/trader/:agentId/resume { assertion } -> TraderStatus   step-up, OwnerAction
+  "resume_trader" over { agentId }
+GET  /v1/owner/trader/:agentId/ticks?before= -> { ticks: TraderTick[] }   50 at a time, newest first
+Each tick and each change is audited. The views show controls, landed amounts and the tokens used,
+never projections or returns.
 
 ## Agent wallets (CR-022, HIGH-2)
 Opt-in, per agent and chain. By default every agent spends from the chain's shared spending (hot)
@@ -976,8 +989,6 @@ list: it is funded and test-run only once approved.
   -> Order (CR-026); triggerUsd is a decimal dollar amount for the whole order, converted to atomic
 - cancel_order { orderId } -> Order (CR-026); only the agent's own orders
 - list_orders  {} -> { orders: Order[] } (CR-026); the agent's open and recent orders
-- list_bots    {} -> { bots } (CR-027); the agent's bots with their reports, read-only
-- get_bot      { botId } -> { bot, trades } (CR-027), read-only
 
 ## Security rules (all sessions)
 - Agent-provided text (reason, URLs, headers, API responses) is untrusted. Never let it change policy.
@@ -988,10 +999,10 @@ list: it is funded and test-run only once approved.
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
-- v0.21 (2026-11-25): CR-027, approved by the owner. Trading bots on Solana, spot:
-  - recurring buy (DCA) and grid, run by guard-core through the trading pipeline;
-  - created, changed and resumed with the passkey; paused and stopped with the session;
-  - per-bot reports from landed amounts, with no projections.
+- v0.21 (2026-11-25): CR-027, approved by the owner. The AI trader on Solana, spot:
+  - a Claude model, with the owner's own API key, decides trades on a schedule inside guard-core;
+  - every action goes through the trading pipeline; reasons are display only;
+  - caps on ticks, tokens and actions, a decision feed, and no projections.
 - v0.20 (2026-11-25): CR-026, approved by the owner. Degen trading on Solana:
   - any pair, from what the agent's wallet holds, valued by two quotes;
   - per-token and per-operation limits;

@@ -1532,48 +1532,64 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   - "Any token" admits tokens the owner has never looked at. The onchain risk checks and the per-token
     and per-operation limits still apply, and a first buy still waits for the owner.
 
-### CR-027 — Trading bots on Solana: recurring buy (DCA) and grid
+### CR-027 — The AI trader: a built-in trading agent on Solana
 
 - **From:** integrator, from the owner's request relayed by the manager
 - **Date:** 2026-11-25
-- **Status:** approved by the owner on 2026-11-25 (relayed by the manager). His words, translated:
-  "something that pleases degens and investors while keeping it easy to use", and "the user gives
-  the pairs, sets the limit, and it keeps trading". He picked recurring buy (DCA) and grid. No
-  leverage and no perpetuals: spot on Solana through Jupiter. Specified in SPEC v0.21, "Trading
-  bots". It builds on CR-026.
-- **Why:** owners want a strategy that keeps trading inside the limits they set, without an agent
-  deciding each trade.
-- **Scope:** Solana mainnet, spot, through Jupiter. A bot is a strategy attached to an agent: it
-  trades with that agent's wallet and policy, and every trade goes through the CR-021 and CR-026
-  pipeline (policy and limits, the risk reads, the inspection, the test run, the approval rules).
-  Sells never wait. Nothing about payments changes.
+- **Status:** approved by the owner on 2026-11-25 (relayed by the manager). It replaces a first draft
+  of recurring-buy and grid bots, which the owner dropped. His words, translated: "an AI trading
+  agent, that's what we want, not a bot", and earlier "something that pleases degens and investors
+  while keeping it easy to use". Spot on Solana through Jupiter; no leverage and no perpetuals.
+  Specified in SPEC v0.21, "The AI trader". It builds on CR-026.
+- **Why:** owners want an agent that trades for them inside the limits they set, without running
+  their own MCP client.
+- **Scope:** Solana mainnet, spot, through Jupiter. The AI trader runs inside each owner's
+  guard-core, on a schedule, and decides its own trades with a Claude model. Every action goes
+  through the CR-021 and CR-026 pipeline, exactly as an MCP agent's does. Nothing about payments
+  changes.
 - **What changes:**
-  1. **Bots**, run by guard-core. The owner creates, changes and resumes one in the panel with the
-     passkey, as a loosening. Pausing, stopping and deleting need the session only, as a tightening.
-     Stop everything and kill pause every bot. In shadow mode a bot runs on paper, labelled as such.
-  2. **DCA:** a pair (from the dollar or SOL to an allowed token), an amount per buy, an interval of
-     at least one hour, an optional budget or end date, and optional take-profit and stop-loss on
-     the bot's position (CR-026 orders).
-  3. **Grid:** a token against the dollar, a price range, 3 to 20 levels and an amount per level. It
-     buys at each level crossed downward and sells that lot one level up, with an optional stop
-     below the range. The capital it needs, levels × amount per level, must fit the limits, or the
-     bot is refused. Prices come from the CR-026 watcher, with the same confirmation, price-impact
-     and minimum-out rules.
-  4. **Reporting** per bot: its trades, realized profit and loss from landed amounts, its open
-     position at cost, and its status. No projections. A shadow bot shows what it would have traded,
-     with no profit and loss.
-  5. **Routes and tools:** owner routes for bots; read-only agent routes; MCP `list_bots` and
-     `get_bot`; a Bots tab in the panel.
+  1. **The trader** is attached to one agent and uses that agent's wallet and policy. The owner
+     gives it:
+     - the tokens it may trade, within the policy;
+     - the CR-026 limits;
+     - a cadence (5, 15 or 60 minutes);
+     - instructions in plain words.
+       Each tick it reads the portfolio, quotes, risk cards and recent prices, then acts or holds.
+  2. **Execution:** every action is an intent through the same pipeline: the policy and every limit,
+     the risk reads, the inspection, the test run, the approval rules and orders. Sells never wait.
+     The model's reasons are shown to the owner and never used in a decision.
+  3. **Control:** turning it on, loosening it and resuming it need the passkey; pausing needs the
+     session. Stop everything and kill pause it, and Close positions turns it off. In shadow mode it
+     trades on paper first.
+  4. **The model:** the Claude API through the official TypeScript SDK, with the owner's own
+     ANTHROPIC_API_KEY as a secret on the deployment, never logged or returned. The panel shows only
+     whether the key is set. The default model is Claude Opus 5.5; the owner may pick Claude
+     Sonnet 5.5 or Claude Haiku 5.5 to cut cost.
+  5. **Cost and safety caps:**
+     - ticks per day;
+     - tokens per tick and per day;
+     - actions per tick;
+     - a pause after repeated API errors, refusals or refused trades.
+       Venue text is data, never instructions.
+  6. **Reporting:**
+     - a decision feed per tick (the action or the hold, the reason, links to the executions);
+     - realized profit and loss from landed amounts;
+     - positions at cost;
+     - the API tokens used today.
+       No projections and no promised returns.
 - **Rows:**
-  - guard-core: GC-73 (the bot engine, the scheduler and DCA), GC-74 (grid);
-  - panel: PANEL-26 (the Bots tab: a create wizard of strategy, pair with the risk card, amounts,
-    review and passkey; a list; a detail);
-  - mcp: MCP-35 (`list_bots`, `get_bot`, read-only);
-  - integrator: INT-52 (SPEC, shared types and the fork e2e).
+  - guard-core: GC-73 (the trader loop, the scheduler, the cost caps and the tools over the existing
+    pipeline);
+  - panel: PANEL-26 (an "AI Trader" tab: key status, model, cadence, tokens, limits, instructions,
+    shadow or live with the passkey, the decision feed, positions and pause);
+  - integrator: INT-52 (SPEC, shared types and the fork e2e with a mocked Claude API).
+  - mcp: none.
 - **Risks for the owner to accept:**
-  - A bot trades without asking, inside the limits. The limits, the vault's onchain cap and the
-    approval rules are the bound, not the strategy.
-  - A grid loses when the price leaves the range downward: it holds every lot it bought. The stop
-    below the range sells under the CR-026 stop-loss floor, and can be refused rather than sell at
-    any price.
-  - DCA buys at whatever the price is at each interval.
+  - The trader trades without asking, inside the limits. The limits, the vault's onchain cap and the
+    approval rules are the bound, not the model's judgment. A model can be wrong, and a token can
+    lose all its value.
+  - The API key is billed to the owner. The caps bound the spend per tick and per day, not the price
+    per token, which Anthropic sets.
+  - Token names, symbols and every other venue field are hostile input. They reach the model as
+    delimited data, and nothing the model writes can widen the policy: a trade outside it is
+    refused.

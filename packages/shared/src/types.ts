@@ -376,8 +376,7 @@ export type TradingRejectCode =
   | 'ORDER_LIMIT_EXCEEDED'
   | 'GAS_RESERVE'
   /** CR-027 */
-  | 'BOT_CAPITAL_ABOVE_LIMIT'
-  | 'BOT_LIMIT_EXCEEDED'
+  | 'TRADER_TOKEN_NOT_ALLOWED'
 
 /** Standing authority an EVM payment must never grant. */
 export type EvmRejectCode = 'APPROVAL_DETECTED' | 'PERMIT_DETECTED' | 'DELEGATION_DETECTED'
@@ -548,62 +547,64 @@ export interface AgentWallet {
   gas: { balance: Amount; minimum: Amount; symbol: string }
 }
 
-/** CR-027: a strategy guard-core runs for an agent, trading through the same pipeline. */
-export interface Bot {
+export type TraderModel = 'claude-opus-5-5' | 'claude-sonnet-5-5' | 'claude-haiku-5-5'
+
+/** CR-027: the AI trader attached to one agent. Loosening any field needs the passkey. */
+export interface TraderConfig {
+  enabled: boolean
+  mode: 'shadow' | 'live'
+  model: TraderModel
+  effort: 'low' | 'medium' | 'high'
+  cadenceMinutes: 5 | 15 | 60
+  /** Each must also pass the agent's policy. */
+  tokens: Address[]
+  /** The owner's own words, at most 2000 characters. */
+  instructions: string
+  /** 1 to 5; read tools do not count. */
+  maxActionsPerTick: number
+  maxTicksPerDay: number
+  /** Input plus output tokens. */
+  maxTokensPerTick: number
+  maxTokensPerDay: number
+}
+
+export interface TraderAction {
+  tool: string
+  intentId?: string
+  orderId?: string
+  status?: IntentStatus
+  rejectReasons: RejectCode[]
+}
+
+export interface TraderTick {
   id: string
   agentId: string
-  chain: ChainId
-  config: DcaConfig | GridConfig
-  status: 'active' | 'paused' | 'stopped' | 'completed'
-  pausedBy?: 'owner' | 'kill' | 'agent_paused' | 'refusals'
-  createdAt: string
-  updatedAt: string
-  /** DCA only. */
-  nextRunAt?: string
+  startedAt: string
+  /** The model that served the tick, a fallback included. */
+  model: string
+  outcome: 'acted' | 'held' | 'skipped' | 'error' | 'refused'
+  actions: TraderAction[]
+  /** The model's own words: untrusted, display only, at most 500 characters. */
+  reason: string
+  usage: { input: number; output: number; cacheRead: number; cacheWrite: number }
+  detail?: string
 }
 
-export interface DcaConfig {
-  kind: 'dca'
-  /** The chain's dollar or wSOL. */
-  tokenIn: Address
-  tokenOut: Address
-  /** Atomic units of tokenIn, per buy. */
-  amountIn: Amount
-  /** At least 3600. */
-  intervalSeconds: number
-  /** Atomic units of tokenIn, over the bot's life. */
-  budget?: Amount
-  endsAt?: string
-  takeProfitBps?: number
-  stopLossBps?: number
-}
-
-export interface GridConfig {
-  kind: 'grid'
-  /** Traded against the chain's dollar. */
-  token: Address
-  /** Prices: the chain's dollar, atomic, per whole token. */
-  low: Amount
-  high: Amount
-  /** 3 to 20. */
-  levels: number
-  perLevelUsd: Amount
-  /** A price under low. */
-  stopBelow?: Amount
-  maxSlippageBps?: number
-}
-
-/** Landed amounts only; a shadow bot reports what it would have traded, with no profit or loss. */
-export interface BotReport {
+/** Landed amounts only; a shadow trader shows what it would have traded, with no profit or loss. */
+export interface TraderReport {
   trades: number
-  spentUsd: Amount
-  receivedUsd: Amount
   /** Signed atomic units of the chain's dollar. */
   realizedPnlUsd?: string
-  /** The bot's own lots, at cost. */
-  position: { amount: Amount; cost: Amount }
+  positions: Position[]
   shadow: boolean
-  lastTradeAt?: string
 }
 
-export type BotView = Bot & { report: BotReport }
+export interface TraderStatus {
+  config: TraderConfig
+  state: 'off' | 'running' | 'paused'
+  pausedBy?: 'owner' | 'kill' | 'agent_paused' | 'errors' | 'refusals'
+  /** Whether ANTHROPIC_API_KEY is set; the key itself is never returned. */
+  keySet: boolean
+  today: { ticks: number; tokens: number }
+  report: TraderReport
+}
