@@ -197,12 +197,16 @@ function movement(intent: PayIntent, full: boolean): string[] {
   ]
 }
 
-function details({ intent, simulation, approveBefore }: ApprovalRequest, full: boolean): string[] {
+function details(request: ApprovalRequest, full: boolean): string[] {
+  const { intent, simulation, approveBefore } = request
   return [
     `Agent: <code>${escapeHtml(intent.agentId)}</code>`,
     `Chain: ${chainName(intent.chain)}`,
     ...movement(intent, full),
-    `Simulation: ${escapeHtml(simulation.summary)}`,
+    // CR-024: nothing was simulated yet, so say what happens instead of an empty summary.
+    request.untested === true
+      ? 'Nothing leaves your vault until you approve. Test run after your approval.'
+      : `Simulation: ${escapeHtml(simulation.summary)}`,
     `Expires: ${utcTime(approveBefore)}`,
     '',
     `agent says: <i>${escapeHtml(intent.reason) || '(nothing)'}</i>`,
