@@ -11,8 +11,14 @@ const SHELL = ['', 'app.js', 'app.css', 'manifest.webmanifest', 'icons/icon-192.
   (path) => BASE + path,
 )
 
+// 'reload' skips the HTTP cache: app.js is kept a day there, and a new worker filling its cache
+// from it would pair today's index.html with yesterday's script.
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)))
+  event.waitUntil(
+    caches
+      .open(CACHE)
+      .then((cache) => cache.addAll(SHELL.map((url) => new Request(url, { cache: 'reload' })))),
+  )
   void self.skipWaiting()
 })
 
