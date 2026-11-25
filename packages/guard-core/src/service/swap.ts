@@ -1,11 +1,10 @@
-import { type ChainAdapter, SwapUnavailable } from '@defimind/onchain'
-import type { Amount, PayIntent, Policy, SwapQuote } from '@defimind/shared'
-import { z } from 'zod'
+import type { ChainAdapter } from '@defimind/onchain'
+import type { Amount, PayIntent, Policy } from '@defimind/shared'
 import { admit } from '../db/breaker.js'
 import { ownerApprovalMethod, recordOwnerApproval, saveClearance } from '../db/receipts.js'
 import * as repo from '../db/repo.js'
-import { addBought, addSold, bookOf } from '../db/trades.js'
-import { parseAmount } from '../domain/amount.js'
+import { addBought, addSold, addSwapped, bookOf } from '../db/trades.js'
+import { parseAmount, toAmount } from '../domain/amount.js'
 import { evaluateTrade, type Trade, type TradeVerdict } from '../domain/trading.js'
 import { HttpError } from '../http/errors.js'
 import type { QuoteRequest, SwapRequest } from '../http/schemas.js'
@@ -15,84 +14,16 @@ import { finish, fund, newIntent, reject, shadowed, trip, type PaymentDeps } fro
 import { policyHash } from './receipts.js'
 import { simulate } from './simulate.js'
 import { settle } from './swap-settle.js'
+import {
+  dollarOf,
+  fetchQuote,
+  gasReason,
+  pairOf,
+  swapLegs,
+  valueOf,
+  withQuote,
+} from './swap-quote.js'
 import { adapterFor } from './wallets.js'
-
-/** Read from the mints onchain by the adapter; a quote without them is not one we can record. */
-const mints = z.object({
-  decimalsIn: z.number().int().min(0).max(255),
-  decimalsOut: z.number().int().min(0).max(255),
-  symbolIn: z.string().max(32).optional(),
-  symbolOut: z.string().max(32).optional(),
-})
-
-type Pair = Pick<Trade, 'side' | 'token'>
-
-/** Phase 1: every swap has the chain's dollar on exactly one side. */
-export function pairOf(deps: PaymentDeps, req: QuoteRequest): Pair | undefined {
-  const dollar = deps.usdc.get(req.chain)
-  if (dollar === undefined || req.tokenIn === req.tokenOut) {
-    return undefined
-  }
-  if (req.tokenIn === dollar) {
-    return { side: 'buy', token: req.tokenOut }
-  }
-  return req.tokenOut === dollar ? { side: 'sell', token: req.tokenIn } : undefined
-}
-
-/** The chain's dollar; a swap is priced only on a chain that has one, as pairOf already checked. */
-export const dollarOf = (deps: PaymentDeps, chain: string) => deps.usdc.get(chain) ?? ''
-
-/** The venue is down or answered nonsense: the route says 502, as for an upstream x402 API. */
-export class VenueUnavailable extends Error {
-  constructor() {
-    super('venue_unavailable')
-  }
-}
-
-/** The venue's quote, or 'no_route'. A venue that is down is not a rejection of the trade. */
-export async function fetchQuote(
-  adapter: ChainAdapter,
-  req: QuoteRequest,
-  slippageBps: number,
-): Promise<SwapQuote | 'no_route'> {
-  if (adapter.quoteSwap === undefined) {
-    return 'no_route'
-  }
-  try {
-    const { tokenIn, tokenOut, amountIn } = req
-    return await adapter.quoteSwap({ tokenIn, tokenOut, amountIn, slippageBps })
-  } catch (error) {
-    if (error instanceof SwapUnavailable && error.code === 'no_route') {
-      return 'no_route'
-    }
-    throw new VenueUnavailable()
-  }
-}
-
-/** The intent with the quote's terms, or undefined when the quote lacks the mints' decimals. */
-export function withQuote(
-  intent: PayIntent,
-  quote: SwapQuote,
-  tokenOut: string,
-): PayIntent | undefined {
-  const decimals = mints.safeParse(quote)
-  if (!decimals.success) {
-    return undefined
-  }
-  const { venue, minAmountOut, slippageBps, priceImpactBps, quotedAt } = quote
-  return {
-    ...intent,
-    swap: {
-      venue,
-      tokenOut,
-      minAmountOut,
-      slippageBps,
-      priceImpactBps,
-      quotedAt,
-      ...decimals.data,
-    },
-  }
-}
 
 /** What the owner is shown for a buy that has drawn nothing yet: it is tested once approved. */
 const UNTESTED = {
@@ -107,7 +38,8 @@ export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy
   if (trading === undefined || !trading.enabled) {
     throw new HttpError(403, 'trading_disabled')
   }
-  if (adapter?.quoteSwap === undefined || pairOf(deps, req) === undefined) {
+  const pair = pairOf(deps, req)
+  if (adapter?.quoteSwap === undefined || pair === undefined) {
     throw new HttpError(400, 'not_tradable')
   }
   const slippage = Math.min(trading.maxSlippageBps, req.maxSlippageBps ?? Infinity)
@@ -115,7 +47,16 @@ export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy
   if (answer === 'no_route') {
     throw new HttpError(404, 'no_route')
   }
-  return answer
+  if (pair.side !== 'swap') {
+    return answer
+  }
+  const value = await valueOf(
+    adapter,
+    swapLegs(req, answer.minAmountOut),
+    trading.maxPriceImpactBps,
+    deps.now(),
+  )
+  return value === undefined ? answer : { ...answer, valueUsd: value.toString() }
 }
 
 /**
@@ -175,9 +116,23 @@ export async function swap(
       return reject(deps, priced, ['SLIPPAGE_TOO_HIGH'])
     }
     repo.saveIntent(db, priced)
+    const gas = await gasReason(adapter, req)
+    if (gas !== undefined) {
+      return reject(deps, priced, [gas])
+    }
     const shadow = policy.mode === 'shadow'
-    const trade: Trade = { ...pair, request: req, quote: answer }
-    const where = { agentId: req.agentId, chain: req.chain, token: pair.token }
+    const maxImpact = policy.trading.maxPriceImpactBps
+    const valueUsd =
+      pair.side === 'swap'
+        ? await valueOf(adapter, swapLegs(req, answer.minAmountOut), maxImpact, now())
+        : undefined
+    const trade: Trade = {
+      ...pair,
+      request: req,
+      quote: answer,
+      ...(valueUsd === undefined ? {} : { valueUsd }),
+    }
+    const where = { agentId: req.agentId, chain: req.chain, token: pair.token, spends: pair.spends }
     const book = bookOf(
       db,
       { ...where, dollar: dollarOf(deps, req.chain), day: repo.utcDay(now()) },
@@ -203,7 +158,7 @@ export async function swap(
     if (verdict.reasons.length > 0) {
       return reject(deps, priced, verdict.reasons)
     }
-    const how = { side: pair.side, verdict, shadow, policy }
+    const how = { side: pair.side, verdict, shadow, policy, valueUsd: valueUsd ?? 0n }
     if (manual === undefined) {
       return clearSwap(deps, adapter, priced, how)
     }
@@ -223,7 +178,14 @@ export async function clearSwap(
   deps: PaymentDeps,
   adapter: ChainAdapter,
   intent: PayIntent,
-  how: { side: 'buy' | 'sell'; verdict: TradeVerdict; shadow: boolean; policy: Policy },
+  how: {
+    side: 'buy' | 'sell' | 'swap'
+    verdict: TradeVerdict
+    shadow: boolean
+    policy: Policy
+    /** A swap's valuation, which its day counts (CR-026). */
+    valueUsd?: bigint
+  },
   /** Set when the owner has already answered: their approval, or their own Close. */
   owner?: 'approved' | 'close',
 ): Promise<PayIntent> {
@@ -233,6 +195,10 @@ export async function clearSwap(
   const asks = how.verdict.decision === 'needs_approval'
   if (how.shadow && short) {
     return shadowed(deps, intent, how.verdict.flags, asks)
+  }
+  // A swap spends only what the wallet holds: it is never topped up from the vault (CR-026).
+  if (how.side === 'swap' && short) {
+    return reject(deps, intent, ['INSUFFICIENT_POSITION'])
   }
   const waits = how.verdict.decision === 'needs_approval' && owner === undefined
   if (waits && short) {
@@ -285,6 +251,8 @@ export async function clearSwap(
   const day = repo.utcDay(now())
   if (how.side === 'buy') {
     addBought(db, intent.agentId, intent.chain, day, intent.amount)
+  } else if (how.side === 'swap') {
+    addSwapped(db, intent.agentId, intent.chain, day, toAmount(how.valueUsd ?? 0n))
   } else if (intent.swap !== undefined) {
     addSold(db, intent.agentId, intent.chain, day, intent.swap.minAmountOut)
   }

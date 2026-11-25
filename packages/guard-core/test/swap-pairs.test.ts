@@ -1,0 +1,97 @@
+import type { TradingPolicy } from '@defimind/shared'
+import { describe, expect, it, vi } from 'vitest'
+import { applyTrade, getPosition } from '../src/db/trades.js'
+import { CHAIN, harness, NOW } from './harness.js'
+import { BONK, trading, Venue } from './venue.js'
+
+const WIF = 'Wif1111111111111111111111111111111111111111'
+
+/** An agent holding 5 WIF-units at 2 dollars, and some BONK already, so the swap is not a first buy. */
+async function setup(over: Partial<TradingPolicy> = {}, balance?: bigint) {
+  const chain = new Venue(balance)
+  const policy = { trading: { ...trading, tokens: [BONK, WIF], ...over } }
+  const h = await harness({ chain, policy })
+  const hold = (token: string, amount: bigint, cost: bigint) => {
+    chain.held.set(token, amount)
+    applyTrade(
+      h.db,
+      { agentId: 'agent-1', chain: CHAIN, token, side: 'buy', amount, cost, decimals: 5 },
+      NOW,
+    )
+  }
+  hold(WIF, 5_000_000n, 2_000_000n)
+  hold(BONK, 1n, 1n)
+  return { h, chain }
+}
+
+const swap = (amountIn = '1000000', extra: object = {}) => ({
+  agentId: 'agent-1',
+  chain: CHAIN,
+  tokenIn: WIF,
+  tokenOut: BONK,
+  amountIn,
+  reason: 'rotate',
+  ...extra,
+})
+
+describe('token-to-token swaps (CR-026)', () => {
+  it('trades one held token for another, moving cost in proportion to the amount sold', async () => {
+    const { h, chain } = await setup()
+    const res = await h.agent('POST', '/v1/agent/swap', swap())
+    expect(res.json()).toMatchObject({ status: 'executed' })
+    expect(chain.topUps).toEqual([])
+    // 1/5 of the WIF went, so 1/5 of its cost moved to BONK; the swap realises nothing.
+    expect(getPosition(h.db, 'agent-1', CHAIN, WIF)).toEqual({
+      amount: 4_000_000n,
+      cost: 1_600_000n,
+    })
+    expect(getPosition(h.db, 'agent-1', CHAIN, BONK)).toEqual({ amount: 995_001n, cost: 400_001n })
+  })
+
+  it('quotes a swap with its valuation, the higher of the two legs', async () => {
+    const { h } = await setup()
+    const { reason: _reason, ...order } = swap()
+    const quote = (await h.agent('POST', '/v1/agent/quote', order)).json()
+    expect(quote).toMatchObject({ minAmountOut: '995000', valueUsd: '1000' })
+  })
+
+  it('never spends more than the position holds, and is never topped up', async () => {
+    const { h, chain } = await setup()
+    const over = await h.agent('POST', '/v1/agent/swap', swap('5000001'))
+    expect(over.json()).toMatchObject({ rejectReasons: ['INSUFFICIENT_POSITION'] })
+    const empty = await setup({}, 0n)
+    const short = await empty.h.agent('POST', '/v1/agent/swap', swap())
+    expect(short.json()).toMatchObject({ rejectReasons: ['INSUFFICIENT_POSITION'] })
+    expect(empty.chain.topUps).toEqual([])
+    expect(chain.sent).toEqual([])
+  })
+
+  it('refuses a swap it cannot value within the impact limit', async () => {
+    const { h, chain } = await setup()
+    chain.sellImpactBps = 301
+    const res = await h.agent('POST', '/v1/agent/swap', swap())
+    expect(res.json().rejectReasons).toContain('VALUATION_UNAVAILABLE')
+  })
+
+  it("holds a swap to the swap operation's caps", async () => {
+    const operations = { swap: { maxTradeUsd: '999', dailyMax: '1500' } }
+    const { h } = await setup({ operations })
+    const res = await h.agent('POST', '/v1/agent/swap', swap())
+    expect(res.json().rejectReasons).toEqual(['SWAP_EXCEEDED'])
+    const roomy = await setup({ operations: { swap: { maxTradeUsd: '1000', dailyMax: '1500' } } })
+    expect((await roomy.h.agent('POST', '/v1/agent/swap', swap())).json().status).toBe('executed')
+    const again = await roomy.h.agent('POST', '/v1/agent/swap', swap())
+    expect(again.json().rejectReasons).toEqual(['SWAP_DAILY_EXCEEDED'])
+  })
+
+  it('keeps the fee coin the next sell needs', async () => {
+    const { h, chain } = await setup()
+    vi.spyOn(chain, 'getHotWalletGas').mockResolvedValue({
+      balance: '1',
+      minimum: '2',
+      symbol: 'SOL',
+    })
+    const res = await h.agent('POST', '/v1/agent/swap', swap())
+    expect(res.json()).toMatchObject({ rejectReasons: ['GAS_RESERVE'] })
+  })
+})

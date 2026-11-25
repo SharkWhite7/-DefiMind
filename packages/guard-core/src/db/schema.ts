@@ -363,6 +363,11 @@ export const dailyTrades = sqliteTable(
       .$type<Amount>()
       .notNull()
       .default(sql`'0'`),
+    /** CR-026: token-to-token swaps, at their valuation in the chain's dollar. */
+    swapped: text('swapped')
+      .$type<Amount>()
+      .notNull()
+      .default(sql`'0'`),
   },
   (t) => [primaryKey({ columns: [t.agentId, t.chain, t.day] })],
 )

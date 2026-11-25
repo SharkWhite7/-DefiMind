@@ -249,12 +249,6 @@ describe('swaps (CR-021)', () => {
     expect(chain.quotes).toBe(0)
   })
 
-  it('refuses a pair without the chain dollar on one side', async () => {
-    const { h } = await setup()
-    const res = await h.agent('POST', '/v1/agent/swap', { ...buy(), tokenIn: 'Wif1111111111111' })
-    expect(res.json()).toMatchObject({ rejectReasons: ['TOKEN_NOT_TRADABLE'] })
-  })
-
   it('refuses when the venue has no route, and answers 502 when it is down', async () => {
     const { h, chain } = await setup()
     chain.down = 'no_route'

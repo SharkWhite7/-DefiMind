@@ -134,6 +134,13 @@
       "when": 1795568235918,
       "tag": "0018_daily_sold",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1795569328426,
+      "tag": "0019_daily_swapped",
+      "breakpoints": true
     }
   ]
 }
