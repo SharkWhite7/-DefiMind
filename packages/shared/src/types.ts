@@ -560,6 +560,8 @@ export interface TraderConfig {
   tokens: Address[]
   /** The owner's own words, at most 2000 characters. */
   instructions: string
+  /** The ready-made strategy it started from; instructions hold the trader's own copy. */
+  template?: { id: string; version: number }
   /** 1 to 5; read tools do not count. */
   maxActionsPerTick: number
   maxTicksPerDay: number

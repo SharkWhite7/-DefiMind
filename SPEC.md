@@ -704,6 +704,9 @@ whole transaction: tokenIn falls by at most amountIn, tokenOut rises by at least
 other token account of the hot wallet nets to zero or more (route intermediates included), and SOL
 falls by fees and rent only, plus amountIn when SOL is tokenIn. A trade never leaves the hot wallet's
 SOL below getHotWalletGas().minimum after fees (GAS_RESERVE), so it can still pay for the next sell.
+A sell to the chain's dollar is exempt, as long as the hot wallet can pay its fee, so a wallet low
+on SOL can always sell and Close positions stays the way out. guard-core checks the reserve again
+just before signing, since two trades checked in the same window could pass it together.
 
 Orders. guard-core stores take-profit and stop-loss orders and fills each one as a sell to the
 chain's dollar under every CR-021 check.
@@ -783,6 +786,7 @@ interface TraderConfig {
   cadenceMinutes: 5 | 15 | 60
   tokens: Address[]                // what it may trade; each must also pass the policy
   instructions: string             // the owner's, plain words, at most 2000 characters
+  template?: { id: string, version: number }   // the ready-made strategy it started from
   maxActionsPerTick: number        // 1 to 5, default 3
   maxTicksPerDay: number           // default 24 × 60 / cadenceMinutes
   maxTokensPerTick: number         // input plus output, default 200000
@@ -838,6 +842,21 @@ Prompt caching covers the frozen part:
 - the owner's instructions, which change only with the passkey.
 The tick's data comes after the last breakpoint. The guard-core session reads the current SDK and
 API documentation before writing this code, and does not rely on memory.
+
+Ready-made strategies. TRADER_TEMPLATES in @defimind/shared holds the DefiMind strategies the owner
+can pick instead of writing instructions. Each one has an id, a version, a name, a summary, the
+instruction text, and suggested values for the cadence, the actions per tick, the trading limits and
+whether orders are on. The first set is:
+- "Accumulate on dips" (accumulate-dips);
+- "Trend follower with tight stops" (trend-stops);
+- "Degen: new tokens, small size, quick exits" (degen-quick);
+- "Keep a steady balance" (steady-balance).
+Picking one copies its text into instructions and records { id, version }. The owner may edit the
+text and every value before saving. Saving follows the passkey rules, and a suggested limit never
+goes past the policy without them. A new version of a template never changes a trader that
+already runs it. Every view calls them "ready-made" and makes no claim of performance. "Tested" is
+reserved for a template with a recorded shadow-mode history the panel can show, which this CR does
+not add.
 
 A tick. Every cadenceMinutes, while the trader is running and within its caps, guard-core starts a
 fresh conversation:
