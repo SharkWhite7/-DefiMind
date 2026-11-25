@@ -1,4 +1,4 @@
-import type { TraderAction, TraderConfig } from '@defimind/shared'
+import type { RejectCode, TraderAction, TraderConfig } from '@defimind/shared'
 import { z } from 'zod'
 import type { TokenSearch } from '../adapters/jupiter-tokens.js'
 import { getOrder } from '../db/orders.js'
@@ -24,6 +24,8 @@ export interface TickContext {
   chain: string
   config: TraderConfig
   shadow: boolean
+  /** PAUSED once the trader or its agent is stopped; read again inside the wallet's lock. */
+  guard: () => RejectCode | undefined
 }
 
 export interface ToolOutcome {
@@ -173,7 +175,10 @@ async function trade(ctx: TickContext, input: z.infer<typeof inputs.swap>): Prom
     reason: clip(`AI trader: ${input.reason}`),
     ...(input.maxSlippageBps === undefined ? {} : { maxSlippageBps: input.maxSlippageBps }),
   }
-  const intent = await swap(ctx.deps, req, undefined, ctx.shadow)
+  const intent = await swap(ctx.deps, req, undefined, {
+    shadow: ctx.shadow,
+    guard: ctx.guard,
+  })
   const { id: intentId, status, rejectReasons } = intent
   return {
     content: { intentId, status, rejectReasons },

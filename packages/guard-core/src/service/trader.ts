@@ -109,7 +109,7 @@ async function converse(
   const messages: BetaMessageParam[] = [{ role: 'user', content: tickMessage(data) }]
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
-      if (!stillOn(ctx)) {
+      if (ctx.guard() !== undefined) {
         return end('stopped: the trader or its agent was paused, turned off or killed')
       }
       const response = await claude(request(config, messages))
@@ -147,7 +147,7 @@ async function converse(
           return end('maxActionsPerTick reached')
         }
         // Close, a pause or a kill may land mid-tick: nothing acts after it.
-        if (acts && !stillOn(ctx)) {
+        if (acts && ctx.guard() !== undefined) {
           return end('stopped: the trader or its agent was paused, turned off or killed')
         }
         if (!acts && ++reads > MAX_READS) {
@@ -177,11 +177,12 @@ async function converse(
   }
 }
 
-/** Whether the trader may still act: on, not paused, and its agent not paused or killed. */
-function stillOn(ctx: TickContext): boolean {
-  const row = getTrader(ctx.deps.db, ctx.agentId)
-  const policy = repo.getPolicy(ctx.deps.db, ctx.agentId)
-  return row?.config.enabled === true && row.pausedBy === null && policy?.paused === false
+/** PAUSED once the trader is off or paused, or its agent paused or killed. */
+function stopped(deps: PaymentDeps, agentId: string): 'PAUSED' | undefined {
+  const row = getTrader(deps.db, agentId)
+  const policy = repo.getPolicy(deps.db, agentId)
+  const on = row?.config.enabled === true && row.pausedBy === null && policy?.paused === false
+  return on ? undefined : 'PAUSED'
 }
 
 /** The Solana chain the trader trades on: the first the agent may use that has a dollar. */
@@ -228,7 +229,8 @@ export async function runTick(t: TraderDeps, agentId: string): Promise<TraderTic
     ending = skipped(config, spent)
   } else {
     const shadow = shadowTrader(deps.db, agentId, config.mode)
-    const ctx = { deps, search: t.search, agentId, chain, config, shadow }
+    const guard = () => stopped(deps, agentId)
+    const ctx = { deps, search: t.search, agentId, chain, config, shadow, guard }
     const budget = Math.min(config.maxTokensPerTick, config.maxTokensPerDay - today.tokens)
     const save = (partial: Ending) => saveTick(deps.db, tick(partial), day, true)
     save(skipped(config, 'running'))

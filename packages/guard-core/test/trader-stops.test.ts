@@ -36,6 +36,23 @@ describe('a tick that the owner stops (CR-027 review)', () => {
     })
   }
 
+  it('re-checks inside the wallet lock: a swap queued behind Close does not buy back', async () => {
+    const { h, t, tick } = await setup([{ tools: [buy()] }])
+    let release = () => {}
+    const gate = new Promise<void>((done) => (release = done))
+    // Close holds the shared wallet's lock while the trader's swap queues behind it.
+    const close = t.deps.serial(`wallet:shared:${CHAIN}`, async () => {
+      await gate
+      disableAll(h.db, NOW)
+    })
+    const running = tick()
+    await new Promise((done) => setTimeout(done, 50))
+    release()
+    await close
+    const done = await running
+    expect(done?.actions[0]).toMatchObject({ status: 'rejected', rejectReasons: ['PAUSED'] })
+  })
+
   it('places no order for a paused agent, whoever asks', async () => {
     const { h, t } = await setup()
     repo.setPaused(h.db, 'agent-1', true, NOW.toISOString())
