@@ -88,6 +88,14 @@ export class Venue extends StubChain {
     extensions: [] as string[],
     supply: '1000000',
   }
+  /** When set, the mint read fails, as an RPC that is down. */
+  mintDown = false
+  async mintFacts(_mint: string) {
+    if (this.mintDown) {
+      throw new Error('rpc down')
+    }
+    return { ...this.mint, extensions: [...this.mint.extensions] }
+  }
   async tokenRisk(mint: string) {
     return {
       chain: CHAIN,

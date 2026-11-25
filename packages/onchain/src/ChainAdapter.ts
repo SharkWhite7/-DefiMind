@@ -88,6 +88,13 @@ export interface ChainAdapter {
   /** CR-025: a token's mint and exit, read for the owner's risk card. Facts only, never a verdict. */
   tokenRisk?(mint: Address): Promise<TokenRiskFacts>
   /**
+   * CR-028: the mint's authorities, extensions and supply, read from the chain alone, with no venue
+   * call: the rug shield reads it for every held token, every minute.
+   */
+  mintFacts?(
+    mint: Address,
+  ): Promise<{ freezeAuthority: boolean; mintAuthority: boolean; extensions: string[]; supply: Amount }>
+  /**
    * CR-026: what `amount` of a token would fetch in the chain's dollar now, for valuation and the
    * order watcher. A venue claim: it sizes limits and triggers, and is never signed. A token with no
    * route back throws SwapUnavailable('no_route').

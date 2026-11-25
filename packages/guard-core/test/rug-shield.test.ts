@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { getOrder } from '../src/db/orders.js'
+import { getBaseline, saveBaseline, takeBaseline } from '../src/db/shield.js'
 import { getPosition, applyTrade } from '../src/db/trades.js'
-import { newRisk, shieldFloor } from '../src/domain/shield.js'
+import { newRisk, reference, shieldFloor } from '../src/domain/shield.js'
 import type { PaymentDeps } from '../src/service/payments.js'
 import { rugShield } from '../src/service/rug-shield.js'
 import { serial } from '../src/service/serial.js'
@@ -67,10 +69,20 @@ describe('the rug shield rules (CR-028)', () => {
     ).toBeUndefined()
   })
 
-  it('floors a liquidity sell at half the last good quote, never under the market less slippage', () => {
+  it('floors a sell at half the reference, never under the market less slippage', () => {
     expect(shieldFloor(900n, 100, 1000n, 5000)).toBe(891n)
     expect(shieldFloor(100n, 100, 1000n, 5000)).toBe(500n)
     expect(shieldFloor(100n, 100, undefined, 5000)).toBe(99n)
+  })
+
+  it('scales the reference to the amount held now, at the lowest of the recent good quotes', () => {
+    const goods = [
+      { out: 1000n, amount: 100n },
+      { out: 5000n, amount: 100n },
+      { out: 1200n, amount: 100n },
+    ]
+    expect(reference(goods, 50n)).toBe(500n)
+    expect(reference([], 50n)).toBeUndefined()
   })
 })
 
@@ -146,5 +158,56 @@ describe('the rug shield watcher (CR-028)', () => {
       await tick()
     }
     expect(held()).toBe(0n)
+  })
+
+  it('keeps the stops when a sell is refused, and tells the owner once', async () => {
+    const { h, chain, tick, held } = await setup({
+      trading: { ...trading, orders: { enabled: true, maxOpen: 3 } },
+    })
+    const stop = await h.agent('POST', '/v1/agent/orders', {
+      agentId: 'agent-1',
+      chain: CHAIN,
+      token: BONK,
+      kind: 'stop_loss',
+      amount: '1000000',
+      triggerOut: '500',
+    })
+    await tick()
+    chain.sellImpactBps = 5000
+    chain.sellOut = '100'
+    chain.realistic = true
+    await tick(6)
+    expect(held()).toBe(2_000_000n)
+    expect(getOrder(h.db, stop.json().id)?.status).toBe('open')
+    expect(h.auditEvents().filter((e) => e === 'rug_shield')).toHaveLength(1)
+  })
+
+  it('sells once on paper in shadow mode, and never cancels real orders', async () => {
+    const { h, chain, tick } = await setup({ mode: 'shadow' })
+    await tick()
+    chain.mint.freezeAuthority = true
+    await tick(10)
+    expect(h.auditEvents().filter((e) => e === 'rug_shield')).toHaveLength(1)
+  })
+
+  it('keeps the baseline while the position is open, and never reuses an old one', async () => {
+    const { h, chain, tick } = await setup()
+    const key = { agentId: 'agent-1', chain: CHAIN, token: BONK }
+    await tick()
+    chain.mint.supply = '1090000'
+    const buy = {
+      agentId: 'agent-1',
+      chain: CHAIN,
+      tokenIn: USDC,
+      tokenOut: BONK,
+      amountIn: '1000000',
+      reason: 'more',
+    }
+    expect((await h.agent('POST', '/v1/agent/swap', buy)).json().status).toBe('executed')
+    expect(getBaseline(h.db, key)?.supply).toBe('1000000')
+    chain.mintDown = true
+    saveBaseline(h.db, key, { ...chain.mint, supply: '1' }, NOW)
+    await takeBaseline(h.db, chain, key, NOW)
+    expect(getBaseline(h.db, key)).toBeUndefined()
   })
 })

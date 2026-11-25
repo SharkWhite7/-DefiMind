@@ -1076,15 +1076,18 @@ Rug shield. TradingPolicy.rugShield = { enabled: boolean }, absent meaning enabl
 a loosening and needs the step-up; turning it on needs the session only.
 
 - **What it watches.** guard-core watches every position of an agent whose shield is on, every
-  SHIELD_CHECK_MS (default 60000). It skips a position worth less than SHIELD_DUST_USD (default 1
-  USD) at its last quote. Each check reads the mint with ChainAdapter.tokenRisk, now with its
-  supply, and makes a quoteSell of the whole position.
-- **The baseline.** Each position has one, stored in the database, taken at the settlement of every
-  buy or swap into it:
+  SHIELD_CHECK_MS (default 60000), skipping SOL and the chain's dollar. Each check first reads the
+  mint with ChainAdapter.mintFacts, from the chain alone with no venue call, so a busy venue never
+  blinds the new-risk rule. It then quotes a quoteSell of the whole position. A position worth less
+  than SHIELD_DUST_USD (default 1 USD) before any good quote is skipped.
+- **The baseline.** Each position has one, stored in the database:
   - the freeze and mint authorities;
   - the Token-2022 extensions and their settings (a transfer fee's rate, a hook's program);
   - the supply.
-  Until tokenRisk reports extension settings (ON-38), the shield compares the extensions' names,
+  It is taken from the mint when a position opens, and kept while the position is held, so a later
+  buy cannot wipe out inflation the shield is counting. A read that fails twice leaves none, never
+  an old one from a position held before; the shield then takes it at its first check.
+  Until mintFacts reports extension settings (ON-38), the shield compares the extensions' names,
   and a changed setting goes unseen.
 - **When it fires.** A shield run is SHIELD_CONFIRM_CHECKS (default 3) consecutive shield checks. The
   shield fires on one of two rules:
@@ -1093,22 +1096,26 @@ a loosening and needs the step-up; turning it on needs the session only.
     supply above baseline × (10000 + SHIELD_SUPPLY_JUMP_BPS) / 10000 (default 1000). One bad RPC
     answer never sells, and slow inflation adds up against the baseline.
   - **Liquidity gone.** The whole position's exit is above maxPriceImpactBps, or has no route, on
-    every check of a shield run, after an earlier check found it within the limit. A price fall
-    alone is the stop orders' job, not the shield's.
-- **The sell.** When the shield fires, guard-core cancels the agent's open orders on that token and
-  sells that agent's booked amount, and only that, to the chain's dollar as a protective sell.
-  - The new-risk rule sells with minAmountOut = the fresh quote × (10000 − maxSlippageBps) / 10000.
-    It sells at the market and is allowed above maxPriceImpactBps.
-  - The liquidity rule's minAmountOut is the higher of that and the last within-limit quote ×
-    (10000 − SHIELD_MAX_LOSS_BPS) / 10000 (default 5000). A pool drained for a few minutes to shake
-    out holders therefore cannot take the whole position at the bottom. When the floor is not met it
-    sells nothing and pushes.
+    every check of a shield run, after an earlier check found it within the limit. A venue error
+    is neither. A price fall alone is the stop orders' job, not the shield's.
+- **The sell.** When the shield fires, guard-core sells that agent's booked amount, at most what it
+  books at that moment, to the chain's dollar as a protective sell. The sell is allowed above
+  maxPriceImpactBps.
+  - Its minAmountOut is the higher of two amounts: the fresh quote × (10000 − maxSlippageBps) /
+    10000, and the reference × (10000 − SHIELD_MAX_LOSS_BPS) / 10000 (default 5000).
+  - The reference is the lowest of the last run's good quotes, scaled to the amount held now. A
+    pool drained, or pumped for one check, therefore cannot take the whole position at the bottom.
+    When the floor is not met it sells nothing.
+  - The token's open orders are cancelled only once the sell has landed. A refused sell leaves the
+    stops in place.
 - **Telling the owner.** Each sell is audited as "rug_shield" with the rule that fired and pushed as
-  Web Push "rug_shield". A refused or failed sell is pushed with failed: true, and the next run may
-  fire again.
-- **No sell.** A paused or killed agent is not sold: the owner gets "rug_shield" with paused: true, and
-  Close positions stays the way out. Shadow mode shadows the sell. An agent without trading.enabled
-  is only pushed.
+  Web Push "rug_shield".
+  - A refused or failed sell is pushed once with failed: true. The shield tries again after 15
+    minutes, then after a wait that doubles each time, up to 6 hours.
+  - In shadow mode the sell is shadowed once and not repeated.
+- **No sell.** A paused or killed agent, or one without trading.enabled, is not sold and not quoted:
+  the owner gets "rug_shield" with paused: true, once per pause, and Close positions stays the way
+  out.
 - **Gas.** The doctor warns when a hot wallet's SOL above the gas reserve covers fewer sell fees than
   it has positions.
 

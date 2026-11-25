@@ -38,24 +38,39 @@ export function newRisk(
   return undefined
 }
 
+/** A quote within the impact limit: what `amount` of the token fetched then. */
+export interface Good {
+  out: bigint
+  amount: bigint
+}
+
 /** One position's run of shield checks, kept in memory. */
 export interface Watch {
   /** The new risk the previous check saw, which this one must see again to fire. */
   risk?: string
-  /** The last quote within the impact limit: the liquidity rule needs one before it can fire. */
-  lastGood?: bigint
-  /** Consecutive checks since then with no route, or above the limit. */
+  /** The latest quotes within the impact limit, at most a run of them. */
+  goods: Good[]
+  /** Consecutive checks since the last good one with no route, or above the limit. */
   bad: number
 }
 
-/** The liquidity rule's floor: the fresh quote less slippage, never under the last good one less the most loss. */
+/**
+ * What the position held now fetched at its worst recent good quote, scaled to the amount held now.
+ * The lowest of a run, so one pumped check cannot pin it high.
+ */
+export function reference(goods: Good[], amount: bigint): bigint | undefined {
+  const scaled = goods.filter((g) => g.amount > 0n).map((g) => (g.out * amount) / g.amount)
+  return scaled.length === 0 ? undefined : scaled.reduce((low, v) => (v < low ? v : low))
+}
+
+/** A shield sell's floor: the fresh quote less slippage, never under the reference less the most loss. */
 export function shieldFloor(
   fresh: bigint,
   slippageBps: number,
-  lastGood: bigint | undefined,
+  ref: bigint | undefined,
   maxLossBps: number,
 ): bigint {
   const market = (fresh * (BPS - BigInt(slippageBps))) / BPS
-  const least = lastGood === undefined ? 0n : (lastGood * (BPS - BigInt(maxLossBps))) / BPS
+  const least = ref === undefined ? 0n : (ref * (BPS - BigInt(maxLossBps))) / BPS
   return market > least ? market : least
 }

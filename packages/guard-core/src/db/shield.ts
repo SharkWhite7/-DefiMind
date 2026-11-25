@@ -36,16 +36,27 @@ export function saveBaseline(db: Db, key: Key, facts: MintFacts, at: Date): void
     .run()
 }
 
-/** Takes the baseline from the chain; a token whose mint cannot be read gets one at its first check. */
+export function deleteBaseline(db: Db, key: Key): void {
+  db.delete(shieldBaselines).where(where(key)).run()
+}
+
+/**
+ * Takes the baseline of a position that was just opened, from the mint alone. A read that fails
+ * twice leaves none, never an old one from a position held before: the shield then takes it at its
+ * first check.
+ */
 export async function takeBaseline(
   db: Db,
-  adapter: { tokenRisk?: (mint: string) => Promise<MintFacts> },
+  adapter: { mintFacts?: (mint: string) => Promise<MintFacts> },
   key: Key,
   at: Date,
 ): Promise<void> {
-  const read = await adapter.tokenRisk?.(key.token).catch(() => undefined)
-  if (read !== undefined) {
-    const { freezeAuthority, mintAuthority, extensions, supply } = read
-    saveBaseline(db, key, { freezeAuthority, mintAuthority, extensions, supply }, at)
+  const read = () => adapter.mintFacts?.(key.token).catch(() => undefined)
+  const facts = (await read()) ?? (await read())
+  if (facts === undefined) {
+    deleteBaseline(db, key)
+    return
   }
+  const { freezeAuthority, mintAuthority, extensions, supply } = facts
+  saveBaseline(db, key, { freezeAuthority, mintAuthority, extensions, supply }, at)
 }
