@@ -2,7 +2,7 @@ import { type ChainAdapter, SwapUnavailable } from '@defimind/onchain'
 import type { PayIntent, SwapDetails, SwapQuote } from '@defimind/shared'
 import { z } from 'zod'
 import type { Trade } from '../domain/trading.js'
-import { belowGasReserve, swapValue } from '../domain/valuation.js'
+import { belowGasReserve, swapValue, WSOL } from '../domain/valuation.js'
 import type { QuoteRequest } from '../http/schemas.js'
 import type { PaymentDeps } from './payments.js'
 
@@ -114,15 +114,16 @@ export async function valueOf(
 
 /**
  * GAS_RESERVE when the trade would leave the hot wallet unable to pay for the next sell (CR-026).
- * A balance that cannot be read refuses too. A sell to the dollar is exempt (SPEC v0.21): it is
- * how Close and the stop-losses get out, and its own test run shows whether its fee is there.
+ * A balance that cannot be read refuses too. A sell of a token to the dollar is exempt (SPEC
+ * v0.21): it is how Close and the stop-losses get out, and costs SOL only for its fee. A sell of SOL
+ * itself spends SOL, so it meets the reserve like a buy.
  */
 export async function gasReason(
   adapter: ChainAdapter,
   req: { tokenIn: string; amountIn: string },
   side: Trade['side'],
 ): Promise<'GAS_RESERVE' | undefined> {
-  if (side === 'sell') {
+  if (side === 'sell' && req.tokenIn !== WSOL) {
     return undefined
   }
   const gas = await adapter.getHotWalletGas().catch(() => undefined)

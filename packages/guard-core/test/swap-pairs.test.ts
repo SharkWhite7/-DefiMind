@@ -4,6 +4,7 @@ import { schema } from '../src/db/client.js'
 import * as repo from '../src/db/repo.js'
 import { applyTrade, getPosition } from '../src/db/trades.js'
 import { hashToken } from '../src/domain/auth.js'
+import { WSOL } from '../src/domain/valuation.js'
 import { CHAIN, harness, MINT as USDC, NOW } from './harness.js'
 import { BONK, trading, Venue } from './venue.js'
 
@@ -24,7 +25,7 @@ async function setup(over: Partial<TradingPolicy> = {}, balance?: bigint) {
   }
   hold(WIF, 5_000_000n, 2_000_000n)
   hold(BONK, 1n, 1n)
-  return { h, chain }
+  return { h, chain, hold }
 }
 
 const swap = (amountIn = '1000000', extra: object = {}) => ({
@@ -107,6 +108,21 @@ describe('token-to-token swaps (CR-026)', () => {
     })
     const res = await h.agent('POST', '/v1/agent/swap', swap('1000000', { tokenOut: USDC }))
     expect(res.json()).toMatchObject({ status: 'executed' })
+  })
+
+  it('holds a sell of SOL itself to the reserve: it spends the fee coin', async () => {
+    const { h, chain, hold } = await setup({ tokens: [BONK, WIF, WSOL] })
+    hold(WSOL, 50_000_000n, 7_000_000n)
+    vi.spyOn(chain, 'getHotWalletGas').mockResolvedValue({
+      balance: '60000000',
+      minimum: '20000000',
+      symbol: 'SOL',
+    })
+    const sell = (amountIn: string) => swap(amountIn, { tokenIn: WSOL, tokenOut: USDC })
+    const all = await h.agent('POST', '/v1/agent/swap', sell('50000000'))
+    expect(all.json()).toMatchObject({ rejectReasons: ['GAS_RESERVE'] })
+    const some = await h.agent('POST', '/v1/agent/swap', sell('30000000'))
+    expect(some.json()).toMatchObject({ status: 'executed' })
   })
 
   it('has two agents on the shared wallet take turns, from the test run to the signature', async () => {
