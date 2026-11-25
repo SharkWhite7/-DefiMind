@@ -140,11 +140,11 @@ export async function shadow(ctx: Context): Promise<Child[]> {
 /** The chains whose shared spending wallet has too little of its native coin for fees (#165). */
 const lowSpending = (ctx: Context) =>
   ctx.api
-    .overview()
-    .then(({ chains }) =>
-      chains.flatMap(({ chain, hotWallet }) =>
-        hotWallet !== undefined && lowGas(hotWallet.gas)
-          ? [{ chain, symbol: hotWallet.gas.symbol }]
+    .keys()
+    .then(({ hotWallets }) =>
+      hotWallets.flatMap(({ chain, gas }) =>
+        gas !== undefined && gas.symbol !== '' && lowGas(gas)
+          ? [{ chain, symbol: gas.symbol }]
           : [],
       ),
     )

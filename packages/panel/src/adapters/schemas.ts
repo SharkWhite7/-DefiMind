@@ -156,21 +156,7 @@ export const mandateRequest = z.object({
 })
 
 export const overview = z.object({
-  chains: z
-    .array(
-      z.object({
-        chain: text(64),
-        allowance,
-        // #165: the shared spending wallet and its native coin; absent when unreadable.
-        hotWallet: z
-          .object({
-            address: text(128),
-            gas: z.object({ balance: atomic, minimum: atomic, symbol: text(16) }),
-          })
-          .optional(),
-      }),
-    )
-    .max(16),
+  chains: z.array(z.object({ chain: text(64), allowance })).max(16),
   agents: z.array(agentSummary).max(1000),
   pending: z.array(approvalRequest).max(500),
   mandates: z.array(mandateRequest).max(500),
@@ -376,6 +362,8 @@ export const keys = z.object({
       z.object({
         chain: text(64),
         address: text(128),
+        // #165: its native coin, for fees; absent when guard-core could not read it.
+        gas: z.object({ balance: atomic, minimum: atomic, symbol: text(16) }).optional(),
       }),
     )
     .max(16),
