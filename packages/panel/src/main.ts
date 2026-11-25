@@ -12,6 +12,7 @@ import { deposit } from './ui/deposit.js'
 import { guide } from './ui/guide.js'
 import { enrol, login, setup } from './ui/login.js'
 import { manualTrade } from './ui/manual-trade.js'
+import { trader } from './ui/trader.js'
 import { ordersScreen } from './ui/orders.js'
 import { overview } from './ui/overview.js'
 import { portfolio } from './ui/portfolio.js'
@@ -41,6 +42,7 @@ const ERRORS: Record<string, string> = {
   vault_not_ours:
     "That vault's limit does not name this DefiMind. Check the address, or set the daily limit first.",
   setup_done: 'This DefiMind is already set up. Sign in with your passkey.',
+  anthropic_key_missing: 'Set ANTHROPIC_API_KEY on the deployment to turn the trader on.',
   no_vault: 'This chain has no vault yet. Set one up first, in the guided setup.',
   set_by_env: "That setting comes from your host's configuration. Change it there, not here.",
 }
@@ -93,6 +95,8 @@ function screen(route: Route): Screen {
       return agent(ctx, route.id)
     case 'trade':
       return manualTrade(ctx, route.id)
+    case 'trader':
+      return trader(ctx, route.id)
     case 'orders':
       return ordersScreen(ctx, route.id)
     case 'report':

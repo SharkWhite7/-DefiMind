@@ -88,6 +88,8 @@ describe('routes', () => {
     { name: 'agents' },
     { name: 'agent', id: 'bot/1' },
     { name: 'trade', id: 'bot/1' },
+    { name: 'trader' },
+    { name: 'trader', id: 'bot/1' },
     { name: 'orders', id: 'bot/1' },
     { name: 'report' },
     { name: 'doctor' },
