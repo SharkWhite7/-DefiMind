@@ -105,7 +105,7 @@ interface TradingPolicy {          // CR-021. Every loosening needs the passkey 
   operations?: OperationLimits     // CR-026: per kind of trade; absent = CR-021's behaviour
   orders?: { enabled: boolean, maxOpen: number }   // CR-026: default { false, 10 }; the agent's own
   rugShield?: { enabled: boolean } // CR-028: absent = enabled; turning it off needs the passkey
-  quickFirstBuyUsd?: Amount        // CR-028: default "0"; a NEW_TOKEN-only buy up to it does not wait
+  quickFirstBuy?: { maxUsd: Amount, dailyUsd: Amount }   // CR-028: absent = off
 }
 
 interface TokenLimit {             // CR-026. Each field absent = the agent's default
@@ -227,8 +227,8 @@ dollar within the limits), ORDERS_DISABLED, ORDER_LIMIT_EXCEEDED, GAS_RESERVE (t
 leave the hot wallet without SOL for fees).
 The AI trader (CR-027): TRADER_TOKEN_NOT_ALLOWED (the trader asked for a token outside its own
 list).
-Degen autopilot (CR-028): HUNT_LIMIT_EXCEEDED (above hunt.maxBuyUsd), HUNT_BUDGET_EXCEEDED (hunted
-positions at cost would pass hunt.budgetUsd).
+Degen autopilot (CR-028): HUNT_LIMIT_EXCEEDED (above hunt.maxBuyUsd or the day's hunt.dailyBuyUsd),
+HUNT_BUDGET_EXCEEDED (hunted positions would pass hunt.budgetUsd).
 
 ## ChainAdapter (packages/onchain/src/ChainAdapter.ts)
 guard-core depends on this interface only and never imports a chain SDK directly.
@@ -588,7 +588,7 @@ POST /v1/owner/positions/close { assertion } -> { intents: PayIntent[] }   step-
   through the same checks. Works while agents are paused. SOL (CR-026) is sold only as far as
   trading bought it: at most min(the booked SOL position, the balance above the gas reserve). SOL the
   owner sends to a hot wallet, for gas or above it, is never sold by Close or by the AI trader.
-Position = { chain, token, amount, cost, decimals, symbol? }: decimals read from the mint onchain by
+Position = { chain, token, amount, cost, decimals, symbol?, hunted? (CR-028) }: decimals read from the mint onchain by
   the adapter, never from a venue's token list; symbol is display only and untrusted, so a client
   always shows the mint beside it.
 
@@ -938,7 +938,8 @@ never projections or returns.
 
 ## Degen autopilot (CR-028)
 Solana mainnet, spot, through Jupiter, behind every CR-021 and CR-026 check. Nothing here changes
-payments or the vault's onchain cap.
+payments or the vault's onchain cap. Every default below is applied before the loosening diff
+compares two policies or two trader configs, so an absent field reads as its default, never as off.
 
 Hunt mode. TraderConfig.hunt lets the AI trader buy tokens outside its own list, picked from the
 venue's new and trending lists after guard-core screens them.
@@ -946,48 +947,74 @@ venue's new and trending lists after guard-core screens them.
 ```ts
 interface HuntConfig {
   enabled: boolean                 // default false
-  budgetUsd: Amount                // the most held at cost, over every hunted position together
-  maxBuyUsd: Amount                // the most one hunted buy may spend
+  budgetUsd: Amount                // the most held over every hunted position together
+  maxBuyUsd: Amount                // the most one hunted buy or swap-in may spend
+  dailyBuyUsd: Amount              // the most all hunted buys and swap-ins may spend in a UTC day
   minAgeMinutes: number            // 5 to 1440, default 30: younger tokens are not offered
-  autoTrailBps?: number            // 100 to 5000: a trailing stop placed after every hunted buy
+  autoTrailBps?: number            // 100 to 5000: a trailing stop placed with every hunted buy
 }
 
 interface HuntCandidate {
   mint: Address
   symbol: string                   // venue text: untrusted, at most 16 characters
   name: string                     // venue text: untrusted, at most 48 characters
-  ageMinutes?: number              // the venue's figure
+  ageMinutes: number               // the venue's figure
   venue: VenueTokenFacts           // CR-025, labelled as the venue's
   exit: { amountUsd: Amount, priceImpactBps: number }   // selling maxBuyUsd worth back
 }
 ```
 
-- Turning hunt on, or raising budgetUsd, maxBuyUsd or autoTrailBps, or lowering minAgeMinutes, is a
-  loosening and needs the step-up trader_settings. Hunt needs policy.trading.allowAnyToken: without
-  it a hunted buy is TOKEN_NOT_TRADABLE, so hunting always rests on that passkey-signed choice.
-- A hunted token is one outside config.tokens. A hunted position is a position in a hunted token.
-- The tool discover_tokens { list: "recent" | "trending" } returns at most 20 HuntCandidate. guard-core
-  reads Jupiter's token lists (the session reads Jupiter's current documentation for the endpoints),
-  caches each list for 60 seconds, and offers a token only when all of these hold:
+- **Loosening.** Each of these needs the step-up trader_settings:
+  - turning hunt on;
+  - raising budgetUsd, maxBuyUsd or dailyBuyUsd;
+  - lowering minAgeMinutes;
+  - removing or raising autoTrailBps.
+  Hunt also needs policy.trading.allowAnyToken. Without it a hunted buy is TOKEN_NOT_TRADABLE, so
+  hunting always rests on that passkey-signed choice.
+- **Hunted positions.** A position is hunted when the AI trader opened it with a buy or a swap into
+  a token outside config.tokens. The tag is set at that trade and kept until the position closes,
+  whatever later edits make to config.tokens. Hunt limits apply only to the AI trader's own actions:
+  an MCP agent's or the owner's trades on the same agent neither use the budget nor get tagged. "The
+  agent holds a token" means a booked position above 0 from that agent's own trades. A token that
+  only arrived in the wallet, an airdrop for one, never counts, and its name never reaches the
+  model.
+- **The discover tool.** discover_tokens { list: "recent" | "trending" } returns at most 20
+  HuntCandidate. guard-core reads Jupiter's token lists (the session reads Jupiter's current
+  documentation for the endpoints) and caches each list for 60 seconds. It offers a token only when
+  all of these hold:
   - the mint is read onchain with no freeze authority, no mint authority and no Token-2022 risk
     extension (the CR-021 risk reads, with MINT_AUTHORITY excluded rather than flagged);
   - a quoteSell of maxBuyUsd worth back to the dollar is within maxPriceImpactBps;
-  - the venue's age, when it gives one, is at least minAgeMinutes.
+  - the venue gives an age, and it is at least minAgeMinutes. A token without an age is not offered.
   Venue fields only narrow the list and never admit a token past a check.
-- swap and place_order take a hunted token only when discover_tokens offered it to this trader in
-  the last 60 minutes, or the agent holds it. Any other mint outside config.tokens is
-  TRADER_TOKEN_NOT_ALLOWED, so the model cannot buy a mint it read anywhere else.
-- A buy or a swap into a hunted token is checked, in step 1 of the checks, against:
+- **Which mints it may trade.** swap and place_order take a token outside config.tokens only when it
+  is one of these:
+  - a token discover_tokens offered this trader in the last 60 minutes;
+  - a hunted position the agent holds.
+  Any other mint is TRADER_TOKEN_NOT_ALLOWED, so the model cannot buy a mint it read anywhere else.
+  At the buy, every CR-021 risk read runs again and the screen's mint rules apply once more; an
+  offer never stands in for them.
+- **Hunt limits.** A hunted buy or swap-in is checked in step 1 of the checks against:
   - hunt.maxBuyUsd for the one trade (HUNT_LIMIT_EXCEEDED);
-  - hunt.budgetUsd for every hunted position at cost after it (HUNT_BUDGET_EXCEEDED);
-  - every policy limit as well, so the lower of the two applies.
-- A hunted buy is still the first buy of its token, so it carries NEW_TOKEN and waits for the owner
-  unless the quick first buy covers it. The panel suggests setting quickFirstBuyUsd to maxBuyUsd.
-- When autoTrailBps is set and a hunted buy lands, guard-core places a trailing stop for the landed
-  amount with that trailBps and the policy's maxSlippageBps. It needs orders.enabled; without it the
-  buy is still made and the tick records that no stop was placed. The order has createdBy "owner",
-  since the owner set it with the passkey, so the model cannot cancel it. In shadow mode it is
-  shadowed like the buy.
+  - hunt.dailyBuyUsd for the UTC day's hunted buys and swap-ins, gross (HUNT_LIMIT_EXCEEDED);
+  - hunt.budgetUsd for every hunted position after it (HUNT_BUDGET_EXCEEDED);
+  - every policy limit as well, so the lower one applies.
+  The budget counts each hunted position at its hunt cost. Hunt cost adds a buy at what it spent and
+  a swap-in at its valueUsd (CR-026), and falls on a sell in proportion to the amount sold. A swap
+  from a token that has risen therefore books the hunted token at today's value, not at the old
+  cost. In shadow mode guard-core keeps the same hunt book from the shadowed trades, so the budget
+  and the day bind on paper as they would live.
+- **Approval.** A hunted buy carries NEW_TOKEN only when no agent has held that token before. Without
+  the flag it is decided by approvalThreshold alone. With it, it waits for the owner unless a quick
+  first buy covers it.
+- **The automatic trailing stop.** When autoTrailBps is set, every hunted buy and swap-in comes with
+  a trailing stop for the landed amount, with that trailBps and the policy's maxSlippageBps.
+  - It needs orders.enabled. Without it the trade is refused up front with ORDERS_DISABLED, so a
+    hunted position never goes unprotected.
+  - It does not count toward orders.maxOpen. It comes first on the position: other open orders on
+    that token may not add up to more than the position minus the automatic stop's amount.
+  - The order has createdBy "owner", since the owner set it with the passkey, so neither the model
+    nor an MCP agent can cancel it. In shadow mode it is shadowed like the trade.
 
 Trailing stops. OrderKind gains "trailing_stop", and Order gains two fields:
 
@@ -996,42 +1023,74 @@ Trailing stops. OrderKind gains "trailing_stop", and Order gains two fields:
   peakOut?: Amount                 // trailing_stop only: the confirmed high, for the whole amount
 ```
 
-- Placing one takes trailBps. triggerOut is the floor, and "0" means none. guard-core sets peakOut
-  from the quote it makes when placing.
-- The watcher keeps the CR-026 cadence. peakOut moves up only to the lowest quote of a confirming
-  run, ORDER_CONFIRM_CHECKS consecutive valid checks spanning at least ORDER_CONFIRM_SECONDS, and
-  only when that is higher. A spike in one check never raises it.
+- Placing one takes trailBps. triggerOut is the floor, and "0" means none. peakOut starts absent and
+  is first set by the first confirming run after placing. Until then only the floor can trigger.
+- The watcher keeps the CR-026 cadence. A confirming run is ORDER_CONFIRM_CHECKS consecutive valid
+  checks spanning at least ORDER_CONFIRM_SECONDS. peakOut moves up only to the lowest quote of a
+  confirming run, and only when that is higher. A spike in one check never raises it.
 - The trigger is max(triggerOut, peakOut × (10000 − trailBps) / 10000), rounded down. The order
   triggers as a stop-loss does at that level, with the same confirming run and the same resets.
 - It is filled as a stop-loss: minAmountOut = trigger × (10000 − maxSlippageBps) / 10000, rounded
   down. It is never sold at any price. Every other CR-026 order rule applies.
 - The owner's step-up body for place_order carries trailBps when the kind is trailing_stop.
 
-Rug shield. TradingPolicy.rugShield = { enabled: boolean }, absent meaning enabled. Turning it off is
-a loosening and needs the step-up; turning it on needs the session only. guard-core watches every
-position of an agent whose shield is on, every SHIELD_CHECK_MS (default 60000), with the CR-026
-watcher's rate-limit backoff. Each check reads the mint with ChainAdapter.tokenRisk, now with its
-supply, and quotes a quoteSell of the whole position.
+Protective sells. This amends CR-026 for every order fill and for the rug shield's sells.
+- **Checks.** They are exempt from operations.sell, requireMandate and the sell day, and they do not
+  count toward it. The rest still applies: a fresh quote, the minAmountOut floor, the inspection
+  and the test run. An agent's own trades therefore can never use up the room its stops need to
+  sell.
+- **Refused on price.** A fill refused because the fresh quote is below minAmountOut
+  (SLIPPAGE_TOO_HIGH) is never failed. The order goes back to open with its run started over, and
+  the owner is told with "order_failed" with reopened: true. A gap-down or a 30-second pump
+  therefore never disarms a stop for good.
+- **Order cancellation.** Cancelling a stop_loss or trailing_stop order from the owner's routes needs
+  the step-up (OwnerAction "cancel_order" over { orderId }). So does turning orders.enabled off while
+  one is open. A take-profit is still cancelled with the session. An agent still cancels only the
+  orders it placed.
+- **Priority.** Stop and trailing checks come before the shield's, the price samples and
+  discover_tokens on the venue's rate limit.
 
-- The shield fires on either of these:
-  - **A new risk.** The mint shows a freeze authority, a Token-2022 risk extension it did not have at
-    the previous check, or, with a mint authority, a supply more than SHIELD_SUPPLY_JUMP_BPS (default
-    1000) above the previous check's. The same fact must be read on two checks in a row, so one bad
-    RPC answer never sells.
-  - **Liquidity gone.** The whole position's exit is above maxPriceImpactBps, or has no route, over
-    a confirming run, after an earlier check found it within the limit. A position that was never
-    within it does not fire on this rule. A price fall alone is the stop orders' job, not the
-    shield's.
-- When it fires, guard-core cancels the token's open orders and sells the whole position to the
-  chain's dollar, as Close positions does for one token. The sell's minAmountOut is the fresh
-  quote × (10000 − maxSlippageBps) / 10000, so it sells at the market and is allowed above
-  maxPriceImpactBps. It is audited as "rug_shield" with the rule that fired and pushed as Web Push
-  "rug_shield".
-- A paused or killed agent is not sold. The owner gets Web Push "rug_shield" with paused: true, and
-  Close positions stays the way out. In shadow mode the sell is shadowed.
-- A sell that fails is pushed as "rug_shield" with failed: true. The next check may fire again.
-- Positions read in shadow mode, or held by an agent without trading.enabled, are watched and only
-  pushed, never sold.
+Whole-position exit. This amends CR-021 step 2. A buy, or a swap into a token, needs an exit route
+for the whole position after it, not only for the trade, within maxPriceImpactBps. Otherwise it is
+NO_EXIT_ROUTE. A position is never built bigger than the stops and the shield can sell.
+
+Rug shield. TradingPolicy.rugShield = { enabled: boolean }, absent meaning enabled. Turning it off is
+a loosening and needs the step-up; turning it on needs the session only.
+
+- **What it watches.** guard-core watches every position of an agent whose shield is on, every
+  SHIELD_CHECK_MS (default 60000). It skips a position worth less than SHIELD_DUST_USD (default 1
+  USD) at its last quote. Each check reads the mint with ChainAdapter.tokenRisk, now with its
+  supply, and makes a quoteSell of the whole position.
+- **The baseline.** Each position has one, stored in the database, taken at the settlement of every
+  buy or swap into it:
+  - the freeze and mint authorities;
+  - the Token-2022 extensions and their settings (a transfer fee's rate, a hook's program);
+  - the supply.
+- **When it fires.** A shield run is SHIELD_CONFIRM_CHECKS (default 3) consecutive shield checks. The
+  shield fires on one of two rules:
+  - **A new risk.** Two checks in a row each differ from the baseline in the same way: an authority
+    or risk extension now present, a setting changed for the worse, or, with a mint authority, a
+    supply above baseline × (10000 + SHIELD_SUPPLY_JUMP_BPS) / 10000 (default 1000). One bad RPC
+    answer never sells, and slow inflation adds up against the baseline.
+  - **Liquidity gone.** The whole position's exit is above maxPriceImpactBps, or has no route, on
+    every check of a shield run, after an earlier check found it within the limit. A price fall
+    alone is the stop orders' job, not the shield's.
+- **The sell.** When the shield fires, guard-core cancels the agent's open orders on that token and
+  sells that agent's booked amount, and only that, to the chain's dollar as a protective sell.
+  - The new-risk rule sells with minAmountOut = the fresh quote × (10000 − maxSlippageBps) / 10000.
+    It sells at the market and is allowed above maxPriceImpactBps.
+  - The liquidity rule's minAmountOut is the higher of that and the last within-limit quote ×
+    (10000 − SHIELD_MAX_LOSS_BPS) / 10000 (default 5000). A pool drained for a few minutes to shake
+    out holders therefore cannot take the whole position at the bottom. When the floor is not met it
+    sells nothing and pushes.
+- **Telling the owner.** Each sell is audited as "rug_shield" with the rule that fired and pushed as
+  Web Push "rug_shield". A refused or failed sell is pushed with failed: true, and the next run may
+  fire again.
+- **No sell.** A paused or killed agent is not sold: the owner gets "rug_shield" with paused: true, and
+  Close positions stays the way out. Shadow mode shadows the sell. An agent without trading.enabled
+  is only pushed.
+- **Gas.** The doctor warns when a hot wallet's SOL above the gas reserve covers fewer sell fees than
+  it has positions.
 
 Faster prices. recent_prices takes { mint, window?: "1h" | "24h" }:
 - "24h" returns up to 96 samples, one every 15 minutes, as in CR-027;
@@ -1043,14 +1102,20 @@ Faster prices. recent_prices takes { mint, window?: "1h" | "24h" }:
 - Each tick's user message also carries, for every listed and held token, its latest sample and the
   change over the last hour and day, as data.
 
-Quick first buys. TradingPolicy.quickFirstBuyUsd: Amount, default "0" (off).
-- A buy, or a swap into a token, whose only flag is NEW_TOKEN, whose value is at most
-  quickFirstBuyUsd and below approvalThreshold, is decided without the owner.
-- MINT_AUTHORITY, or any other reason to ask, still sends it to the owner. The audit records
-  "quick_first_buy" with the flag.
-- Raising it is a loosening and needs the step-up. It applies to every caller of the agent's
-  pipeline, the AI trader and an MCP agent alike, and never to the owner's own manual trades,
-  which carry his passkey anyway.
+Quick first buys. TradingPolicy.quickFirstBuy = { maxUsd: Amount, dailyUsd: Amount }, absent meaning
+off. Setting it or raising either amount is a loosening and needs the step-up.
+- **What it covers.** A buy, or a swap into a token, is decided without the owner when all of these
+  hold:
+  - its only flag is NEW_TOKEN;
+  - its value is at most maxUsd and below approvalThreshold;
+  - the UTC day's quick first buys, with it, stay within dailyUsd;
+  - and either the AI trader is buying a token discover_tokens offered it, or the token is listed in
+    policy.trading.tokens.
+- **What it does not cover.** A token admitted only through allowAnyToken by an MCP agent always
+  waits, so a leaked agent key cannot use quick first buys on fresh mints. MINT_AUTHORITY, or any
+  other reason to ask, still sends the buy to the owner. The owner's own manual trades carry his
+  passkey and never use it.
+- **Audit.** Each one is audited as "quick_first_buy".
 
 ## Agent wallets (CR-022, HIGH-2)
 Opt-in, per agent and chain. By default every agent spends from the chain's shared spending (hot)

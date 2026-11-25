@@ -71,8 +71,8 @@ export interface TradingPolicy {
   orders?: { enabled: boolean; maxOpen: number }
   /** CR-028: absent means enabled; turning it off needs the passkey. */
   rugShield?: { enabled: boolean }
-  /** CR-028: default "0". A buy flagged only NEW_TOKEN, up to this, does not wait for the owner. */
-  quickFirstBuyUsd?: Amount
+  /** CR-028: absent is off. See SPEC for which buys it covers; MCP agents' allowAnyToken buys never. */
+  quickFirstBuy?: { maxUsd: Amount; dailyUsd: Amount }
 }
 
 export interface TokenLimit {
@@ -342,6 +342,8 @@ export interface Position {
   decimals: number
   /** Display only and untrusted: always shown beside the mint. */
   symbol?: string
+  /** CR-028: opened by the AI trader's hunt; kept until the position closes. */
+  hunted?: boolean
 }
 
 /** Applies on every chain. */
@@ -590,12 +592,14 @@ export interface TraderConfig {
 /** CR-028: buying tokens outside the trader's list, after guard-core screens them. */
 export interface HuntConfig {
   enabled: boolean
-  /** Every hunted position together, at cost. */
+  /** Every hunted position together, at hunt cost (a swap-in counts at its value). */
   budgetUsd: Amount
   maxBuyUsd: Amount
+  /** Gross hunted buys and swap-ins per UTC day. */
+  dailyBuyUsd: Amount
   /** 5 to 1440; younger tokens are not offered. */
   minAgeMinutes: number
-  /** 100 to 5000: a trailing stop placed after every hunted buy that lands. */
+  /** 100 to 5000: a trailing stop with every hunted buy; without orders.enabled the buy is refused. */
   autoTrailBps?: number
 }
 
@@ -606,7 +610,8 @@ export interface HuntCandidate {
   symbol: string
   /** At most 48 characters. */
   name: string
-  ageMinutes?: number
+  /** The venue's figure; a token without one is never offered. */
+  ageMinutes: number
   venue: VenueTokenFacts
   /** Selling hunt.maxBuyUsd worth back to the dollar. */
   exit: { amountUsd: Amount; priceImpactBps: number }

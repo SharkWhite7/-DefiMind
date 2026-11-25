@@ -1629,9 +1629,20 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
        owner is told to use Close positions.
   4. **Faster prices.** One-minute price samples for the tokens of 5-minute traders, and a short
      price summary in each tick, so the model spends fewer tool calls.
-  5. **Quick first buys.** An owner-set amount under which a buy flagged only as a new token goes
-     through without waiting. It is off by default and raising it needs the passkey. A mint that
-     can still be inflated keeps waiting.
+  5. **Quick first buys.** An owner-set amount per buy and per day under which a buy flagged only as
+     a new token goes through without waiting. It covers the AI trader's hunted buys and tokens the
+     owner listed, never an MCP agent's buy of a token admitted only by "any token". It is off by
+     default and raising it needs the passkey. A mint that can still be inflated keeps waiting.
+  6. **Fixes from the independent review of this CR**, before any code:
+     - protective sells (stop fills and the shield) are exempt from the sell limits, so an agent
+       cannot use up its stops' room;
+     - a stop refused on price goes back to open instead of failing for good;
+     - cancelling a stop from the panel, or turning orders off while one is open, needs the passkey;
+     - a buy needs an exit for the whole position after it;
+     - the shield compares with a baseline stored at the buy, and its liquidity rule sells nothing
+       below half the last good quote;
+     - the hunt budget counts swaps at their value, adds a daily cap, binds in shadow mode, and
+       tags hunted positions at the buy.
 - **Rows:**
   - guard-core: GC-74 (hunt mode and the discover tool, trailing stops in the order watcher, the rug
     shield watcher, fast price samples, quick first buys);
