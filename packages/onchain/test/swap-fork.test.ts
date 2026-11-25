@@ -221,20 +221,22 @@ for (const route of routes) {
         const outcome = await s.simulate(intent())
         expect(outcome.rejectReasons).toEqual([])
         const changes = new Map(outcome.simulation.balanceChanges.map((c) => [c.token, c.delta]))
-        const spent = -BigInt(changes.get(route.tokenIn.toBase58())!)
-        // Selling SOL, the same lamports also pay the fees.
-        if (native) expect(spent).toBeGreaterThan(BigInt(recorded.quote.inAmount))
-        else expect(spent).toBe(BigInt(recorded.quote.inAmount))
+        // Each leg reported gross of fees and rent, a SOL leg as any other (CR-026).
+        expect(changes.get(route.tokenIn.toBase58())).toBe(`-${recorded.quote.inAmount}`)
         const bought = BigInt(changes.get(route.tokenOut.toBase58())!)
-        // Buying SOL, the fees come out of the same lamports.
-        const fees = route.tokenOut.equals(WSOL) ? 5_000n + MAX_PRIORITY_LAMPORTS : 0n
-        expect(bought + fees).toBeGreaterThanOrEqual(BigInt(recorded.quote.otherAmountThreshold))
+        expect(bought).toBeGreaterThanOrEqual(BigInt(recorded.quote.otherAmountThreshold))
         // Route intermediates net to zero: only the two legs move (CR-026).
         expect(changes.size).toBe(2)
 
         const was = holdsIn()
         await s.send(intent())
-        expect(was - holdsIn()).toBe(native ? spent : BigInt(recorded.quote.inAmount))
+        // Selling SOL, the same lamports also pay the fee and the rent of the account it opens.
+        const spent = was - holdsIn()
+        if (native)
+          expect(spent - BigInt(recorded.quote.inAmount)).toBeLessThanOrEqual(
+            5_000n + MAX_PRIORITY_LAMPORTS + 2_039_280n,
+          )
+        else expect(spent).toBe(BigInt(recorded.quote.inAmount))
         if (route.tokenOut.equals(WSOL)) expect(svm.getAccount(outAccount)).toBeNull()
         else expect(balance(outAccount)).toBe(bought)
       })

@@ -189,7 +189,11 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
         maxSupportedTransactionVersion: 0,
       })
       if (!tx?.meta) throw new Error(`tx_not_found: ${txId}`)
-      return landedChanges(tx.meta, hotWallet.publicKey.toBase58())
+      // A signer, so among the message's static keys: the first of them pays the fee.
+      const index = tx.transaction.message.getAccountKeys().staticAccountKeys.findIndex((key) =>
+        key.equals(hotWallet.publicKey),
+      )
+      return landedChanges(tx.meta, hotWallet.publicKey.toBase58(), index)
     },
 
     async getAllowanceState(): Promise<AllowanceState> {

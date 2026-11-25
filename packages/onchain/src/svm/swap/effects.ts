@@ -83,6 +83,9 @@ export function swapEffects(
   const spent = -(net.get(deal.tokenIn) ?? 0n) - (sol === 'in' ? cost : 0n)
   const bought = (net.get(deal.tokenOut) ?? 0n) + (sol === 'out' ? cost : 0n)
   ok &&= spent <= deal.amountIn && bought >= deal.minAmountOut
+  // Reported gross of the fee and the rent, as any other leg: the trade's own amount. Its SOL cost
+  // is held above and by the gas reserve.
+  if (sol) add(WSOL, cost)
   return {
     reasons: ok ? [] : ['SIM_UNEXPECTED_EFFECT'],
     changes: [...net]

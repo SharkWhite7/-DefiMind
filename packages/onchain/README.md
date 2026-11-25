@@ -189,7 +189,8 @@ The wrap must come in that order around one route. The route must be signed by t
 spend from its own tokenIn account and pay into its own tokenOut account, so it cannot park the
 proceeds anywhere else.
 
-The test run counts a SOL leg in lamports alone: the hot wallet's own, plus those of every wSOL
+`balanceChanges` reports every leg gross of the network fee and the rent of the accounts the swap
+opens, a SOL leg as any other. The test run counts a SOL leg in lamports alone: the hot wallet's own, plus those of every wSOL
 account it owns, rent included. SOL moved between them nets to nothing, and only SOL that leaves
 the hot wallet counts. Only the hot wallet's own wSOL account may close. Selling SOL, the leg may
 fall by amountIn plus the fee actually paid (the signature and the priority on the units the
@@ -230,7 +231,8 @@ the venue's own facts are guard-core's. Tested against mainnet USDC, JUP and PYU
 
 `getLandedChanges(txId)` (Solana) returns what a confirmed transaction really moved for the hot
 wallet: `{ token, delta }[]`, signed atomic deltas netted per mint from the transaction's own pre and
-post token balances, none zero, SOL left out. A swap lands at its own price, never exactly the test
+post balances, none zero, each gross of the network fee and the rent of the accounts it opened. A SOL
+leg (CR-026) is counted in lamports and reported under the wSOL mint. A swap lands at its own price, never exactly the test
 run's, so positions are booked from this. A failed transaction throws `tx_failed`, one the RPC does
 not have yet `tx_not_found`. Tested against the owner's recorded mainnet buy, Close and top-up.
 

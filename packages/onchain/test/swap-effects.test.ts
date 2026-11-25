@@ -129,7 +129,8 @@ describe('a SOL leg (CR-026), counted in lamports alone', () => {
     expect(effects.reasons).toEqual([])
     expect(effects.changes).toEqual([
       { token: bonk, delta: '600' },
-      { token: WSOL, delta: `-${10_000_000n + fees}` },
+      // Gross of the fee: the trade's own amount, as any leg is reported.
+      { token: WSOL, delta: '-10000000' },
     ])
   })
 
@@ -151,7 +152,7 @@ describe('a SOL leg (CR-026), counted in lamports alone', () => {
       { before: hot, after: hot + 50_000_000n + rent + 2_000n - fees },
     )
     expect(effects.reasons).toEqual([])
-    expect(effects.changes).toContainEqual({ token: WSOL, delta: `${50_000_000n - fees}` })
+    expect(effects.changes).toContainEqual({ token: WSOL, delta: '50000000' })
   })
 
   // The integrator's attack on #167: the proceeds parked in a stray wSOL account while the same
