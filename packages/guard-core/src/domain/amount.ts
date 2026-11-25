@@ -30,3 +30,14 @@ export function formatDollars(amount: Amount): string {
   const fraction = (units % 1_000_000n).toString().padStart(6, '0').replace(/0+$/, '')
   return `${whole}.${fraction.padEnd(2, '0')}`
 }
+
+const DOLLARS = /^(0|[1-9]\d*)(\.\d{1,6})?$/
+
+/** "1.5" to 1500000: a decimal dollar amount in base units of a 6-decimal token. */
+export function parseDollars(value: string): bigint {
+  if (!DOLLARS.test(value)) {
+    throw new Error(`invalid_dollars: ${value}`)
+  }
+  const [whole = '0', fraction = ''] = value.split('.')
+  return BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, '0'))
+}

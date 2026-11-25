@@ -30,7 +30,8 @@ export function placeOrder(
   const { db, now } = deps
   const policy = repo.getPolicy(db, input.agentId)
   const dollar = deps.usdc.get(input.chain)
-  if (policy === undefined) {
+  // A paused agent places nothing: a kill's cancel must not be outlived by an order placed after it.
+  if (policy === undefined || policy.paused) {
     return ['PAUSED']
   }
   if (!isSvm(input.chain) || dollar === undefined || !policy.chains.includes(input.chain)) {

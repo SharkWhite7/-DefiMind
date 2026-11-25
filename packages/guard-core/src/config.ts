@@ -141,6 +141,8 @@ const settings = z
     ORDER_CHECK_MS: z.coerce.number().int().min(1_000).default(15_000),
     ORDER_CONFIRM_CHECKS: z.coerce.number().int().min(1).max(100).default(3),
     ORDER_CONFIRM_SECONDS: z.coerce.number().int().min(0).max(3_600).default(30),
+    /** CR-027. The owner's own key for the AI trader: never logged, returned or stored. */
+    ANTHROPIC_API_KEY: optional(z.string().min(1)),
 
     /**
      * Whether the public listener may read the client's address from Fly-Client-IP. Only behind a

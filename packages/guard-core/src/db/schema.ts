@@ -448,3 +448,5 @@ export const orders = sqliteTable(
   },
   (t) => [index('orders_status').on(t.status), index('orders_agent').on(t.agentId)],
 )
+
+export * from './trader-schema.js'
