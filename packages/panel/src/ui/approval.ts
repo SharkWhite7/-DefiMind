@@ -40,6 +40,7 @@ function decide(ctx: Context, approve: () => Promise<unknown>, reject: () => Pro
 
 /** GC-66: a waiting buy draws from the vault only once the owner approves it. */
 const VAULT_UNTOUCHED = 'Nothing leaves your vault until you approve.'
+const UNTESTED = 'Test run after your approval.'
 
 const mono = (text: string) => el('span', { class: 'mono' }, text)
 
@@ -80,7 +81,7 @@ export async function approval(ctx: Context, id: string): Screen {
   if (!found) {
     return gone(ctx)
   }
-  const { intent, simulation, flags, approveBefore } = found
+  const { intent, simulation, flags, approveBefore, untested } = found
   const swap = intent.kind === 'swap'
   return [
     el('h1', {}, swap ? swapTitle(intent) : amountText(intent)),
@@ -99,6 +100,7 @@ export async function approval(ctx: Context, id: string): Screen {
       ),
       ...flags.map((flag) => el('p', { class: 'flag' }, flagText(flag))),
       swap && isBuy(intent) && el('p', { class: 'muted' }, VAULT_UNTOUCHED),
+      untested === true && el('p', { class: 'muted' }, UNTESTED),
     ),
     decide(
       ctx,
