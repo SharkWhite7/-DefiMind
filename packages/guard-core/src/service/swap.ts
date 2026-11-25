@@ -258,7 +258,8 @@ export async function clearSwap(
     approvedBy: owner === undefined ? 'policy' : (ownerApprovalMethod(db, intent.id) ?? 'owner'),
   })
   const day = repo.utcDay(now())
-  if (how.verdict.quick === true) {
+  // The owner's own trade or approval never uses the room the autopilot's quick buys have.
+  if (how.verdict.quick === true && owner === undefined) {
     noteQuick(
       deps,
       intent,

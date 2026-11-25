@@ -1133,7 +1133,10 @@ off. Setting it or raising either amount is a loosening and needs the step-up.
   waits, so a leaked agent key cannot use quick first buys on fresh mints. MINT_AUTHORITY, or any
   other reason to ask, still sends the buy to the owner. The owner's own manual trades carry his
   passkey and never use it.
-- **Audit.** Each one is audited as "quick_first_buy".
+- **Audit.** Each one is audited as "quick_first_buy". It is counted when decided, before it lands,
+  so a send that fails still uses the room. A buy the owner approved never counts. In shadow mode
+  quick buys use none of the day's room, so a shadow record can show more of them than live would
+  allow.
 
 ## The DefiMind Network (CR-029)
 A hosted service, packages/network, run by DefiMind as its own Fly app. Deployments use it only

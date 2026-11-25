@@ -62,6 +62,8 @@ export function tradingLimits(ctx: Context, policy: PolicyView, save: Save) {
   shield.checked = form.shield
   const quickBuy = money('quick-buy', 'Quick first buys: each up to, in dollars', form.quickBuy)
   const quickDay = money('quick-day', 'Quick first buys: all in a day, in dollars', form.quickDay)
+  quickBuy.node.placeholder = 'off'
+  quickDay.node.placeholder = 'off'
   return card(
     el('h2', {}, 'Trading limits'),
     el(

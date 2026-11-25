@@ -16,7 +16,7 @@ import { fetchQuote } from './swap-quote.js'
 export async function wholeExit(
   deps: PaymentDeps,
   adapter: ChainAdapter,
-  req: SwapRequest,
+  req: Pick<SwapRequest, 'agentId' | 'chain'>,
   pair: { side: 'buy' | 'sell' | 'swap'; token: string },
   answer: SwapQuote,
   shadow: boolean,
@@ -28,7 +28,7 @@ export async function wholeExit(
   if (held === 0n) {
     return answer.exitImpactBps
   }
-  const total = toAmount(held + parseAmount(answer.minAmountOut))
+  const total = toAmount(held + parseAmount(answer.expectedOut))
   const quoted = await adapter.quoteSell(pair.token, total).catch(() => undefined)
   return quoted?.priceImpactBps ?? null
 }
