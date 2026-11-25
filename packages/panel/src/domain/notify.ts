@@ -14,6 +14,7 @@ const TITLES = {
   order_filled: 'An order sold',
   order_failed: 'An order could not sell',
   trader_paused: 'The AI trader paused',
+  rug_shield: 'The rug shield acted on a token',
 } as const
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/

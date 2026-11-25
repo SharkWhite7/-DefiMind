@@ -21,12 +21,16 @@ export interface PushPayload {
     | 'order_filled'
     | 'order_failed'
     | 'trader_paused'
+    | 'rug_shield'
   agentId?: string
   chain?: string
   amount?: string
   intentId?: string
   /** CR-028: an order refused on price that went back to open. */
   reopened?: boolean
+  /** CR-028, rug_shield: the agent is paused, so nothing was sold; or the sell failed. */
+  paused?: boolean
+  failed?: boolean
 }
 
 /** A rejection with one of these means something tried to take standing authority over funds. */
@@ -96,6 +100,15 @@ export function pusher(deps: PushDeps) {
     send,
     kill: () => send({ kind: 'kill' }),
     traderPaused: (agentId: string) => send({ kind: 'trader_paused', agentId }),
+    /** CR-028: the shield sold a token, or would have but the agent is paused, or the sell failed. */
+    shield: (event: {
+      agentId: string
+      chain: string
+      amount: string
+      intentId?: string
+      paused?: boolean
+      failed?: boolean
+    }) => send({ kind: 'rug_shield', ...event }),
     /** CR-026: an order filled, or could not be filled; CR-028: one refused on price re-opens. */
     order(
       kind: 'order_filled' | 'order_failed',

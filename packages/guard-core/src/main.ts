@@ -105,6 +105,13 @@ const [app, publicApp] = await buildServers(
       confirmChecks: config.ORDER_CONFIRM_CHECKS,
       confirmSeconds: config.ORDER_CONFIRM_SECONDS,
     },
+    shield: {
+      checkMs: config.SHIELD_CHECK_MS,
+      confirmChecks: config.SHIELD_CONFIRM_CHECKS,
+      supplyJumpBps: config.SHIELD_SUPPLY_JUMP_BPS,
+      maxLossBps: config.SHIELD_MAX_LOSS_BPS,
+      dustUsd: config.SHIELD_DUST_USD,
+    },
     backups: {
       databaseUrl: config.DATABASE_URL,
       hour: config.BACKUP_HOUR_UTC,

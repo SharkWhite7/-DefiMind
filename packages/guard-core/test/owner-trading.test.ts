@@ -131,7 +131,8 @@ describe('the risk card (CR-025)', () => {
   })
 
   it('needs an adapter that reads it', async () => {
-    const { owner } = await setup()
+    const { chain, owner } = await setup()
+    Object.assign(chain, { tokenRisk: undefined })
     expect((await owner.call('GET', url)).json().error).toBe('not_tradable')
   })
 })

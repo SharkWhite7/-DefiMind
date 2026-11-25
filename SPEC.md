@@ -1084,6 +1084,8 @@ a loosening and needs the step-up; turning it on needs the session only.
   - the freeze and mint authorities;
   - the Token-2022 extensions and their settings (a transfer fee's rate, a hook's program);
   - the supply.
+  Until tokenRisk reports extension settings (ON-38), the shield compares the extensions' names,
+  and a changed setting goes unseen.
 - **When it fires.** A shield run is SHIELD_CONFIRM_CHECKS (default 3) consecutive shield checks. The
   shield fires on one of two rules:
   - **A new risk.** Two checks in a row each differ from the baseline in the same way: an authority
