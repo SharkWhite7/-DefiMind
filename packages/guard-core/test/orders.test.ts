@@ -258,3 +258,21 @@ describe('a venue that is down at the fill (SPEC #183)', () => {
     expect(getOrder(h.db, order.id)?.status).toBe('open')
   })
 })
+
+describe("the owner's orders, seen from the agent", () => {
+  it('lists them read-only: the agent cannot cancel them', async () => {
+    const { h } = await setup()
+    const owner = await signedIn(h)
+    const placed = await owner.call('POST', '/v1/owner/orders', {
+      ...place(),
+      assertion: await owner.stepUp('place_order', place()),
+    })
+    const id = placed.json().id
+    const listed = (await h.agent('GET', '/v1/agent/orders/agent-1')).json().orders
+    expect(listed).toEqual([expect.objectContaining({ id, createdBy: 'owner' })])
+    const cancel = await h.agent('POST', `/v1/agent/orders/${id}/cancel`, { agentId: 'agent-1' })
+    expect(cancel.statusCode).toBe(404)
+    expect(cancel.json()).toEqual({ error: 'not_found' })
+    expect(getOrder(h.db, id)?.status).toBe('open')
+  })
+})
