@@ -87,6 +87,7 @@ export function registerOrders(server: McpServer, deps: ToolDeps): void {
             .catch(noTradingYet)
           return text(describeOrder(placed, deps))
         } catch (error) {
+          // guard-core answers a refused order with 409 order_refused and its codes: a decision.
           if (error instanceof GuardError && error.rejectReasons.length > 0) {
             return text(refused(error.rejectReasons, formatUsd(trigger.atomic)))
           }

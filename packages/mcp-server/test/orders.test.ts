@@ -176,3 +176,31 @@ describe('cancel_order and list_orders', () => {
     expect(placed.text).toBe(NOT_AVAILABLE)
   })
 })
+
+describe("guard-core's 409 order_refused (GC-72)", () => {
+  it('reaches the agent as a refusal with per-code advice, not as an error', async () => {
+    const fetch = async () =>
+      new Response(
+        JSON.stringify({
+          error: 'order_refused',
+          rejectReasons: ['INSUFFICIENT_POSITION', 'ORDERS_DISABLED'],
+        }),
+        { status: 409 },
+      )
+    const { httpGuard } = await import('../src/adapters/guard.js')
+    const guard = httpGuard({ baseUrl: 'http://guard:8787', agentId: 'agent-1', token: 't', fetch })
+    const { text, isError } = await call(await connect(guard), 'place_order', {
+      token: BONK,
+      kind: 'take_profit',
+      amount: '1',
+      triggerUsd: '3',
+    })
+    expect(isError).toBe(false)
+    expect(text).toContain('DefiMind refused this order (trigger $3.00); nothing was placed.')
+    expect(text).toContain(
+      '- INSUFFICIENT_POSITION: the agent holds less of this token than the trade or order needs',
+    )
+    expect(text).toContain('open orders on the token count against it too')
+    expect(text).toContain('Tell the user the owner has to turn orders on.')
+  })
+})
