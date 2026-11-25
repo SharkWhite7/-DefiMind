@@ -2,7 +2,8 @@ import type { Position } from '@defimind/shared'
 import type { Db } from '../db/client.js'
 import { listAgents } from '../db/agents.js'
 import * as repo from '../db/repo.js'
-import { boughtTodayAll, listPositions } from '../db/trades.js'
+import { listPositions } from '../db/trades.js'
+import { boughtTodayAll } from '../db/day-book.js'
 import { toAmount } from '../domain/amount.js'
 
 export interface Portfolio {

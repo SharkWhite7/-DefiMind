@@ -1,6 +1,6 @@
 import type { PayIntent, SwapQuote } from '@defimind/shared'
 import * as repo from '../db/repo.js'
-import { bookOf } from '../db/trades.js'
+import { bookOf } from '../db/day-book.js'
 import { evaluateTrade } from '../domain/trading.js'
 import { reject, type PaymentDeps } from './payments.js'
 import { clearSwap, dollarOf, pairOf } from './swap.js'

@@ -102,6 +102,7 @@ async function sell(
     const verdict = evaluateTrade(
       { side: 'sell', token: held.token, request, quote },
       closing(quote.venue, slippage),
+      // No positionAmount: Close sells what the chain says the wallet holds, booked or not.
       { tradedToday: 0n, soldToday: 0n, positionCost: 0n, boughtBefore: true },
       now(),
     )

@@ -150,6 +150,11 @@ describe('policyBody trading (CR-026)', () => {
     expect(policyBody.safeParse(policy({ orders: { enabled: true, maxOpen: 101 } })).success).toBe(
       false,
     )
+    // A misspelt cap fails rather than being dropped and read as set.
+    expect(policyBody.safeParse(policy({ operations: { sells: {} } })).success).toBe(false)
+    const typo = { tokenLimits: { Bonk111111111111111111111111111111111111111: { maxHeld: '1' } } }
+    expect(policyBody.safeParse(policy(typo)).success).toBe(false)
+    expect(policyBody.safeParse(policy({ tokenLimit: {} })).success).toBe(false)
     const negative = { sell: { maxTradeUsd: '-1', dailyMax: '1' } }
     expect(policyBody.safeParse(policy({ operations: negative })).success).toBe(false)
   })

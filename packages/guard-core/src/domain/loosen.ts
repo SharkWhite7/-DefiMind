@@ -26,7 +26,10 @@ export function loosened(before: StoredPolicy, after: Policy): string[] {
     ...((after.priceIncreaseMaxPct ?? 0) > before.priceIncreaseMaxPct
       ? ['priceIncreaseMaxPct']
       : []),
-    ...tradingLoosened(before.trading, after.trading).map((field) => `trading.${field}`),
+    // A PUT without trading keeps the stored one (repo.putPolicy), so it loosens nothing there.
+    ...(after.trading === undefined ? [] : tradingLoosened(before.trading, after.trading)).map(
+      (field) => `trading.${field}`,
+    ),
   ]
 }
 

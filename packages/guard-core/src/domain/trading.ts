@@ -2,10 +2,12 @@ import type {
   Policy,
   PolicyDecision,
   RejectCode,
+  SwapDetails,
   SwapQuote,
   TradingFlag,
   TradingPolicy,
 } from '@defimind/shared'
+import { z } from 'zod'
 import { parseAmount } from './amount.js'
 import { type Book, limitReasons } from './trade-limits.js'
 
@@ -76,7 +78,8 @@ export function evaluateTrade(trade: Trade, policy: Policy, book: Book, now: Dat
   }
 
   const amountIn = parseAmount(request.amountIn)
-  const valueUsd = side === 'buy' ? amountIn : parseAmount(quote.minAmountOut)
+  // A sell counts at what it is expected to bring: a cap is not slipped under on the slippage.
+  const valueUsd = side === 'buy' ? amountIn : parseAmount(quote.expectedOut)
   for (const reason of limitReasons(
     trading,
     { side, token: trade.token, amountIn, valueUsd },
@@ -138,4 +141,15 @@ function quoteReasons(trade: Trade, trading: TradingPolicy, now: Date): RejectCo
 function buyFlags(quote: SwapQuote, book: Book): TradingFlag[] {
   const flags = quote.flags.filter((flag) => flag === 'MINT_AUTHORITY')
   return book.boughtBefore ? flags : ['NEW_TOKEN', ...flags]
+}
+
+const stored = z.object({ expectedOut: z.string().regex(/^\d+$/) })
+
+/**
+ * What a recorded swap was expected to bring: kept beside its SwapDetails since CR-026. A swap
+ * recorded before that counts at its minimum, the only figure it kept.
+ */
+export function expectedOf(swap: SwapDetails | undefined): bigint {
+  const kept = stored.safeParse(swap)
+  return kept.success ? BigInt(kept.data.expectedOut) : parseAmount(swap?.minAmountOut ?? '0')
 }
