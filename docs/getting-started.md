@@ -18,7 +18,8 @@ the panel walks you through the rest. You never edit a file or paste a key.
   pricing page has the current price.
 - [Phantom](https://phantom.app/download) on your phone or in your browser, with a new wallet you
   use for nothing else.
-- About 1 dollar of SOL in that wallet for network fees, and the USDC your agents may spend.
+- About 2 dollars of SOL in that wallet for network fees (half of it goes to DefiMind's spending
+  wallet, under "Set a daily limit" below), and the USDC your agents may spend.
 - The computer where your AI agent runs (Claude Code, Claude Desktop or Cursor).
 
 ## 1. Put DefiMind online
@@ -59,7 +60,10 @@ taking your word for it. In short:
 3. **Create your vault.** Phantom signs a Squads multisig that you alone own. Your agents never
    touch the rest of your wallet.
 4. **Set a daily limit.** You type the most the vault may pay out in a day, up to 50 during the
-   beta. The vault itself enforces it, even if DefiMind were broken into.
+   beta. The vault itself enforces it, even if DefiMind were broken into. The signing page names
+   DefiMind's spending wallet here ("Only the hot wallet … may draw on it"). From Phantom, send that
+   address about 1 dollar of SOL: it pays the network fees when it draws from the vault and when it
+   trades. The doctor warns when it runs low.
 5. **Add money.** Move USDC from your wallet into the vault. Start small.
 6. **Connect your agent.** The panel gives the agent its own key. See the next section.
 7. **Choose the rules.** How much the agent may pay at once and per day, and from which amount it
