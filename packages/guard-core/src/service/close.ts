@@ -68,7 +68,8 @@ async function sell(
     .filter((p) => owner !== undefined || !separate.has(p.agentId))
     .sort((a, b) => (BigInt(b.amount) > BigInt(a.amount) ? 1 : -1))
   const agentId = owner ?? holders[0]?.agentId ?? listAgents(db)[0]?.agentId
-  // SOL above the gas reserve may be the owner's own headroom: only what trading bought is sold.
+  // held is already net of the gas reserve (getPositions), but what is above it may be the owner's
+  // own headroom: only the SOL trading bought is sold.
   const booked = holders.reduce((sum, p) => sum + BigInt(p.amount), 0n)
   const amount =
     held.token === WSOL && booked < BigInt(held.amount) ? booked.toString() : held.amount

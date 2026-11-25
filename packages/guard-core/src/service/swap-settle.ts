@@ -101,9 +101,11 @@ export async function settle(
     changes === undefined ? simulation : { summary: 'landed', balanceChanges: changes }
   const spent = -net(moved, intent.token)
   if (side === 'swap') {
+    const got = net(moved, details.tokenOut)
     const to = {
       token: details.tokenOut,
-      amount: net(moved, details.tokenOut),
+      // A bad read must not book a negative position.
+      amount: got > 0n ? got : 0n,
       decimals: details.decimalsOut,
       ...(details.symbolOut === undefined ? {} : { symbol: details.symbolOut }),
     }
