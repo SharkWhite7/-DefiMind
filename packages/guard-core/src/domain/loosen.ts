@@ -46,9 +46,11 @@ function disarms(before: StoredPolicy, after: Policy): boolean {
   const trading = after.trading ?? before.trading
   return (
     (ordersOn(before.trading) && !ordersOn(trading)) ||
-    (before.mode === 'live' && after.mode !== 'live') ||
+    (before.mode === 'live' && (after.mode ?? before.mode) !== 'live') ||
     before.chains.some((chain) => !after.chains.includes(chain)) ||
-    (before.trading?.venues ?? []).some((venue) => !(trading?.venues ?? []).includes(venue))
+    (before.trading?.venues ?? []).some((venue) => !(trading?.venues ?? []).includes(venue)) ||
+    // Every check above the impact limit is dropped, so a lower one can keep a stop from firing.
+    (trading?.maxPriceImpactBps ?? 0) < (before.trading?.maxPriceImpactBps ?? 0)
   )
 }
 

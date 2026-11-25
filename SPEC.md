@@ -1051,16 +1051,19 @@ sells. A take-profit's fill is an ordinary sell.
   it, the fill quotes again, asking for only the room between the two:
   (expected − floor) × 10000 / expected, rounded down. Below the floor it is refused.
 - **Refused on price.** A fill refused because the expected amount is below the floor
-  (SLIPPAGE_TOO_HIGH) is never failed. The order goes back to open with its run started over, and
-  the owner is told once with "order_failed" with reopened: true. It fires again only once a check's
-  quote is at or above its fill floor. A gap-down therefore never disarms a stop for good, and never
-  sets it firing over and over.
+  (SLIPPAGE_TOO_HIGH), or on PRICE_IMPACT_TOO_HIGH, is never failed.
+  - The order goes back to open with its run started over, and the owner is told once with
+    "order_failed" with reopened: true.
+  - It fires again only once a check's quote is at or above its fill floor, and not before a wait
+    of ORDER_CHECK_MS × 2^refusals, at most an hour, in case the venue's two quotes disagree.
+  A gap-down therefore never disarms a stop for good, and never sets it firing over and over.
 - **Disarming a stop.** These need the step-up:
   - cancelling a stop_loss or trailing_stop from the owner's routes (OwnerAction "cancel_order" over
     { orderId }); a take-profit is still cancelled with the session;
   - while one is open, any change that would cancel, shadow or refuse it: orders or trading off,
-    live to shadow, or dropping its chain or venue. This holds on every route that changes a
-    policy, the bot's tightening included.
+    live to shadow, dropping its chain or venue, or lowering maxPriceImpactBps, above which its
+    checks do not count. This holds on every route that changes a policy, the bot's tightening
+    included.
   An agent still cancels only the orders it placed.
 - **Priority.** Stop and trailing checks come before the shield's, the price samples and
   discover_tokens on the venue's rate limit.

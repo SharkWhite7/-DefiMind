@@ -33,8 +33,11 @@ export interface WatchRules {
 export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
   const streaks = new Map<string, Streak>()
   const rises = new Map<string, Rise>()
-  /** Orders re-opened on price: each fires again only once the market is back at its floor. */
-  const parked = new Set<string>()
+  /**
+   * Orders re-opened on price: each fires again only once the market is back at its floor, and
+   * after a wait that doubles with every refusal, in case the quotes disagree.
+   */
+  const parked = new Map<string, { tries: number; until: number }>()
 
   function forget(id: string) {
     streaks.delete(id)
@@ -69,7 +72,8 @@ export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
     const out = parseAmount(quoted.out)
     const maxImpact = policy.trading?.maxPriceImpactBps ?? 0
     const watched = order.kind === 'trailing_stop' ? raise(order, out, quoted, maxImpact) : order
-    if (parked.has(order.id) && out < fillFloor(watched)) {
+    const wait = parked.get(order.id)
+    if (wait !== undefined && (out < fillFloor(watched) || at.getTime() < wait.until)) {
       streaks.delete(order.id)
       return
     }
@@ -143,18 +147,21 @@ export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
       return
     }
     const failReason = intent.rejectReasons[0] ?? 'SIM_FAILED'
-    // CR-028: refused on price, it watches again, so a gap-down never disarms a stop for good.
+    // CR-028: refused on price or on thin liquidity, it watches again, so a gap-down never
+    // disarms a stop for good.
     if (
-      failReason === 'SLIPPAGE_TOO_HIGH' &&
+      (failReason === 'SLIPPAGE_TOO_HIGH' || failReason === 'PRICE_IMPACT_TOO_HIGH') &&
       moveOrder(deps.db, order.id, 'open', {}, 'triggered')
     ) {
       const detail = { id: order.id, kind: order.kind, reopened: true, filledIntentId: intent.id }
       repo.audit(deps.db, { event: 'order_failed', agentId: order.agentId, detail }, deps.now())
+      const tries = (parked.get(order.id)?.tries ?? 0) + 1
       // Told once: it then waits, quietly, for the market to come back to its floor.
-      if (!parked.has(order.id)) {
+      if (tries === 1) {
         deps.push?.order('order_failed', order, intent.id, true)
       }
-      parked.add(order.id)
+      const backoff = Math.min(rules.checkMs * 2 ** tries, 60 * 60_000)
+      parked.set(order.id, { tries, until: deps.now().getTime() + backoff })
       return
     }
     close(order, 'failed', { failReason, filledIntentId: intent.id }, 'order_failed', 'triggered')
@@ -170,6 +177,7 @@ export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
     if (!moveOrder(deps.db, order.id, to, extra, from)) {
       return
     }
+    parked.delete(order.id)
     const detail = { id: order.id, kind: order.kind, ...extra }
     repo.audit(deps.db, { event, agentId: order.agentId, detail }, deps.now())
     if (event !== 'order_expired') {

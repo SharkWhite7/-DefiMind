@@ -187,7 +187,8 @@ describe('loosened trading (CR-021)', () => {
     const shadow = { ...on, mode: 'shadow' as const }
     const noVenue = { ...on, trading: { ...on.trading, venues: [] } }
     const noChain = { ...on, chains: [] }
-    for (const change of [ordersOff, tradingOff, shadow, noVenue, noChain]) {
+    const thin = { ...on, trading: { ...on.trading, maxPriceImpactBps: 1 } }
+    for (const change of [ordersOff, tradingOff, shadow, noVenue, noChain, thin]) {
       expect(loosened(on, change, true)).toContain('stops')
       expect(loosened(on, change, false)).not.toContain('stops')
     }
