@@ -8,6 +8,7 @@ import {
   fromTraderForm,
   MODELS,
   type TraderConfig,
+  ticksPerDay,
   traderLoosens,
 } from '../domain/trader.js'
 import { NO_TRADING } from '../domain/trading.js'
@@ -27,10 +28,17 @@ const labelled = (id: string, label: string, node: HTMLElement) => [
   node,
 ]
 
+const limitsText = (
+  l: { maxTradeUsd: string; dailyTradeMax: string; maxPositionUsd: string },
+  orders: boolean,
+) =>
+  `${formatUsd(l.maxTradeUsd)} per buy, ${formatUsd(l.dailyTradeMax)} a day, ${formatUsd(l.maxPositionUsd)} held in one token, take-profit and stop-loss orders ${orders ? 'on' : 'off'}.`
+
 /** Its suggested limits go through the policy, with the passkey when they loosen it. */
 function suggestedLimits(ctx: Context, policy: PolicyView, template: TraderTemplate) {
   const s = template.suggested
   const trading = policy.trading ?? NO_TRADING
+  const ordersOn = trading.orders?.enabled === true
   const after: PolicyView = {
     ...policy,
     trading: {
@@ -38,14 +46,13 @@ function suggestedLimits(ctx: Context, policy: PolicyView, template: TraderTempl
       maxTradeUsd: s.maxTradeUsd,
       dailyTradeMax: s.dailyTradeMax,
       maxPositionUsd: s.maxPositionUsd,
+      // Suggested on turns orders on; suggested off leaves them as the owner set them.
+      ...(s.orders ? { orders: { enabled: true, maxOpen: trading.orders?.maxOpen ?? 10 } } : {}),
     },
   }
   return [
-    el(
-      'p',
-      { class: 'muted' },
-      `Suggested limits: ${formatUsd(s.maxTradeUsd)} per buy, ${formatUsd(s.dailyTradeMax)} a day, ${formatUsd(s.maxPositionUsd)} held in one token${s.orders ? ', and take-profit and stop-loss orders on (in Trading limits)' : ''}.`,
-    ),
+    el('p', { class: 'muted' }, `Now: ${limitsText(trading, ordersOn)}`),
+    el('p', { class: 'muted' }, `Suggested: ${limitsText(s, s.orders || ordersOn)}`),
     button('Apply suggested limits', async () => {
       const loose = loosens(policy, after)
       await ctx.api.putPolicy(after, loose)
@@ -59,9 +66,20 @@ function suggestedLimits(ctx: Context, policy: PolicyView, template: TraderTempl
 export function setup(ctx: Context, status: TraderView | undefined, policy: PolicyView) {
   const before = status?.config
   const config: TraderConfig = before ?? defaultConfig()
+  // SPEC: a new version of a template never changes a trader that runs one. The stored id and
+  // version stay until the owner picks a strategy again, even an id no longer listed.
+  let template = config.template
+  const stored = template
+  const listed = TRADER_TEMPLATES.some((t) => t.id === stored?.id)
   const strategy = select(
     'strategy',
-    [['', 'Write my own'], ...TRADER_TEMPLATES.map((t) => [t.id, t.name] as const)],
+    [
+      ['', 'Write my own'],
+      ...TRADER_TEMPLATES.map((t) => [t.id, t.name] as const),
+      ...(stored === undefined || listed
+        ? []
+        : [[stored.id, `${stored.id}, version ${stored.version} (no longer listed)`] as const]),
+    ],
     config.template?.id ?? '',
   )
   const about = el('div')
@@ -94,29 +112,31 @@ export function setup(ctx: Context, status: TraderView | undefined, policy: Poli
   )
   const enabled = el('input', { id: 'trader-on', type: 'checkbox' })
   enabled.checked = config.enabled
-  const allowed = [...new Set([...(policy.trading?.tokens ?? []), ...config.tokens])]
+  // The trader's own tokens first, in their stored order: re-ordering them would read as a change.
+  const allowed = [...new Set([...config.tokens, ...(policy.trading?.tokens ?? [])])]
   const boxes = allowed.map((mint, i) => {
     const box = el('input', { id: `tt-${i}`, type: 'checkbox' })
     box.checked = config.tokens.includes(mint)
     return { mint, box }
   })
   const pick = () => {
-    const template = TRADER_TEMPLATES.find((t) => t.id === strategy.value)
-    if (template === undefined) {
+    const chosen = TRADER_TEMPLATES.find((t) => t.id === strategy.value)
+    template = chosen === undefined ? undefined : { id: chosen.id, version: chosen.version }
+    if (chosen === undefined) {
       about.replaceChildren()
       return
     }
-    instructions.value = template.instructions
-    cadence.value = String(template.suggested.cadenceMinutes)
-    actions.value = String(template.suggested.maxActionsPerTick)
+    instructions.value = chosen.instructions
+    cadence.value = String(chosen.suggested.cadenceMinutes)
+    actions.value = String(chosen.suggested.maxActionsPerTick)
     about.replaceChildren(
-      el('p', {}, template.summary),
+      el('p', {}, chosen.summary),
       el(
         'p',
         { class: 'muted' },
         'Ready-made, not tested: no strategy can promise a result. Edit anything before you save.',
       ),
-      ...suggestedLimits(ctx, policy, template),
+      ...suggestedLimits(ctx, policy, chosen),
     )
   }
   strategy.addEventListener('change', pick)
@@ -174,7 +194,6 @@ export function setup(ctx: Context, status: TraderView | undefined, policy: Poli
           ctx.say(form, 'stop')
           return
         }
-        const template = TRADER_TEMPLATES.find((t) => t.id === strategy.value)
         const minutes = Number(cadence.value) as TraderConfig['cadenceMinutes']
         const after: TraderConfig = {
           ...form,
@@ -183,14 +202,10 @@ export function setup(ctx: Context, status: TraderView | undefined, policy: Poli
           model: model.value,
           effort: effort.value as TraderConfig['effort'],
           cadenceMinutes: minutes,
-          maxTicksPerDay:
-            before === undefined || minutes !== config.cadenceMinutes
-              ? (24 * 60) / minutes
-              : config.maxTicksPerDay,
-          template:
-            template === undefined ? undefined : { id: template.id, version: template.version },
+          maxTicksPerDay: ticksPerDay(before, minutes),
+          ...(template === undefined ? {} : { template }),
         }
-        if (after.template === undefined) {
+        if (template === undefined) {
           delete after.template
         }
         const loose = traderLoosens(before, after)

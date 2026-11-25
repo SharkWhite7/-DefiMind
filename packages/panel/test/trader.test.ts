@@ -3,7 +3,9 @@ import { formatUsd } from '../src/domain/money.js'
 import {
   defaultConfig,
   fromTraderForm,
+  plain,
   signedUsd,
+  ticksPerDay,
   type TraderConfig,
   traderLoosens,
 } from '../src/domain/trader.js'
@@ -49,5 +51,17 @@ describe('the AI trader', () => {
     expect(signedUsd('-1250000', formatUsd)).toBe('-$1.25')
     expect(signedUsd('3000000', formatUsd)).toBe('+$3.00')
     expect(signedUsd('0', formatUsd)).toBe('$0.00')
+    expect(signedUsd('-0', formatUsd)).toBe('$0.00')
+  })
+
+  it('keeps a custom cap on checks when the cadence changes', () => {
+    const before = { ...defaultConfig(), cadenceMinutes: 15 as const, maxTicksPerDay: 96 }
+    expect(ticksPerDay(undefined, 60)).toBe(24)
+    expect(ticksPerDay(before, 60)).toBe(24)
+    expect(ticksPerDay({ ...before, maxTicksPerDay: 10 }, 60)).toBe(10)
+  })
+
+  it('takes control and text-direction characters out of what the model wrote', () => {
+    expect(plain('buy\u202Eyub\u2066 now\u0007\nthen\u0085')).toBe('buyyub now then')
   })
 })

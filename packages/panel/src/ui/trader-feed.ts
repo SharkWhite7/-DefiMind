@@ -1,6 +1,6 @@
 import type { TickView } from '../adapters/schemas.js'
 import { href } from '../domain/route.js'
-import { count, OUTCOMES } from '../domain/trader.js'
+import { count, OUTCOMES, plain } from '../domain/trader.js'
 import type { Context } from './context.js'
 import { button, card, el, when } from './dom.js'
 
@@ -34,9 +34,14 @@ function tick(item: TickView) {
       ` ${when(item.startedAt)}`,
     ),
     item.reason !== '' &&
-      el('p', { class: 'said' }, el('span', { class: 'muted' }, 'The trader says: '), item.reason),
+      el(
+        'p',
+        { class: 'said' },
+        el('span', { class: 'muted' }, 'The trader says: '),
+        plain(item.reason),
+      ),
     item.actions.length > 0 && el('ul', { class: 'facts' }, ...item.actions.map(action)),
-    item.detail !== undefined && el('p', { class: 'muted' }, item.detail),
+    item.detail !== undefined && el('p', { class: 'muted' }, plain(item.detail)),
     el('span', { class: 'muted' }, `${item.model} · ${count(used)} tokens`),
   )
 }

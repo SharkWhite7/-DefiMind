@@ -107,6 +107,85 @@ describe.each([390, 1280])('the AI trader at %i px (CR-027)', (width) => {
     await close()
   })
 
+  it('turns off without the passkey, keeping its stored tokens and template version', async () => {
+    const { guard, page, close } = await open(width)
+    const OTHER = 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263'
+    // The owner removed MINT from the policy since; the trader still lists it first.
+    guard.state.policy['trading'] = {
+      enabled: true,
+      venues: ['jupiter'],
+      tokens: [OTHER],
+      allowAnyToken: false,
+      maxTradeUsd: '5000000',
+      dailyTradeMax: '20000000',
+      maxPositionUsd: '20000000',
+      maxSlippageBps: 100,
+      maxPriceImpactBps: 300,
+    }
+    guard.trader!.state.config = {
+      ...guard.trader!.state.config,
+      tokens: [MINT, OTHER],
+      template: { id: 'accumulate-dips', version: 0 },
+      maxTicksPerDay: 10,
+    }
+    await traderTab(page, guard.origin)
+    await page.getByLabel('Turn the trader on').uncheck()
+    await page.getByRole('button', { name: 'Save trader' }).click()
+    await expect.poll(() => status(page).textContent()).toBe('Trader saved.')
+    const put = guard.trader!.state.puts[0]!
+    expect(put.bound).toBeUndefined()
+    expect(put.config).toMatchObject({
+      enabled: false,
+      tokens: [MINT, OTHER],
+      template: { id: 'accumulate-dips', version: 0 },
+      maxTicksPerDay: 10,
+    })
+
+    // A slower pace is still a change, so the passkey; the custom cap on checks stays.
+    await page.getByLabel('How often it checks').selectOption('60')
+    await page.getByRole('button', { name: 'Save trader' }).click()
+    await expect
+      .poll(() => status(page).textContent())
+      .toBe('Trader saved. Confirmed with your passkey.')
+    expect(guard.trader!.state.puts[1]!.config).toMatchObject({ maxTicksPerDay: 10 })
+    await close()
+  })
+
+  it('keeps a template id that is no longer listed', async () => {
+    const { guard, page, close } = await open(width)
+    guard.trader!.state.config = {
+      ...guard.trader!.state.config,
+      template: { id: 'retired-one', version: 3 },
+    }
+    await traderTab(page, guard.origin)
+    expect(await page.getByLabel('Strategy').inputValue()).toBe('retired-one')
+    await page.getByLabel('Turn the trader on').uncheck()
+    await page.getByRole('button', { name: 'Save trader' }).click()
+    await expect.poll(() => status(page).textContent()).toBe('Trader saved.')
+    expect(guard.trader!.state.puts[0]!.config).toMatchObject({
+      template: { id: 'retired-one', version: 3 },
+    })
+    await close()
+  })
+
+  it('applies suggested limits with orders on, beside the current ones', async () => {
+    const { guard, page, close } = await open(width)
+    await traderTab(page, guard.origin)
+    const template = TRADER_TEMPLATES.find((t) => t.suggested.orders)!
+    await page.getByLabel('Strategy').selectOption(template.id)
+    await page.getByText(/^Now: /).waitFor()
+    await page.getByText(/^Suggested: .*orders on\.$/).waitFor()
+    await page.getByRole('button', { name: 'Apply suggested limits' }).click()
+    await expect.poll(() => status(page).textContent()).toMatch(/^Limits applied/)
+    const put = guard.state.puts.at(-1)!
+    expect(put.policy['trading']).toMatchObject({
+      maxTradeUsd: template.suggested.maxTradeUsd,
+      orders: { enabled: true },
+    })
+    expect(put.stepUp?.action).toBe('loosen_policy')
+    await close()
+  })
+
   it('shows realized profit or loss once live, and the missing key', async () => {
     const { guard, page, close } = await open(width)
     guard.trader!.state.shadow = false

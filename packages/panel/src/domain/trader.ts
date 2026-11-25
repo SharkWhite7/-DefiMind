@@ -107,7 +107,25 @@ export const count = (n: number) => n.toLocaleString('en-US')
 
 /** A signed amount of the chain's dollar, atomic: "-$1.25" or "+$3.00". */
 export function signedUsd(amount: string, format: (atomic: string) => string): string {
-  const negative = amount.startsWith('-')
-  const value = negative ? amount.slice(1) : amount
-  return `${negative ? '-' : value === '0' ? '' : '+'}${format(value)}`
+  const value = amount.replace(/^-/, '')
+  const sign = value === '0' ? '' : amount.startsWith('-') ? '-' : '+'
+  return `${sign}${format(value)}`
 }
+
+/**
+ * The daily cap on checks after a cadence change: the full day at the new pace, unless the owner's
+ * stored cap was not the full day at the old one. That custom cap stays as it is.
+ */
+export function ticksPerDay(before: TraderConfig | undefined, minutes: number): number {
+  const full = (m: number) => (24 * 60) / m
+  return before === undefined || before.maxTicksPerDay === full(before.cadenceMinutes)
+    ? full(minutes)
+    : before.maxTicksPerDay
+}
+
+/** Control and text-direction characters out of the model's words: they could reorder what is shown. */
+export const plain = (text: string) =>
+  text
+    .replace(/[\t\n\r]/g, ' ')
+    // eslint-disable-next-line no-control-regex -- matching control characters is the point
+    .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, '')
