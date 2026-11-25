@@ -431,7 +431,8 @@ integrator before any session writes code, since every package imports those typ
 
 - **From:** integrator, for the owner
 - **Date:** 2026-11-09
-- **Status:** proposed. The owner wants it. He has not yet approved the details below.
+- **Status:** superseded by CR-029 on 2026-11-25. The owner's token is on Solana, and the token,
+  Governor and registry below are not built.
 - **What:** a new, separate onchain layer beside the guard, which never touches the money path:
   1. **The token.** An ERC-20 on Robinhood Chain (4663):
      - OpenZeppelin `ERC20` + `ERC20Permit` + `ERC20Votes`;
@@ -1659,3 +1660,79 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     and on a false alarm it sells a position the owner wanted to keep.
   - A quick first buy skips the owner's look at a new token, up to the amount he sets.
   - A trailing stop sells into a dip that may recover.
+
+### CR-029 — The DefiMind Network: Rug Radar, Hunt Pass, a strategy marketplace and holder votes
+
+- **From:** integrator, from the owner's request
+- **Date:** 2026-11-25
+- **Status:** approved by the owner on 2026-11-25. In his words, translated: "let's implement these
+  ideas in the system". He then chose:
+  - Rug Radar, Hunt Pass, and the marketplace with votes, leaving the AI Arena for later;
+  - hosting on Fly, in his account;
+  - the token's mint kept as a setting, never named in the repository.
+    Specified in SPEC v0.23, "The DefiMind Network". It replaces the Robinhood Chain token of CR-009,
+    whose token, Governor and registry are dropped. The owner's token is on Solana.
+- **Why:** every deployment runs alone, so nothing it learns protects anyone else. The token gives
+  the shared layer a purpose, and it can do so without ever touching anyone's funds.
+- **Scope:** a new hosted service, the DefiMind Network, and opt-in links to it from guard-core and
+  the panel. The service and the links follow these rules:
+  - weight comes from tokens held in the holder's own wallet, measured over time;
+  - nothing is locked or sent anywhere, and there is no contract to deploy;
+  - network data can only make a deployment refuse something, never approve, buy or sell;
+  - every payment, cap and vault is unchanged, and the guard works the same without the network.
+- **What changes:**
+  1. **Linked holder wallets.** An owner links a wallet to the network by signing a message on the
+     signing page. Its weight is the smallest token balance it showed over the last 24 hours, so
+     moving tokens from wallet to wallet does not multiply them.
+  2. **Rug Radar.** A deployment whose Rug Shield fires reports the token, or the owner reports one
+     from the panel, from a linked wallet above a minimum weight. The network checks the claim
+     itself, on the chain and at the venue, and lists only what it can confirm. The list is free to
+     every deployment: buys of a listed token are refused, the Hunt screen skips it, and a holder is
+     told. The first confirmed reporter of a token earns points. The owner pays rewards in the
+     token from a treasury multisig, by hand, from a published table.
+  3. **Hunt Pass.** Linked wallets above a minimum weight get the network's hunt feed: candidates
+     screened all day, with listed tokens removed. A deployment screens them again itself before
+     any buy.
+  4. **Strategy marketplace.** Creators above a minimum weight publish strategies in the trader
+     template shape. Owners browse them in the panel and pick one like a ready-made strategy. The
+     text is shown in full before saving, and it can never name a mint.
+  5. **Holder votes.** Weighted by held tokens:
+     - up or down on marketplace strategies;
+     - on network proposals (the thresholds, the reward table, the featured strategies).
+       Votes are signed and counted off the chain. The results are advisory, and the owner applies
+       them.
+  6. **Fixes from the independent review of this CR**, before any code:
+     - the feed only narrows guard-core's own lists, and a mint offered only through the pass always
+       waits for the owner on its first buy;
+     - a new_risk listing needs a change in the chain's history after the report's slot, and the
+       Radar never refuses the dollar, SOL, a token the owner listed, or any sell;
+     - linking uses Sign-In With Solana on guard-core's own signing page, with one credential per
+       wallet;
+     - strategy text is plain printable text with no addresses, cashtags or quoted words, and
+       traders on a network strategy never see candidate names or symbols;
+     - admin actions are signed over the domain, the body and a nonce;
+     - weight snapshots share one slot and a missed read counts as 0;
+     - points need a token that was live before the report, and are capped;
+     - automatic reports carry only the mint, the rule and a slot, after a random delay.
+- **Rows:**
+  - network (new package, owner to be assigned by the manager): NET-1 (the service);
+  - guard-core: GC-75 (the link, the Radar sync and refusal, shield reports, the pass feed in
+    discover_tokens, the marketplace proxy);
+  - onchain: ON-37 (the signing page's link action, through the wallet's Sign-In With Solana);
+  - panel: PANEL-28 (linking, reports, the marketplace, votes, Radar alerts);
+  - integrator: INT-54 (SPEC, shared types, the e2e).
+- **Before it goes live (owner):**
+  - create the Fly app and set the token mint and the thresholds;
+  - set up a treasury multisig for rewards;
+  - get legal advice on rewards paid in the token.
+- **Risks for the owner to accept:**
+  - The network is a service DefiMind runs. If it is down or compromised, deployments lose the
+    Radar and the feed, and a wrong listing blocks buys of that token. It can never move funds.
+  - A linked wallet is known to the network operator, so the panel suggests a wallet used only for
+    holding.
+  - Weight measured by holding, with no lock and no slashing, makes spam cost time, not tokens.
+    Reports are therefore checked against the chain, never taken on trust.
+  - Marketplace strategies are a third party's words in the trader's instructions. The policy, the
+    limits and the hunt budget are the bound, as with any instructions.
+  - Rewards in the token may be treated as payments in law; no revenue share, buyback or yield is
+    part of this CR.
