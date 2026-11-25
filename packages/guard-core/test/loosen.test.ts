@@ -124,4 +124,55 @@ describe('loosened trading (CR-021)', () => {
     ).toEqual([])
     expect(loosened(trades, before)).toEqual([])
   })
+
+  it('flags an added, raised or removed token or operation cap, never a lowered one (CR-026)', () => {
+    const capped = {
+      ...trades,
+      trading: {
+        ...trading,
+        tokenLimits: { BONK: { maxBuyUsd: '500', maxHeldUsd: '900' } },
+        operations: { sell: { maxTradeUsd: '700', dailyMax: '800' } },
+      },
+    }
+    const change = (patch: object) =>
+      loosened(capped, { ...capped, trading: { ...capped.trading, ...patch } })
+    expect(loosened(trades, capped)).toEqual([
+      'trading.tokenLimits.BONK',
+      'trading.operations.sell',
+    ])
+    expect(change({ tokenLimits: { BONK: { maxBuyUsd: '400', maxHeldUsd: '900' } } })).toEqual([])
+    expect(change({ tokenLimits: { BONK: { maxBuyUsd: '501', maxHeldUsd: '900' } } })).toEqual([
+      'trading.tokenLimits.BONK',
+    ])
+    expect(change({ tokenLimits: { BONK: { maxBuyUsd: '500' } } })).toEqual([
+      'trading.tokenLimits.BONK',
+    ])
+    expect(change({ operations: {} })).toEqual(['trading.operations.sell'])
+    expect(change({ operations: { sell: { maxTradeUsd: '1', dailyMax: '1' } } })).toEqual([])
+  })
+
+  it('reads a PUT without trading as leaving it as it is', () => {
+    const capped = {
+      ...trades,
+      trading: { ...trading, tokenLimits: { BONK: { maxBuyUsd: '500' } } },
+    }
+    const { trading: _kept, ...without } = capped
+    expect(loosened(capped, without)).toEqual([])
+  })
+
+  it('flags turning orders on and allowing more of them (CR-026)', () => {
+    const orders = (value: { enabled: boolean; maxOpen: number }) => ({
+      ...trades,
+      trading: { ...trading, orders: value },
+    })
+    expect(loosened(trades, orders({ enabled: true, maxOpen: 10 }))).toEqual([
+      'trading.orders.enabled',
+    ])
+    expect(
+      loosened(orders({ enabled: true, maxOpen: 10 }), orders({ enabled: true, maxOpen: 11 })),
+    ).toEqual(['trading.orders.maxOpen'])
+    expect(
+      loosened(orders({ enabled: true, maxOpen: 10 }), orders({ enabled: false, maxOpen: 2 })),
+    ).toEqual([])
+  })
 })
