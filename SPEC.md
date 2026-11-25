@@ -767,7 +767,8 @@ POST /v1/agent/quote and /v1/agent/swap, /v1/owner/quote and /v1/owner/trade tak
   and tokenOut are mints or the chain's dollar.
 POST /v1/agent/orders { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps?, expiresAt? }
   -> Order
-POST /v1/agent/orders/:id/cancel { agentId } -> Order   only the agent's own orders
+POST /v1/agent/orders/:id/cancel { agentId } -> Order   only orders the agent placed: an order the
+  owner placed for it is listed, marked createdBy "owner", and cancelling it answers 404
 GET  /v1/agent/orders/:agentId -> { orders: Order[] }   open ones and the last 50 others
 POST /v1/owner/orders { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps?, expiresAt?,
   assertion } -> Order   step-up, OwnerAction "place_order"
