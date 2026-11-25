@@ -1477,3 +1477,56 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     passkey.
   - Jupiter's search can be wrong or hostile. It only lists candidates; adding one still takes the
     passkey and the onchain risk read.
+
+### CR-026 — Degen trading on Solana: any pair, per-token and per-operation limits, take-profit and stop-loss
+
+- **From:** integrator, from the owner's request relayed by the manager
+- **Date:** 2026-11-25
+- **Status:** approved by the owner on 2026-11-25 (relayed by the manager). His words, translated:
+  "first release it on Solana, leave everything ready: the user can trade any token", and "the user
+  chooses the limit for that token and for the operation". He picked token-to-token swaps,
+  take-profit and stop-loss, and per-operation limits. Specified in SPEC v0.20, "Degen trading". It
+  ships after today's launch, which keeps CR-021 and CR-025 as they are; until then it is announced
+  as coming soon.
+- **Why:** CR-021 trades only between the chain's dollar and one token, under one set of limits.
+  Owners want to trade any token they choose, swap one token for another, set a limit per token and
+  per kind of operation, and leave take-profit and stop-loss orders running.
+- **Scope:** Solana mainnet only, through Jupiter, behind the same guard as CR-021: the policy, the
+  onchain risk read, the transaction inspection and the balance-delta test run. Nothing about
+  payments changes.
+- **What changes:**
+  1. **Per-token limits.** `TradingPolicy.tokenLimits`: an allowed mint may carry its own
+     `maxBuyUsd` and `maxHeldUsd`, which override `maxTradeUsd` and `maxPositionUsd` for that mint.
+     "Any token that passes the risk checks" stays, with the agent's defaults.
+  2. **Per-operation limits.** `TradingPolicy.operations` sets per-trade and per-day caps for buy,
+     sell and swap. Buy keeps `maxTradeUsd` and `dailyTradeMax` as its defaults. Sells still never
+     wait for the owner.
+  3. **Any pair.** A swap from one token to another, from what the agent's wallet already holds. It
+     never draws from the vault, so the vault's outflow stays bounded by the onchain cap.
+     - Valuation for the limits: the lower of two venue quotes back to the dollar, one per leg, each
+       within the price-impact limit.
+     - Cost basis: carried over from the token sold.
+     - Test run: both legs in one transaction, balance deltas checked.
+  4. **Take-profit and stop-loss orders**, created by the owner or the agent, stored in guard-core
+     and watched by a loop there. A fill is a sell under the same checks.
+     - A trigger needs N consecutive checks over T seconds.
+     - The price impact of the whole order must stay within the limit.
+     - The minimum out comes from the trigger minus slippage.
+     - Orders are cancelled by Close and by kill. A paused agent's orders do not execute.
+     - Each fill is audited and pushed.
+  5. **Routes and tools.** Owner and agent swaps take any pair. New: `place_order`, `cancel_order`,
+     `list_orders`. Panel screens for per-token limits, the swap and the orders.
+- **Rows:**
+  - onchain: ON-35, the any-pair route build and the two-leg test run;
+  - guard-core: GC-70 (policy schema and valuation), GC-71 (the any-pair swap service), GC-72 (orders
+    and the watcher);
+  - mcp: MCP-34, the tools;
+  - panel: PANEL-24 (per-token limits and the swap screen), PANEL-25 (orders);
+  - integrator: INT-51, SPEC, shared types and the fork e2e.
+- **Risks for the owner to accept:**
+  - The venue's prices are untrusted. They size the limits, bounded by two quotes and the
+    price-impact limit, but they cannot move money past the test run, which checks what lands.
+  - A stop-loss is not a guarantee. When the price falls through the minimum out, the sale is refused
+    rather than sold at any price: the owner is told, and the position stays.
+  - "Any token" admits tokens the owner has never looked at. The onchain risk checks and the per-token
+    and per-operation limits still apply, and a first buy still waits for the owner.
