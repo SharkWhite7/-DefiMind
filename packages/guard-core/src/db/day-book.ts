@@ -104,8 +104,10 @@ export function correctSold(
   db: Db,
   key: { agentId: string; chain: ChainId; day: string },
   counted: bigint,
-  landed: bigint,
+  read: bigint,
 ) {
+  // A bad read can cancel this sell's own count, never eat into the other sells of the day.
+  const landed = read < 0n ? 0n : read
   if (landed > counted) {
     addToday(db, key, 'sold', toAmount(landed - counted))
     return

@@ -269,5 +269,5 @@ export async function clearSwap(
   } else {
     addSold(db, intent.agentId, intent.chain, day, toAmount(expectedOf(intent.swap)))
   }
-  return settle(deps, adapter, approved, how.side, simulation)
+  return settle(deps, adapter, approved, how.side, simulation, day)
 }

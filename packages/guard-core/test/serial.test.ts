@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { CHAINS } from '@defimind/shared'
 import { serial } from '../src/service/serial.js'
+import { signerKey } from '../src/service/wallets.js'
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 1))
 
@@ -36,5 +38,19 @@ describe('serial', () => {
     const next = run('a', async () => 'ran')
     await expect(failed).rejects.toThrow('boom')
     await expect(next).resolves.toBe('ran')
+  })
+})
+
+describe('signerKey (CR-026)', () => {
+  it('locks two agents on the shared wallet together, and an own wallet apart', () => {
+    const wallets = { route: (agentId: string) => (agentId === 'own' ? {} : undefined) }
+    const deps = { wallets } as unknown as Parameters<typeof signerKey>[0]
+    expect(signerKey(deps, 'agent-1', CHAINS.solanaMainnet)).toBe(
+      signerKey(deps, 'agent-2', CHAINS.solanaMainnet),
+    )
+    expect(signerKey(deps, 'own', CHAINS.solanaMainnet)).toBe(`wallet:own:${CHAINS.solanaMainnet}`)
+    expect(signerKey({}, 'agent-1', CHAINS.solanaMainnet)).toBe(
+      `wallet:shared:${CHAINS.solanaMainnet}`,
+    )
   })
 })

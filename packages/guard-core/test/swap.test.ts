@@ -4,6 +4,7 @@ import { schema } from '../src/db/client.js'
 import { applyTrade, getPosition } from '../src/db/trades.js'
 import { activateWallet, addWallet } from '../src/db/wallets.js'
 import { hashToken } from '../src/domain/auth.js'
+import { WSOL } from '../src/domain/valuation.js'
 import { CHAIN, harness, MINT as USDC, NOW, wouldHave } from './harness.js'
 import { signedIn } from './owner.js'
 import { BONK, trading, Venue } from './venue.js'
@@ -412,6 +413,30 @@ describe('the owner Close (CR-021)', () => {
     expect(res.json().intents).toEqual([
       expect.objectContaining({ amount: '2000000000', status: 'executed' }),
     ])
+  })
+
+  it("sells only the SOL trading bought, never the owner's gas headroom", async () => {
+    const { h, chain } = await setup()
+    const owner = await signedIn(h)
+    const sol = { chain: CHAIN, token: WSOL, amount: 10_000_000n, cost: 1_500_000n, decimals: 9 }
+    applyTrade(h.db, { agentId: 'agent-1', side: 'buy', ...sol }, NOW)
+    chain.held.set(WSOL, 50_000_000n)
+    const res = await owner.call('POST', '/v1/owner/positions/close', {
+      assertion: await owner.stepUp('close_positions', {}),
+    })
+    expect(res.json().intents).toEqual([
+      expect.objectContaining({ token: WSOL, amount: '10000000' }),
+    ])
+  })
+
+  it('leaves SOL alone when trading bought none', async () => {
+    const { h, chain } = await setup()
+    const owner = await signedIn(h)
+    chain.held.set(WSOL, 50_000_000n)
+    const res = await owner.call('POST', '/v1/owner/positions/close', {
+      assertion: await owner.stepUp('close_positions', {}),
+    })
+    expect(res.json().intents).toEqual([])
   })
 
   it('sells even when the policy requires mandates: Close is the owner own action', async () => {
