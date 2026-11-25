@@ -74,6 +74,7 @@ live and press kill. Then connect the agent from the same checkout:
 - [`SPEC.md`](./SPEC.md) — the source of truth for all interfaces. Do not change it without owner approval.
 - [`CLAUDE.md`](./CLAUDE.md) — rules every contributor (human or AI) follows: roles, language, coordination, code standards.
 - [`coordination/BOARD.md`](./coordination/BOARD.md) — the task board: who owns what, what is blocked.
+- [`docs/trading.md`](./docs/trading.md) — trading on Solana: limits, the risk card, trading by hand.
 - [`docs/adr/`](./docs/adr) — architecture decisions.
 
 ## Packages
