@@ -62,12 +62,14 @@ export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy
 /**
  * POST /v1/agent/swap: the same pipeline as a payment, with the trading policy (CR-021). `floor`
  * is the least the trade may bring: the minimum the owner saw on their own trade (CR-025), whose
- * passkey already approved it, or an order's trigger less its slippage (CR-026).
+ * passkey already approved it, or an order's trigger less its slippage (CR-026). `shadow` shadows
+ * the trade whatever the policy says: an AI trader in shadow mode on a live agent (CR-027).
  */
 export async function swap(
   deps: PaymentDeps,
   req: SwapRequest,
   floor?: { minAmountOut: Amount; by: 'owner' | 'order' },
+  shadow = false,
 ): Promise<PayIntent> {
   return deps.serial(signerKey(deps, req.agentId, req.chain), async () => {
     const { db, now } = deps
@@ -120,7 +122,6 @@ export async function swap(
     if (gas !== undefined) {
       return reject(deps, priced, [gas])
     }
-    const shadow = policy.mode === 'shadow'
     const maxImpact = policy.trading.maxPriceImpactBps
     const valueUsd =
       pair.side === 'swap'
@@ -136,7 +137,7 @@ export async function swap(
     const book = bookOf(
       db,
       { ...where, dollar: dollarOf(deps, req.chain), day: repo.utcDay(now()) },
-      shadow,
+      shadow || policy.mode === 'shadow',
     )
     const verdict = evaluateTrade(trade, policy, book, now())
     repo.audit(
@@ -158,7 +159,13 @@ export async function swap(
     if (verdict.reasons.length > 0) {
       return reject(deps, priced, verdict.reasons)
     }
-    const how = { side: pair.side, verdict, shadow, policy, valueUsd: valueUsd ?? 0n }
+    const how = {
+      side: pair.side,
+      verdict,
+      shadow: shadow || policy.mode === 'shadow',
+      policy,
+      valueUsd: valueUsd ?? 0n,
+    }
     if (floor?.by !== 'owner') {
       return clearSwap(deps, adapter, priced, how)
     }

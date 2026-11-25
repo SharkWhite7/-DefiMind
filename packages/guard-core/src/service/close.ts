@@ -5,6 +5,7 @@ import * as repo from '../db/repo.js'
 import { applyTrade, listPositions } from '../db/trades.js'
 import { listWallets } from '../db/wallets.js'
 import { evaluateTrade } from '../domain/trading.js'
+import { disableAll } from '../db/traders.js'
 import { cancelOpen } from './orders.js'
 import { newIntent, reject, type PaymentDeps } from './payments.js'
 import { signerKey } from './wallets.js'
@@ -22,6 +23,8 @@ const REASON = 'owner: close positions'
 export async function closePositions(deps: PaymentDeps): Promise<PayIntent[]> {
   // An order left open would try to sell a position that is already gone (CR-026).
   cancelOpen(deps, 'owner_close')
+  // Nor may an AI trader buy back what is being sold (CR-027).
+  disableAll(deps.db, deps.now())
   const intents: PayIntent[] = []
   const shared = [...deps.chains.values()].map((adapter) => ({ adapter, agentId: undefined }))
   const own = (await deps.wallets?.all()) ?? []

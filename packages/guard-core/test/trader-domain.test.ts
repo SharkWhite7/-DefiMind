@@ -7,6 +7,7 @@ import {
   tokensOf,
   traderNeedsPasskey,
   traderState,
+  unitPrice,
 } from '../src/domain/trader.js'
 
 const on = { ...DEFAULT_TRADER, enabled: true, instructions: 'Hold.', tokens: ['mint'] }
@@ -55,5 +56,14 @@ describe('the trader caps and streaks', () => {
     expect(clip('x'.repeat(600))).toHaveLength(500)
     expect(clip('short')).toBe('short')
     expect(tokensOf({ input: 1, output: 2, cacheRead: 3, cacheWrite: 4 })).toBe(10)
+  })
+})
+
+describe('unitPrice', () => {
+  it('prices one whole token from a sell quote', () => {
+    expect(unitPrice(10_000_000n, 10_000_000_000n, 5)).toBe('0.0001')
+    expect(unitPrice(9_990_000n, 4_000_000_000n, 9)).toBe('2.4975')
+    expect(unitPrice(10_000_000n, 3_000_000_000_000_000n, 5)).toBe('0.000000000333')
+    expect(unitPrice(1n, 0n, 6)).toBe('0')
   })
 })

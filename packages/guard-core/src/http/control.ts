@@ -10,6 +10,7 @@ import { budget } from '../service/budget.js'
 import { doctor, type DoctorDeps } from '../service/doctor.js'
 import { killTransactions, type KillTransaction } from '../service/kill.js'
 import { cancelOpen } from '../service/orders.js'
+import { pauseAll as pauseTraders, setPaused as pauseTrader } from '../db/traders.js'
 import type { PaymentDeps } from '../service/payments.js'
 import { HttpError } from './errors.js'
 import { REPORT_DEFAULT_SPAN_MS, REPORT_MAX_SPAN_MS, reportQuery } from './schemas.js'
@@ -149,6 +150,7 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
     async kill(log: Log) {
       const pausedAgents = repo.pauseAll(db, now().toISOString())
       cancelOpen(deps, `${via}_kill`)
+      pauseTraders(db, 'kill', now())
       const ownerTransactions = await killTransactions(deps, log)
       repo.audit(
         db,
@@ -165,6 +167,7 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
         throw new HttpError(404, 'not_found')
       }
       cancelOpen(deps, `${via}_kill`, agentId)
+      pauseTrader(db, agentId, 'kill', now())
       const ownerTransactions = await killTransactions(deps, log, agentId)
       repo.audit(
         db,

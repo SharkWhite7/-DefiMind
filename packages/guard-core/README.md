@@ -425,6 +425,31 @@ An order is filled as a sell to the chain's dollar, under every trading check, t
 - **Filling.** The watcher quotes every open order every `ORDER_CHECK_MS` (default 15 s) for its whole amount. It fires after `ORDER_CONFIRM_CHECKS` (default 3) consecutive hits spanning at least `ORDER_CONFIRM_SECONDS` (default 30). A miss starts the count over, and a check above `maxPriceImpactBps` does not count either way. The sell must bring at least `triggerOut × (10000 − maxSlippageBps) / 10000`; below that the order fails with that reason and the position stays. Filled and failed orders are audited and pushed as `order_filled` and `order_failed`.
 - **Ending.** A paused agent's orders stay open and are not checked. An order whose position was sold elsewhere fails with `INSUFFICIENT_POSITION`, and an expired one is cancelled. Close positions and every kill cancel the open orders. The count of hits lives in memory, so a restart starts it over.
 
+### The AI trader (CR-027)
+
+At most one per agent. It runs inside guard-core on a schedule and decides its own trades with a Claude model, through the official SDK and the owner's own `ANTHROPIC_API_KEY`. The key is never logged, returned or stored; without it the trader cannot be turned on and every tick is skipped. Each action is an intent through the agent's own pipeline, exactly as an MCP agent's.
+
+- **Routes**, all behind the owner's session; no agent route exists.
+  - `GET /v1/owner/trader/:agentId` returns a `TraderStatus`. A trader never set up reads as off, at SPEC's defaults.
+  - `PUT` takes `{ config, assertion? }`. The step-up `trader_settings` covers `{ agentId, config }` as sent. Only turning the trader off or lowering a cap goes without it. Turning it on without the key answers 409 `anthropic_key_missing`.
+  - `POST …/pause` needs the session only. `POST …/resume { assertion }` needs the step-up `resume_trader` over `{ agentId }`.
+  - `GET …/ticks?before=` returns 50 ticks, newest first.
+- **A tick.** Every `cadenceMinutes`, counted from the last tick's start, the trader opens a fresh conversation with:
+  - the model, with adaptive thinking and an explicit effort;
+  - the tools, all strict, with `tool_choice` auto;
+  - the server-side fallback beta with `fallbacks: "default"`, on every model but Haiku 5.5.
+
+  The tools, the fixed system prompt and the owner's instructions sit before the cache breakpoint; the tick's data comes after it. The stop reason is checked before any tool runs: `refusal` ends the tick refused, `max_tokens` ends it as an error, and neither runs anything. A tick also ends at `hold`, at `maxActionsPerTick` (read tools do not count), at `maxTokensPerTick`, or after 12 round trips.
+
+- **Caps.** A tick that would pass `maxTicksPerDay` or `maxTokensPerDay` is recorded as skipped. Tokens count input, output, cache reads and cache writes.
+- **Tools.** `get_portfolio`, `quote`, `token_risk`, `recent_prices`, `swap`, `place_order` (with `triggerUsd`, as the MCP tool takes it), `cancel_order` and `hold`. Every input is parsed with zod.
+  - `swap` and `place_order` take only the listed tokens, the dollar and SOL; any other token is refused with `TRADER_TOKEN_NOT_ALLOWED`.
+  - In shadow mode every swap is shadowed. A shadow trader on a live agent cannot place orders (`ORDERS_DISABLED`), since a fill would sell for real.
+- **Untrusted text.** Every tool result, and the tick's data, reaches the model as JSON in a `<tool_data>` or `<tick_data>` block, with `<` escaped so no field can close it. The model's reason is cut to 500 characters and shown only.
+- **Pausing.** Three ticks in a row that end in an error pause the trader (`errors`), and three that end refused, by the model or by the pipeline, do too (`refusals`). Either way the owner gets a Web Push `trader_paused`. API errors are counted by their `Anthropic.APIError` class, never by their text, after the SDK's own retries. Kill pauses every trader (`kill`), a paused agent shows its trader as `agent_paused`, and Close positions turns every trader off.
+- **Prices.** Every 15 minutes guard-core prices each listed token by quoting a 10-dollar buy and selling it back. It keeps the samples for 7 days, and `recent_prices` returns the last 24 hours.
+- **Tests** run the real SDK client over a scripted `fetch`, so CI never calls the Claude API.
+
 ### Owner trading tools (CR-025)
 
 Every route needs the owner's session. These routes serve Solana mainnet through Jupiter only.

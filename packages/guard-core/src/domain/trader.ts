@@ -103,3 +103,20 @@ export function traderState(
 export function tokensOf(usage: TraderTick['usage']): number {
   return usage.input + usage.output + usage.cacheRead + usage.cacheWrite
 }
+
+const PICO = 12
+
+/**
+ * The dollar price of one whole token, as a decimal string with up to 12 places: `outUsd` atomic
+ * dollars (6 decimals) for `amount` atomic units of a token with `decimals`. Display data for the
+ * model, so it is rounded down and never fed back into a limit.
+ */
+export function unitPrice(outUsd: bigint, amount: bigint, decimals: number): string {
+  if (amount === 0n) {
+    return '0'
+  }
+  const pico = (outUsd * 10n ** BigInt(decimals + PICO - 6)) / amount
+  const whole = pico / 10n ** BigInt(PICO)
+  const fraction = (pico % 10n ** BigInt(PICO)).toString().padStart(PICO, '0').replace(/0+$/, '')
+  return fraction === '' ? whole.toString() : `${whole}.${fraction}`
+}

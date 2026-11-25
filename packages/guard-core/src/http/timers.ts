@@ -1,15 +1,23 @@
 import type { FastifyInstance } from 'fastify'
 import { anchorJob, type AnchorPublisher } from '../service/anchor.js'
 import { INTEGRITY_EVERY_MS } from '../service/integrity.js'
-import type { PaymentDeps } from '../service/payments.js'
+import type { X402Deps } from '../service/x402.js'
 import { sweep } from '../service/sweep.js'
 import type { BucketConfig } from '../adapters/bucket.js'
 import { scheduleBackups } from '../service/backup.js'
 import { alert } from '../service/events.js'
 import { orderWatcher } from '../service/order-watcher.js'
+import type { Claude } from '../adapters/claude.js'
+import { jupiterTokens } from '../adapters/jupiter-tokens.js'
+import { dueTicks, samplePrices } from '../service/trader-schedule.js'
+
+const PRICE_EVERY_MS = 15 * 60_000
 
 /** The order watcher (CR-026): off when unset, as in tests that tick it directly. */
 export type Watch = { checkMs: number; confirmChecks: number; confirmSeconds: number }
+
+/** The AI traders (CR-027): off when unset, as in tests that run ticks directly. */
+export type Traders = { checkMs: number; claude?: Claude | undefined }
 
 /** The daily backup (CR-024): off when unset, as in tests. */
 export type Backups = { databaseUrl: string; hour: number; bucket?: BucketConfig | undefined }
@@ -17,14 +25,25 @@ export type Backups = { databaseUrl: string; hour: number; bucket?: BucketConfig
 /** The background work: the daily chain check and backup, the anchor job and the expiry sweep. */
 export function startTimers(
   first: FastifyInstance,
-  deps: PaymentDeps,
+  deps: X402Deps,
   options: {
     anchorPublisher?: AnchorPublisher
     sweepMs?: number
     backups?: Backups
     orders?: Watch
+    traders?: Traders
   },
 ): void {
+  if (options.traders !== undefined) {
+    const { checkMs, claude } = options.traders
+    const t = {
+      deps,
+      search: jupiterTokens(deps.fetch),
+      ...(claude === undefined ? {} : { claude }),
+    }
+    every(first, checkMs, () => dueTicks(t))
+    every(first, PRICE_EVERY_MS, () => samplePrices(t))
+  }
   if (options.orders !== undefined) {
     const { checkMs, ...rules } = options.orders
     const watcher = orderWatcher(deps, rules)
@@ -86,4 +105,22 @@ export function startTimers(
     }, options.sweepMs)
     first.addHook('onClose', async () => clearInterval(timer))
   }
+}
+
+/** Runs `job` on an interval, never two at once: a slow venue or API must not stack them. */
+function every(first: FastifyInstance, ms: number, job: () => Promise<void>): void {
+  let running = false
+  const timer = setInterval(() => {
+    if (running) {
+      return
+    }
+    running = true
+    job()
+      .catch((error: unknown) => first.log.error({ err: error }, 'background job failed'))
+      .finally(() => {
+        running = false
+      })
+  }, ms)
+  timer.unref()
+  first.addHook('onClose', async () => clearInterval(timer))
 }
