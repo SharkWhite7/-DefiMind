@@ -5,7 +5,8 @@ import * as repo from '../db/repo.js'
 import { everHeld } from '../db/trades.js'
 import type { PaymentDeps } from '../service/payments.js'
 import type { OwnerAction } from '../service/step-up.js'
-import { quote, swap, VenueUnavailable } from '../service/swap.js'
+import { quote, swap } from '../service/swap.js'
+import { VenueUnavailable } from '../service/swap-quote.js'
 import { HttpError } from './errors.js'
 import { windowLimiter } from './limiter.js'
 import {
@@ -115,7 +116,7 @@ export function ownerTradingRoutes(
         now(),
       )
       try {
-        const intent = await swap(deps, { ...order, reason: REASON }, { minAmountOut })
+        const intent = await swap(deps, { ...order, reason: REASON }, { minAmountOut, by: 'owner' })
         return {
           intentId: intent.id,
           status: intent.status,

@@ -5,8 +5,12 @@ import * as repo from '../db/repo.js'
 import { applyTrade, listPositions } from '../db/trades.js'
 import { listWallets } from '../db/wallets.js'
 import { evaluateTrade } from '../domain/trading.js'
+import { WSOL } from '../domain/valuation.js'
+import { cancelOpen } from './orders.js'
 import { newIntent, reject, type PaymentDeps } from './payments.js'
-import { clearSwap, fetchQuote, VenueUnavailable, withQuote } from './swap.js'
+import { signerKey } from './wallets.js'
+import { clearSwap } from './swap.js'
+import { fetchQuote, VenueUnavailable, withQuote } from './swap-quote.js'
 
 const REASON = 'owner: close positions'
 
@@ -17,6 +21,8 @@ const REASON = 'owner: close positions'
  * price impact is not limited, slippage still is, so the sale cannot be sandwiched.
  */
 export async function closePositions(deps: PaymentDeps): Promise<PayIntent[]> {
+  // An order left open would try to sell a position that is already gone (CR-026).
+  cancelOpen(deps, 'owner_close')
   const intents: PayIntent[] = []
   const shared = [...deps.chains.values()].map((adapter) => ({ adapter, agentId: undefined }))
   const own = (await deps.wallets?.all()) ?? []
@@ -62,24 +68,34 @@ async function sell(
     .filter((p) => owner !== undefined || !separate.has(p.agentId))
     .sort((a, b) => (BigInt(b.amount) > BigInt(a.amount) ? 1 : -1))
   const agentId = owner ?? holders[0]?.agentId ?? listAgents(db)[0]?.agentId
+  // held is already net of the gas reserve (getPositions), but what is above it may be the owner's
+  // own headroom: only the SOL trading bought is sold.
+  const booked = holders.reduce((sum, p) => sum + BigInt(p.amount), 0n)
+  const amount =
+    held.token === WSOL && booked < BigInt(held.amount) ? booked.toString() : held.amount
+  if (amount === '0') {
+    return undefined
+  }
   const policy = agentId === undefined ? undefined : repo.getPolicy(db, agentId)
   if (agentId === undefined || policy === undefined) {
     return undefined
   }
-  return deps.serial(agentId, async () => {
+  const key =
+    owner === undefined ? `wallet:shared:${held.chain}` : signerKey(deps, owner, held.chain)
+  return deps.serial(key, async () => {
     const request = {
       agentId,
       chain: held.chain,
       tokenIn: held.token,
       tokenOut: held.dollar,
-      amountIn: held.amount,
+      amountIn: amount,
     }
     const intent = newIntent(
       {
         ...request,
         kind: 'swap',
         token: held.token,
-        amount: held.amount,
+        amount,
         recipient: (await trader.getAllowanceState()).delegate,
         reason: REASON,
       },
@@ -103,7 +119,7 @@ async function sell(
       { side: 'sell', token: held.token, request, quote },
       closing(quote.venue, slippage),
       // No positionAmount: Close sells what the chain says the wallet holds, booked or not.
-      { tradedToday: 0n, soldToday: 0n, positionCost: 0n, boughtBefore: true },
+      { tradedToday: 0n, soldToday: 0n, swappedToday: 0n, positionCost: 0n, boughtBefore: true },
       now(),
     )
     repo.audit(
