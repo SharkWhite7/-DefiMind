@@ -9,8 +9,9 @@ export async function openDevice(
   fresh = false,
   trading = false,
   wallets = false,
+  trader = false,
 ) {
-  const guard = await guardCore(dist, { fresh, trading, wallets })
+  const guard = await guardCore(dist, { fresh, trading, wallets, trader })
   const context = await browser.newContext({ viewport: { width, height: 844 } })
   const page = await context.newPage()
   const cdp = await context.newCDPSession(page)

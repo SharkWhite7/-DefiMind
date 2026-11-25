@@ -172,6 +172,7 @@ body[data-screen='agents'] nav a[href='/panel/agents'],
 body[data-screen='agent'] nav a[href='/panel/agents'],
 body[data-screen='deposit'] nav a[href='/panel/deposit'],
 body[data-screen='portfolio'] nav a[href='/panel/portfolio'],
+body[data-screen='trader'] nav a[href='/panel/trader'],
 body[data-screen='report'] nav a[href='/panel/report'],
 body[data-screen='executions'] nav a[href='/panel/executions'],
 body[data-screen='doctor'] nav a[href='/panel/doctor'],
@@ -885,4 +886,16 @@ body[data-screen='enrol'] .primary {
 .risk > p {
   margin-top: 14px;
   color: var(--text);
+}
+
+/* CR-027: the model's own words, set apart from the panel's. */
+.said {
+  margin: 6px 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--line2);
+}
+
+/* An element's own display (a button's inline-flex) must not undo the hidden attribute. */
+[hidden] {
+  display: none !important;
 }

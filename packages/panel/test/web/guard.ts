@@ -8,6 +8,7 @@ import { canonicalJson } from '../../src/domain/canonical.js'
 import { setupMock } from './setup.js'
 import { tradingMock } from './trading.js'
 import { walletsMock } from './wallets.js'
+import { traderMock } from './trader.js'
 
 /** SPEC's panel CSP, so a test fails on anything the real one would block. */
 export const CSP = [
@@ -51,7 +52,7 @@ export interface Decision {
  */
 export async function guardCore(
   dist: string,
-  { fresh = false, trading = false, wallets = false } = {},
+  { fresh = false, trading = false, wallets = false, trader = false } = {},
 ) {
   const setup = setupMock()
   const intentId = randomUUID()
@@ -60,6 +61,7 @@ export async function guardCore(
   // CR-021 only where a test asks for it: every other flow sees a guard-core without trading.
   const trades = trading ? tradingMock(later) : undefined
   const agentWallets = wallets ? walletsMock(() => origin) : undefined
+  const ai = trader ? traderMock(later) : undefined
   const state = {
     passkeys: 0,
     sessions: new Set<string>(),
@@ -380,6 +382,9 @@ export async function guardCore(
     if (agentWallets?.route(method, path, body, send, stepUp)) {
       return
     }
+    if (ai?.route(method, path, body, send, stepUp)) {
+      return
+    }
     if (path.startsWith('/v1/owner/policy/')) {
       if (method === 'PUT') {
         const bound = stepUp()
@@ -507,6 +512,7 @@ export async function guardCore(
     setup: setup.state,
     trading: trades,
     wallets: agentWallets,
+    trader: ai,
     intentId,
     mandateId,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
