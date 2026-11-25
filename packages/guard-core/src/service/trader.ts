@@ -29,6 +29,8 @@ const MAX_TOKENS = 16_000
 /** A ceiling on round trips, whatever the token cap: a model that never ends its turn stops here. */
 const MAX_TURNS = 12
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01'
+/** Read tools are free of the action cap, so they are bounded per response instead. */
+const MAX_READS = 8
 
 type Ending = Omit<TraderTick, 'id' | 'agentId' | 'startedAt'>
 
@@ -68,10 +70,16 @@ function errorDetail(ctx: TickContext, error: unknown): string {
 }
 
 /**
- * The conversation of one tick, until the model ends its turn, holds, or reaches a cap. What it
- * spent and did before an error stays on the record.
+ * The conversation of one tick, until the model ends its turn, holds, or reaches a cap. `budget` is
+ * the tick's token cap, what is left of the day included. `save` records it after every turn, so
+ * what it spent and did stays on the record through an error or a crash.
  */
-async function converse(ctx: TickContext, claude: Claude): Promise<Ending> {
+async function converse(
+  ctx: TickContext,
+  claude: Claude,
+  budget: number,
+  save: (tick: Ending) => void,
+): Promise<Ending> {
   const { config, deps, agentId } = ctx
   const tick: Ending = {
     outcome: 'held',
@@ -101,6 +109,9 @@ async function converse(ctx: TickContext, claude: Claude): Promise<Ending> {
   const messages: BetaMessageParam[] = [{ role: 'user', content: tickMessage(data) }]
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
+      if (!stillOn(ctx)) {
+        return end('stopped: the trader or its agent was paused, turned off or killed')
+      }
       const response = await claude(request(config, messages))
       const { usage } = response
       tick.model = response.model
@@ -116,19 +127,33 @@ async function converse(ctx: TickContext, claude: Claude): Promise<Ending> {
       if (response.stop_reason === 'max_tokens') {
         return end('the model ran out of output tokens', 'error')
       }
-      if (tokensOf(tick.usage) > config.maxTokensPerTick) {
-        return end('maxTokensPerTick reached')
+      save(end())
+      if (tokensOf(tick.usage) > budget) {
+        return end(
+          budget < config.maxTokensPerTick ? 'maxTokensPerDay reached' : 'maxTokensPerTick reached',
+        )
       }
       if (response.stop_reason !== 'tool_use') {
         return end()
       }
       const results: BetaToolResultBlockParam[] = []
+      let reads = 0
       for (const block of response.content) {
         if (block.type !== 'tool_use') {
           continue
         }
-        if (ACTIONS.has(block.name) && tick.actions.length >= config.maxActionsPerTick) {
+        const acts = ACTIONS.has(block.name)
+        if (acts && tick.actions.length >= config.maxActionsPerTick) {
           return end('maxActionsPerTick reached')
+        }
+        // Close, a pause or a kill may land mid-tick: nothing acts after it.
+        if (acts && !stillOn(ctx)) {
+          return end('stopped: the trader or its agent was paused, turned off or killed')
+        }
+        if (!acts && ++reads > MAX_READS) {
+          const content = tagged('tool_data', { error: `at most ${MAX_READS} reads per turn` })
+          results.push({ type: 'tool_result', tool_use_id: block.id, content })
+          continue
         }
         const outcome = await runTool(ctx, block.name, block.input)
         if (outcome.action !== undefined) {
@@ -144,11 +169,19 @@ async function converse(ctx: TickContext, claude: Claude): Promise<Ending> {
       // Echoed as received, thinking and fallback blocks included: the API checks them.
       messages.push({ role: 'assistant', content: response.content })
       messages.push({ role: 'user', content: results })
+      save(end())
     }
     return end('turn limit reached')
   } catch (error) {
     return end(errorDetail(ctx, error), 'error')
   }
+}
+
+/** Whether the trader may still act: on, not paused, and its agent not paused or killed. */
+function stillOn(ctx: TickContext): boolean {
+  const row = getTrader(ctx.deps.db, ctx.agentId)
+  const policy = repo.getPolicy(ctx.deps.db, ctx.agentId)
+  return row?.config.enabled === true && row.pausedBy === null && policy?.paused === false
 }
 
 /** The Solana chain the trader trades on: the first the agent may use that has a dollar. */
@@ -177,7 +210,15 @@ export async function runTick(t: TraderDeps, agentId: string): Promise<TraderTic
   const startedAt = deps.now()
   const day = repo.utcDay(startedAt)
   const chain = chainOf(deps, agentId)
-  const spent = skipReason(config, traderToday(deps.db, agentId, day))
+  const id = randomUUID()
+  const today = traderToday(deps.db, agentId, day)
+  const spent = skipReason(config, today)
+  const tick = (ending: Ending): TraderTick => ({
+    id,
+    agentId,
+    startedAt: startedAt.toISOString(),
+    ...ending,
+  })
   let ending: Ending
   if (claude === undefined) {
     ending = skipped(config, 'ANTHROPIC_API_KEY is not set')
@@ -187,17 +228,16 @@ export async function runTick(t: TraderDeps, agentId: string): Promise<TraderTic
     ending = skipped(config, spent)
   } else {
     const shadow = shadowTrader(deps.db, agentId, config.mode)
-    ending = await converse({ deps, search: t.search, agentId, chain, config, shadow }, claude)
+    const ctx = { deps, search: t.search, agentId, chain, config, shadow }
+    const budget = Math.min(config.maxTokensPerTick, config.maxTokensPerDay - today.tokens)
+    const save = (partial: Ending) => saveTick(deps.db, tick(partial), day, true)
+    save(skipped(config, 'running'))
+    ending = await converse(ctx, claude, budget, save)
   }
-  const tick: TraderTick = {
-    id: randomUUID(),
-    agentId,
-    startedAt: startedAt.toISOString(),
-    ...ending,
-  }
-  saveTick(deps.db, tick, day)
-  record(deps, row.streak, tick)
-  return tick
+  const done = tick(ending)
+  saveTick(deps.db, done, day)
+  record(deps, row.streak, done)
+  return done
 }
 
 /** The decision log, and the self-pause after three errors or refusals in a row. */

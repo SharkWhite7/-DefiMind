@@ -55,9 +55,17 @@ const inputs = {
 
 type Name = keyof typeof inputs
 
-/** "USDC" names the chain's dollar, as the MCP tools take it. */
+/** "USDC" names the chain's dollar, as the MCP tools take it, and "SOL" the wrapped SOL mint. */
 function resolve(ctx: TickContext, token: string): string {
+  if (token === 'SOL') {
+    return WSOL
+  }
   return token === 'USDC' ? (ctx.deps.usdc.get(ctx.chain) ?? token) : token
+}
+
+/** A shadow trader on a live agent: its orders would act on real funds, so it has none. */
+function shadowOnLive(ctx: TickContext): boolean {
+  return ctx.shadow && repo.getPolicy(ctx.deps.db, ctx.agentId)?.mode !== 'shadow'
 }
 
 function allowed(ctx: TickContext, token: string): boolean {
@@ -124,8 +132,18 @@ async function run(ctx: TickContext, name: Name, input: unknown): Promise<ToolOu
     case 'cancel_order': {
       const { orderId } = inputs.cancel_order.parse(input)
       const found = getOrder(deps.db, orderId)
-      if (found === undefined || found.agentId !== agentId) {
+      // The owner's own orders are not the trader's to touch: a stop-loss they set stays.
+      if (found === undefined || found.agentId !== agentId || found.createdBy === 'owner') {
         return { content: { error: 'not_found' }, action: { tool: name, rejectReasons: [] } }
+      }
+      if (shadowOnLive(ctx)) {
+        return {
+          content: {
+            refused: ['ORDERS_DISABLED'],
+            why: 'a shadow trader leaves real orders alone',
+          },
+          action: { tool: name, rejectReasons: ['ORDERS_DISABLED'] },
+        }
       }
       cancelOrder(deps, found, 'trader')
       return {
@@ -167,11 +185,12 @@ async function order(
   ctx: TickContext,
   input: z.infer<typeof inputs.place_order>,
 ): Promise<ToolOutcome> {
-  if (!allowed(ctx, input.token)) {
+  const token = resolve(ctx, input.token)
+  if (!allowed(ctx, token)) {
     return refused('place_order')
   }
   // A fill sells for real on a live agent, so a shadow trader there cannot place one.
-  if (ctx.shadow && repo.getPolicy(ctx.deps.db, ctx.agentId)?.mode !== 'shadow') {
+  if (shadowOnLive(ctx)) {
     return {
       content: { refused: ['ORDERS_DISABLED'], why: 'orders are off for a trader in shadow mode' },
       action: { tool: 'place_order', rejectReasons: ['ORDERS_DISABLED'] },
@@ -182,6 +201,7 @@ async function order(
     ctx.deps,
     {
       ...rest,
+      token,
       agentId: ctx.agentId,
       chain: ctx.chain,
       triggerOut: toAmount(parseDollars(triggerUsd)),

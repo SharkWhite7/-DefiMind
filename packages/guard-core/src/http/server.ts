@@ -13,7 +13,7 @@ import { botSettings, publicAdmin, type Config } from '../config.js'
 import type { Db } from '../db/client.js'
 import { usdcFor } from '../chains.js'
 import { parseBearer, tokenMatches } from '../domain/auth.js'
-import { serializeError } from '../domain/redact.js'
+import { LOG_REDACT, serializeError } from '../domain/redact.js'
 import { errorHandler } from './errors.js'
 import type { PasskeySetup } from '../service/passkeys.js'
 import { publicKeyHex } from '../service/receipts.js'
@@ -103,13 +103,7 @@ export async function buildServers(
     Fastify({
       logger: {
         level: config.LOG_LEVEL,
-        // A bearer token in a log file is the same as a bearer token in a repository.
-        redact: [
-          'req.headers.authorization',
-          'req.headers.cookie',
-          'req.headers["x-guard-signature"]',
-          'res.headers["set-cookie"]',
-        ],
+        redact: LOG_REDACT,
         serializers: { err: serializeError },
       },
     }),

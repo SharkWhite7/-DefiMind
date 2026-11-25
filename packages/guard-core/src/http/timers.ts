@@ -10,6 +10,7 @@ import { orderWatcher } from '../service/order-watcher.js'
 import type { Claude } from '../adapters/claude.js'
 import { jupiterTokens } from '../adapters/jupiter-tokens.js'
 import { dueTicks, samplePrices } from '../service/trader-schedule.js'
+import { endInterrupted } from '../db/traders.js'
 
 const PRICE_EVERY_MS = 15 * 60_000
 
@@ -36,6 +37,7 @@ export function startTimers(
 ): void {
   if (options.traders !== undefined) {
     const { checkMs, claude } = options.traders
+    endInterrupted(deps.db)
     const t = {
       deps,
       search: jupiterTokens(deps.fetch),

@@ -1,7 +1,7 @@
 import { parseAmount } from '../domain/amount.js'
 import { unitPrice } from '../domain/trader.js'
 import { prunePrices, savePrice } from '../db/prices.js'
-import { enabledTraders, listTicks } from '../db/traders.js'
+import { enabledTraders, lastStart } from '../db/traders.js'
 import { runTick, type TraderDeps } from './trader.js'
 
 /** What each sample sells: 10 dollars' worth, as the risk card's exit read does. */
@@ -17,9 +17,8 @@ export async function dueTicks(t: TraderDeps): Promise<void> {
     if (row.pausedBy !== null) {
       continue
     }
-    const [last] = listTicks(t.deps.db, row.agentId)
-    const due =
-      last === undefined || Date.parse(last.startedAt) + row.config.cadenceMinutes * 60_000 <= now
+    const last = lastStart(t.deps.db, row.agentId)
+    const due = last === undefined || Date.parse(last) + row.config.cadenceMinutes * 60_000 <= now
     if (due) {
       await runTick(t, row.agentId)
     }

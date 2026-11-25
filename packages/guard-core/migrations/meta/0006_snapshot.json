@@ -46,9 +46,7 @@
       "indexes": {
         "agents_token_hash_unique": {
           "name": "agents_token_hash_unique",
-          "columns": [
-            "token_hash"
-          ],
+          "columns": ["token_hash"],
           "isUnique": true
         }
       },
@@ -120,16 +118,12 @@
       "indexes": {
         "audit_log_intent": {
           "name": "audit_log_intent",
-          "columns": [
-            "intent_id"
-          ],
+          "columns": ["intent_id"],
           "isUnique": false
         },
         "audit_log_at": {
           "name": "audit_log_at",
-          "columns": [
-            "at"
-          ],
+          "columns": ["at"],
           "isUnique": false
         }
       },
@@ -138,12 +132,8 @@
           "name": "audit_log_intent_id_intents_id_fk",
           "tableFrom": "audit_log",
           "tableTo": "intents",
-          "columnsFrom": [
-            "intent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["intent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -190,12 +180,8 @@
           "name": "clearances_intent_id_intents_id_fk",
           "tableFrom": "clearances",
           "tableTo": "intents",
-          "columnsFrom": [
-            "intent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["intent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -232,10 +218,7 @@
       "indexes": {
         "cleared_payments_agent_at": {
           "name": "cleared_payments_agent_at",
-          "columns": [
-            "agent_id",
-            "at"
-          ],
+          "columns": ["agent_id", "at"],
           "isUnique": false
         }
       },
@@ -244,12 +227,8 @@
           "name": "cleared_payments_intent_id_intents_id_fk",
           "tableFrom": "cleared_payments",
           "tableTo": "intents",
-          "columnsFrom": [
-            "intent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["intent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -297,23 +276,15 @@
           "name": "daily_spend_agent_id_agents_id_fk",
           "tableFrom": "daily_spend",
           "tableTo": "agents",
-          "columnsFrom": [
-            "agent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["agent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "daily_spend_agent_id_chain_day_pk": {
-          "columns": [
-            "agent_id",
-            "chain",
-            "day"
-          ],
+          "columns": ["agent_id", "chain", "day"],
           "name": "daily_spend_agent_id_chain_day_pk"
         }
       },
@@ -432,17 +403,12 @@
       "indexes": {
         "intents_agent_status": {
           "name": "intents_agent_status",
-          "columns": [
-            "agent_id",
-            "status"
-          ],
+          "columns": ["agent_id", "status"],
           "isUnique": false
         },
         "intents_expires_at": {
           "name": "intents_expires_at",
-          "columns": [
-            "expires_at"
-          ],
+          "columns": ["expires_at"],
           "isUnique": false
         }
       },
@@ -451,12 +417,8 @@
           "name": "intents_agent_id_agents_id_fk",
           "tableFrom": "intents",
           "tableTo": "agents",
-          "columnsFrom": [
-            "agent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["agent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -550,17 +512,12 @@
       "indexes": {
         "mandates_agent_status": {
           "name": "mandates_agent_status",
-          "columns": [
-            "agent_id",
-            "status"
-          ],
+          "columns": ["agent_id", "status"],
           "isUnique": false
         },
         "mandates_expires_at": {
           "name": "mandates_expires_at",
-          "columns": [
-            "expires_at"
-          ],
+          "columns": ["expires_at"],
           "isUnique": false
         }
       },
@@ -569,12 +526,8 @@
           "name": "mandates_agent_id_agents_id_fk",
           "tableFrom": "mandates",
           "tableTo": "agents",
-          "columnsFrom": [
-            "agent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["agent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -607,12 +560,8 @@
           "name": "owner_approvals_intent_id_intents_id_fk",
           "tableFrom": "owner_approvals",
           "tableTo": "intents",
-          "columnsFrom": [
-            "intent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["intent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -810,12 +759,8 @@
           "name": "policies_agent_id_agents_id_fk",
           "tableFrom": "policies",
           "tableTo": "agents",
-          "columnsFrom": [
-            "agent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["agent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -852,9 +797,7 @@
       "indexes": {
         "receipts_issued_at": {
           "name": "receipts_issued_at",
-          "columns": [
-            "issued_at"
-          ],
+          "columns": ["issued_at"],
           "isUnique": false
         }
       },
@@ -863,12 +806,8 @@
           "name": "receipts_intent_id_intents_id_fk",
           "tableFrom": "receipts",
           "tableTo": "intents",
-          "columnsFrom": [
-            "intent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["intent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -936,22 +875,15 @@
           "name": "x402_pins_agent_id_agents_id_fk",
           "tableFrom": "x402_pins",
           "tableTo": "agents",
-          "columnsFrom": [
-            "agent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["agent_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "x402_pins_agent_id_domain_pk": {
-          "columns": [
-            "agent_id",
-            "domain"
-          ],
+          "columns": ["agent_id", "domain"],
           "name": "x402_pins_agent_id_domain_pk"
         }
       },

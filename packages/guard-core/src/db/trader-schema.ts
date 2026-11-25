@@ -37,6 +37,8 @@ export const traderTicks = sqliteTable(
     cacheRead: integer('cache_read').notNull(),
     cacheWrite: integer('cache_write').notNull(),
     detail: text('detail'),
+    /** Saved as it runs, so a crash still leaves what it spent and did on the record. */
+    running: integer('running', { mode: 'boolean' }).notNull().default(false),
   },
   (t) => [index('trader_ticks_agent').on(t.agentId, t.startedAt)],
 )

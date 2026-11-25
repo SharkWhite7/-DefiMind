@@ -3,7 +3,10 @@ import type { BetaTool } from '@anthropic-ai/sdk/resources/beta/messages/message
 /** The tools that act; read tools never count toward maxActionsPerTick. */
 export const ACTIONS = new Set(['swap', 'place_order', 'cancel_order'])
 
-const mint = { type: 'string', description: 'A token mint address, or "USDC" for the dollar.' }
+const mint = {
+  type: 'string',
+  description: 'A token mint address, "USDC" for the dollar or "SOL" for SOL.',
+}
 const amount = {
   type: 'string',
   description: 'Atomic units of the token spent, as a decimal integer string.',

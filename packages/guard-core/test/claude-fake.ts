@@ -59,9 +59,12 @@ function answer(turn: Turn | undefined, model: string): { status: number; body: 
 
 export function fakeClaude(script: Turn[] = []) {
   const sent: Sent[] = []
+  /** Runs before each answer, with the request's index: what the owner does between turns. */
+  const hooks: { before?: (request: number) => void } = {}
   const fetch = async (_url: string | URL | Request, init?: RequestInit) => {
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>
     sent.push({ headers: new Headers(init?.headers), body })
+    hooks.before?.(sent.length - 1)
     const out = answer(script.shift(), String(body['model']))
     // One scripted error is one error: the SDK would otherwise retry it.
     const headers = { 'content-type': 'application/json', 'x-should-retry': 'false' }
@@ -73,6 +76,7 @@ export function fakeClaude(script: Turn[] = []) {
       fetch: fetch as typeof globalThis.fetch,
     }),
     sent,
+    hooks,
     push: (...turns: Turn[]) => script.push(...turns),
   }
 }

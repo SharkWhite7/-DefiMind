@@ -20,6 +20,7 @@ CREATE TABLE `trader_ticks` (
 	`cache_read` integer NOT NULL,
 	`cache_write` integer NOT NULL,
 	`detail` text,
+	`running` integer DEFAULT false NOT NULL,
 	FOREIGN KEY (`agent_id`) REFERENCES `agents`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint

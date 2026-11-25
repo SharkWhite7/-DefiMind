@@ -72,17 +72,40 @@ export function disableAll(db: Db, now: Date): void {
     .run()
 }
 
-export function saveTick(db: Db, tick: TraderTick, day: string): void {
+/** A tick is saved before it starts and again as it goes, `running` until it ends. */
+export function saveTick(db: Db, tick: TraderTick, day: string, running = false): void {
   const { usage, detail, ...rest } = tick
+  const values = { ...rest, ...usage, detail: detail ?? null, running }
   db.insert(traderTicks)
-    .values({ ...rest, ...usage, day, detail: detail ?? null })
+    .values({ ...values, day })
+    .onConflictDoUpdate({ target: traderTicks.id, set: values })
     .run()
+}
+
+/** A tick left running by a crash or a restart cannot be resumed: it ends as an error. */
+export function endInterrupted(db: Db): number {
+  return db
+    .update(traderTicks)
+    .set({ running: false, outcome: 'error', detail: 'interrupted by a restart' })
+    .where(eq(traderTicks.running, true))
+    .run().changes
+}
+
+/** When the last tick started, running or not: the schedule counts from it. */
+export function lastStart(db: Db, agentId: string): string | undefined {
+  return db
+    .select({ at: traderTicks.startedAt })
+    .from(traderTicks)
+    .where(eq(traderTicks.agentId, agentId))
+    .orderBy(desc(traderTicks.startedAt))
+    .limit(1)
+    .get()?.at
 }
 
 type TickRow = typeof traderTicks.$inferSelect
 
 function tick(row: TickRow): TraderTick {
-  const { day: _, input, output, cacheRead, cacheWrite, detail, ...rest } = row
+  const { day: _, running: __, input, output, cacheRead, cacheWrite, detail, ...rest } = row
   return {
     ...rest,
     usage: { input, output, cacheRead, cacheWrite },
@@ -90,9 +113,9 @@ function tick(row: TickRow): TraderTick {
   }
 }
 
-/** 50 at a time, newest first, older than `before` when given. */
+/** Finished ticks, 50 at a time, newest first, older than `before` when given. */
 export function listTicks(db: Db, agentId: string, before?: string): TraderTick[] {
-  const own = eq(traderTicks.agentId, agentId)
+  const own = and(eq(traderTicks.agentId, agentId), eq(traderTicks.running, false))
   return db
     .select()
     .from(traderTicks)
