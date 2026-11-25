@@ -69,7 +69,6 @@ function confirmCard(
   agentId: string,
   held: Position,
   order: NewOrder,
-  slippageBps: number,
   back: () => void,
 ) {
   return card(
@@ -79,8 +78,8 @@ function confirmCard(
       {},
       row('Sells', mono(units({ ...held, amount: order.amount }))),
       row(WHEN[order.kind], mono(formatUsd(order.triggerOut))),
-      row('Slippage', `up to ${percent(slippageBps)}`),
-      row('Receives at least', mono(formatUsd(orderFloor(order.triggerOut, slippageBps)))),
+      row('Slippage', `up to ${percent(order.maxSlippageBps)}`),
+      row('Receives at least', mono(formatUsd(orderFloor(order.triggerOut, order.maxSlippageBps)))),
     ),
     el(
       'p',
@@ -160,9 +159,8 @@ function newOrder(ctx: Context, agentId: string, positions: Position[], maxSlipp
           return
         }
         form.hidden = true
-        const bps = order.maxSlippageBps ?? maxSlippageBps
         slot.replaceChildren(
-          confirmCard(ctx, agentId, held, order, bps, () => {
+          confirmCard(ctx, agentId, held, order, () => {
             slot.replaceChildren()
             form.hidden = false
           }),

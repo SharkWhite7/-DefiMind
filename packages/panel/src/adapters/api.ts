@@ -221,7 +221,7 @@ export function ownerApi(passkey: Authenticator, fetchImpl: typeof fetch = fetch
     },
 
     orders: () => get(s.orders, '/v1/owner/orders'),
-    /** The passkey signs maxSlippageBps only when the owner set one, as guard-core binds it. */
+    /** The passkey signs the whole order, slippage included: no expiry is offered yet. */
     placeOrder: (order: { agentId: string; chain: string; token: string } & NewOrder) =>
       stepUp('place_order', { ...order }, (assertion) =>
         post(s.order, '/v1/owner/orders', { ...order, assertion }),

@@ -10,11 +10,12 @@ describe('orders (CR-026)', () => {
     expect(orderFloor('40000000', 0)).toBe('40000000')
   })
 
-  it('leaves the slippage out when the owner left it empty', () => {
+  it("sends the agent's own slippage when the owner left it empty", () => {
     expect(fromOrderForm(form, 6, 100)).toEqual({
       kind: 'stop_loss',
       amount: '1500000',
       triggerOut: '40000000',
+      maxSlippageBps: 100,
     })
     expect(fromOrderForm({ ...form, slippage: '0,5' }, 6, 100)).toEqual({
       kind: 'stop_loss',

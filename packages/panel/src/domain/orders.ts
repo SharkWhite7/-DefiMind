@@ -38,8 +38,8 @@ export interface NewOrder {
   kind: OrderKind
   amount: string
   triggerOut: string
-  /** Absent when the owner left it empty: guard-core then uses the policy's. */
-  maxSlippageBps?: number
+  /** Always sent, the agent's own when left empty: the passkey then pins the floor shown. */
+  maxSlippageBps: number
 }
 
 const isKind = (kind: string): kind is OrderKind => Object.hasOwn(ORDER_KINDS, kind)
@@ -57,15 +57,12 @@ export function fromOrderForm(form: OrderForm, decimals: number, maxSlippageBps:
   if (triggerOut === undefined || triggerOut === '0') {
     return 'Price: write what the whole amount sells for, in dollars, like 40.00.'
   }
-  const order: NewOrder = { kind: form.kind, amount, triggerOut }
-  if (form.slippage.trim() === '') {
-    return order
-  }
-  const bps = parsePercent(form.slippage)
+  const typed = form.slippage.trim()
+  const bps = typed === '' ? maxSlippageBps : parsePercent(typed)
   if (bps === undefined || bps > maxSlippageBps) {
     return `Slippage: write a percent up to this agent's ${(maxSlippageBps / 100).toFixed(2)}.`
   }
-  return { ...order, maxSlippageBps: bps }
+  return { kind: form.kind, amount, triggerOut, maxSlippageBps: bps }
 }
 
 /** guard-core's reasons for refusing to place an order (CR-026), said plainly. */

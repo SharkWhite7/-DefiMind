@@ -30,6 +30,8 @@ export function tradingMock(later: string) {
     placed: [] as Bound[],
     /** CR-026's placing checks, as guard-core would answer them. */
     refuse: [] as string[],
+    /** A quote for another amount than asked, as a wrong or tampered answer would be. */
+    skew: false,
   }
   const token = (mint: string, verified: boolean) => ({
     chain,
@@ -104,7 +106,7 @@ export function tradingMock(later: string) {
     }
     if (method === 'POST' && path === '/v1/owner/quote') {
       state.quotes.push(body)
-      const amountIn = String(body['amountIn'])
+      const amountIn = state.skew ? '1' : String(body['amountIn'])
       send(200, {
         venue: 'jupiter',
         tokenIn: body['tokenIn'],

@@ -78,6 +78,22 @@ describe.each([390, 1280])('swaps and orders at %i px (CR-026)', (width) => {
     await close()
   })
 
+  it('asks for no passkey when the quote is for another trade', async () => {
+    const { guard, page, close } = await openDevice(browser, dist, width, false, true)
+    guard.state.policy['chains'] = [chain]
+    guard.state.policy['trading'] = trading(true)
+    guard.trading!.state.skew = true
+    await signIn(page, guard.origin)
+    await page.goto(`${guard.origin}/panel/agents/research-bot/trade`)
+    await page.getByLabel('Spend, in dollars').fill('25')
+    await page.getByRole('button', { name: 'Get quote' }).click()
+    await expect
+      .poll(() => status(page).textContent())
+      .toBe('The quote does not match this trade. Nothing was sent.')
+    expect(await page.getByRole('heading', { name: 'Confirm' }).count()).toBe(0)
+    await close()
+  })
+
   it('refuses a swap into the same token before asking for a quote', async () => {
     const { guard, page, close } = await openDevice(browser, dist, width, false, true)
     guard.state.policy['chains'] = [chain]
@@ -123,6 +139,7 @@ describe.each([390, 1280])('swaps and orders at %i px (CR-026)', (width) => {
         kind: 'stop_loss',
         amount: '1000000000',
         triggerOut: '20000000',
+        maxSlippageBps: 100,
       },
     })
     await page.getByText('Stop loss: Open').waitFor()

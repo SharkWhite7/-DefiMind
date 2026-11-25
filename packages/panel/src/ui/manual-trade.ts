@@ -201,6 +201,12 @@ export async function manualTrade(ctx: Context, agentId: string): Screen {
         }
         const order: Order = { agentId, chain, tokenIn, tokenOut, amountIn }
         const quote = await ctx.api.quote(order)
+        // The card shows the quote; the passkey signs the order. They must be the same trade.
+        const { amountIn: a, tokenIn: i, tokenOut: o } = quote
+        if (a !== order.amountIn || i !== order.tokenIn || o !== order.tokenOut) {
+          ctx.say('The quote does not match this trade. Nothing was sent.', 'stop')
+          return
+        }
         form.hidden = true
         const legs = { side: kind, from: legIn, to: legOut } as const
         slot.replaceChildren(
