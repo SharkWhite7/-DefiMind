@@ -7,6 +7,9 @@ import type {
   TradingPolicy,
 } from '@defimind/shared'
 import { parseAmount } from './amount.js'
+import { type Book, limitReasons } from './trade-limits.js'
+
+export type { Book } from './trade-limits.js'
 
 /** What a trading policy means for the fields it leaves out (SPEC v0.16). */
 export const TRADING_DEFAULTS = { maxSlippageBps: 100, maxPriceImpactBps: 300 } as const
@@ -28,16 +31,6 @@ export interface Trade {
   /** What the agent asked for: the quote must answer exactly this. */
   request: { tokenIn: string; tokenOut: string; amountIn: string; maxSlippageBps?: number }
   quote: SwapQuote
-}
-
-/** What the agent's trading so far means for this trade, from executed swaps. */
-export interface Book {
-  /** Today's buys, in the chain's dollar. */
-  tradedToday: bigint
-  /** What the agent holds of `token`, at cost. */
-  positionCost: bigint
-  /** Whether any buy of `token` has ever executed, for any agent. */
-  boughtBefore: boolean
 }
 
 export interface TradeVerdict {
@@ -83,16 +76,15 @@ export function evaluateTrade(trade: Trade, policy: Policy, book: Book, now: Dat
   }
 
   const amountIn = parseAmount(request.amountIn)
+  const valueUsd = side === 'buy' ? amountIn : parseAmount(quote.minAmountOut)
+  for (const reason of limitReasons(
+    trading,
+    { side, token: trade.token, amountIn, valueUsd },
+    book,
+  )) {
+    add(reason)
+  }
   if (side === 'buy') {
-    if (amountIn > parseAmount(trading.maxTradeUsd)) {
-      add('TRADE_EXCEEDED')
-    }
-    if (book.tradedToday + amountIn > parseAmount(trading.dailyTradeMax)) {
-      add('TRADE_DAILY_EXCEEDED')
-    }
-    if (book.positionCost + amountIn > parseAmount(trading.maxPositionUsd)) {
-      add('POSITION_EXCEEDED')
-    }
     for (const risk of quote.risks) {
       add(risk)
     }

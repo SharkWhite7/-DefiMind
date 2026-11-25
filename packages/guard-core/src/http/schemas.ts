@@ -97,6 +97,8 @@ export const newAgentRequest = z.object({ agentId: newAgentId })
 export const agentRouteParam = z.object({ id: agentId })
 export const intentIdParam = z.object({ id: z.uuid() })
 
+const operationLimit = z.object({ maxTradeUsd: atomicAmount, dailyMax: atomicAmount })
+
 /** CR-021. The two bps limits default as SPEC says; every other field must be given. */
 const tradingBody = z.object({
   enabled: z.boolean(),
@@ -108,6 +110,19 @@ const tradingBody = z.object({
   maxPositionUsd: atomicAmount,
   maxSlippageBps: z.number().int().min(0).max(10_000).default(100),
   maxPriceImpactBps: z.number().int().min(0).max(10_000).default(300),
+  // CR-026. Absent keeps CR-021's behaviour; bounded like the token list.
+  tokenLimits: z
+    .record(
+      address,
+      z.object({ maxBuyUsd: atomicAmount.optional(), maxHeldUsd: atomicAmount.optional() }),
+    )
+    .refine((limits) => Object.keys(limits).length <= 64, 'at most 64 token limits')
+    .optional(),
+  operations: z
+    .object({ buy: operationLimit, sell: operationLimit, swap: operationLimit })
+    .partial()
+    .optional(),
+  orders: z.object({ enabled: z.boolean(), maxOpen: z.number().int().min(0).max(100) }).optional(),
 })
 
 export const policyBody = z.object({

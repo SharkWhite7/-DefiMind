@@ -1,9 +1,9 @@
 import type { PayIntent, SwapQuote } from '@defimind/shared'
 import * as repo from '../db/repo.js'
-import { boughtToday, everHeld, getPosition } from '../db/trades.js'
+import { bookOf } from '../db/trades.js'
 import { evaluateTrade } from '../domain/trading.js'
 import { reject, type PaymentDeps } from './payments.js'
-import { clearSwap, pairOf } from './swap.js'
+import { clearSwap, dollarOf, pairOf } from './swap.js'
 import { adapterFor } from './wallets.js'
 
 /**
@@ -48,16 +48,10 @@ export async function sendApprovedSwap(deps: PaymentDeps, first: PayIntent): Pro
       decimalsIn: details.decimalsIn,
       decimalsOut: details.decimalsOut,
     }
-    const verdict = evaluateTrade(
-      { ...pair, request, quote },
-      policy,
-      {
-        tradedToday: boughtToday(db, intent.agentId, intent.chain, repo.utcDay(now())),
-        positionCost: getPosition(db, intent.agentId, intent.chain, pair.token).cost,
-        boughtBefore: everHeld(db, intent.chain, pair.token),
-      },
-      now(),
-    )
+    const where = { agentId: intent.agentId, chain: intent.chain, token: pair.token }
+    const day = repo.utcDay(now())
+    const book = bookOf(db, { ...where, dollar: dollarOf(deps, intent.chain), day }, false)
+    const verdict = evaluateTrade({ ...pair, request, quote }, policy, book, now())
     if (verdict.reasons.length > 0) {
       return reject(deps, intent, verdict.reasons)
     }

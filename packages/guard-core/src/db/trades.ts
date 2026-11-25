@@ -1,6 +1,7 @@
 import type { Amount, ChainId, Position } from '@defimind/shared'
 import { and, eq, like, sql } from 'drizzle-orm'
 import { parseAmount, toAmount } from '../domain/amount.js'
+import type { Book } from '../domain/trade-limits.js'
 import type { Db } from './client.js'
 import { dailyTrades, intents, positions } from './schema.js'
 
@@ -39,40 +40,100 @@ export function boughtTodayAll(db: Db, agentId: string, day: string): bigint {
     .reduce((sum, row) => sum + parseAmount(row.bought), 0n)
 }
 
-export function boughtToday(db: Db, agentId: string, chain: ChainId, day: string): bigint {
+type Counter = 'bought' | 'sold'
+
+function today(db: Db, agentId: string, chain: ChainId, day: string, counter: Counter): bigint {
   const row = db
-    .select({ bought: dailyTrades.bought })
+    .select({ bought: dailyTrades.bought, sold: dailyTrades.sold })
     .from(dailyTrades)
     .where(
       and(eq(dailyTrades.agentId, agentId), eq(dailyTrades.chain, chain), eq(dailyTrades.day, day)),
     )
     .get()
-  return row === undefined ? 0n : parseAmount(row.bought)
+  return row === undefined ? 0n : parseAmount(row[counter])
 }
 
-/** Read and written in one transaction, so two buys at once cannot both read the old total. */
-export function addBought(db: Db, agentId: string, chain: ChainId, day: string, amount: Amount) {
+export const boughtToday = (db: Db, agentId: string, chain: ChainId, day: string) =>
+  today(db, agentId, chain, day, 'bought')
+
+/** Read and written in one transaction, so two trades at once cannot both read the old total. */
+function addToday(
+  db: Db,
+  key: { agentId: string; chain: ChainId; day: string },
+  counter: Counter,
+  amount: Amount,
+) {
   db.transaction((tx) => {
     const row = tx
-      .select({ bought: dailyTrades.bought })
+      .select({ bought: dailyTrades.bought, sold: dailyTrades.sold })
       .from(dailyTrades)
       .where(
         and(
-          eq(dailyTrades.agentId, agentId),
-          eq(dailyTrades.chain, chain),
-          eq(dailyTrades.day, day),
+          eq(dailyTrades.agentId, key.agentId),
+          eq(dailyTrades.chain, key.chain),
+          eq(dailyTrades.day, key.day),
         ),
       )
       .get()
-    const bought = toAmount(parseAmount(row?.bought ?? '0') + parseAmount(amount))
+    const total = toAmount(parseAmount(row?.[counter] ?? '0') + parseAmount(amount))
     tx.insert(dailyTrades)
-      .values({ agentId, chain, day, bought })
+      .values({ ...key, [counter]: total })
       .onConflictDoUpdate({
         target: [dailyTrades.agentId, dailyTrades.chain, dailyTrades.day],
-        set: { bought },
+        set: { [counter]: total },
       })
       .run()
   })
+}
+
+export const addBought = (db: Db, agentId: string, chain: ChainId, day: string, amount: Amount) =>
+  addToday(db, { agentId, chain, day }, 'bought', amount)
+
+/** CR-026: a sell counts at the dollars its quote was to bring at least. */
+export const addSold = (db: Db, agentId: string, chain: ChainId, day: string, amount: Amount) =>
+  addToday(db, { agentId, chain, day }, 'sold', amount)
+
+/** In shadow nothing is sold either: the day's sells are the ones that would have been. */
+function shadowSoldToday(db: Db, agentId: string, chain: ChainId, day: string, dollar: string) {
+  return db
+    .select({ swap: intents.swap })
+    .from(intents)
+    .where(
+      and(
+        eq(intents.agentId, agentId),
+        eq(intents.chain, chain),
+        eq(intents.kind, 'swap'),
+        eq(intents.status, 'shadowed'),
+        like(intents.createdAt, `${day}%`),
+      ),
+    )
+    .all()
+    .filter((row) => row.swap?.tokenOut === dollar)
+    .reduce((sum, row) => sum + parseAmount(row.swap?.minAmountOut ?? '0'), 0n)
+}
+
+/**
+ * What the agent's trading so far means for a trade of `token` (CR-021, CR-026). In shadow, the
+ * day's totals are the paper trades', and no position is held to sell from.
+ */
+export function bookOf(
+  db: Db,
+  where: { agentId: string; chain: ChainId; token: string; dollar: string; day: string },
+  shadow: boolean,
+): Book {
+  const { agentId, chain, token, dollar, day } = where
+  const position = getPosition(db, agentId, chain, token)
+  return {
+    tradedToday: shadow
+      ? shadowBoughtToday(db, agentId, chain, day, dollar)
+      : boughtToday(db, agentId, chain, day),
+    soldToday: shadow
+      ? shadowSoldToday(db, agentId, chain, day, dollar)
+      : today(db, agentId, chain, day, 'sold'),
+    positionCost: position.cost,
+    ...(shadow ? {} : { positionAmount: position.amount }),
+    boughtBefore: everHeld(db, chain, token),
+  }
 }
 
 export function getPosition(db: Db, agentId: string, chain: ChainId, token: string) {

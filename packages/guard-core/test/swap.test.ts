@@ -94,6 +94,25 @@ describe('swaps (CR-021)', () => {
     })
   })
 
+  it('refuses to sell more than the agent holds (CR-026)', async () => {
+    const { h } = await setup()
+    await bought(h)
+    const res = await h.agent('POST', '/v1/agent/swap', sell('995000001'))
+    expect(res.json()).toMatchObject({ rejectReasons: ['INSUFFICIENT_POSITION'] })
+  })
+
+  it("holds sells to the sell operation's daily cap, counted as they execute (CR-026)", async () => {
+    const operations = { sell: { maxTradeUsd: '50000', dailyMax: '60000' } }
+    const { h } = await setup({ trading: { operations } })
+    await bought(h)
+    const first = await h.agent('POST', '/v1/agent/swap', sell('40000000'))
+    expect(first.json()).toMatchObject({ status: 'executed' })
+    const second = await h.agent('POST', '/v1/agent/swap', sell('20000000'))
+    expect(second.json()).toMatchObject({ status: 'executed' })
+    const third = await h.agent('POST', '/v1/agent/swap', sell('1000000'))
+    expect(third.json()).toMatchObject({ rejectReasons: ['SELL_DAILY_EXCEEDED'] })
+  })
+
   it('books what landed, not what the test run promised (GC-66)', async () => {
     const { h, chain } = await setup()
     chain.landed = 994_000_000n
