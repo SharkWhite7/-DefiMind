@@ -10,8 +10,8 @@ can also trade by hand from the panel. Trading is off for every agent until you 
 ## Before the first trade
 
 DefiMind's spending wallet pays each trade's network fee, and about 0.002 SOL the first time it
-holds a new token. Keep about 1 dollar of SOL in it: see "Set a daily limit" in
-[getting-started](./getting-started.md). The vault needs USDC for the buys.
+holds a new token. Keep about 1 dollar of SOL in it: the panel shows its address and balance
+under **Add money** and in **Settings**, as in [getting-started](./getting-started.md). The vault needs USDC for the buys.
 
 ## Turn trading on for an agent
 

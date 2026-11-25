@@ -278,6 +278,8 @@ export interface SwapQuote {
   risks: RejectCode[]
   flags: TradingFlag[]
   quotedAt: string
+  /** CR-026, token-to-token only: the higher of the two legs' dollar quotes, which the limits use. */
+  valueUsd?: Amount
 }
 
 /** CR-021: these send a buy to the owner even below the threshold. */
@@ -372,6 +374,7 @@ export type TradingRejectCode =
   | 'VALUATION_UNAVAILABLE'
   | 'ORDERS_DISABLED'
   | 'ORDER_LIMIT_EXCEEDED'
+  | 'GAS_RESERVE'
 
 /** Standing authority an EVM payment must never grant. */
 export type EvmRejectCode = 'APPROVAL_DETECTED' | 'PERMIT_DETECTED' | 'DELEGATION_DETECTED'
