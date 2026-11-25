@@ -60,11 +60,12 @@ taking your word for it. In short:
 3. **Create your vault.** Phantom signs a Squads multisig that you alone own. Your agents never
    touch the rest of your wallet.
 4. **Set a daily limit.** You type the most the vault may pay out in a day, up to 50 during the
-   beta. The vault itself enforces it, even if DefiMind were broken into. The signing page names
-   DefiMind's spending wallet here ("Only the hot wallet … may draw on it"). From Phantom, send that
-   address about 1 dollar of SOL: it pays the network fees when it draws from the vault and when it
-   trades. The doctor warns when it runs low.
-5. **Add money.** Move USDC from your wallet into the vault. Start small.
+   beta. The vault itself enforces it, even if DefiMind were broken into.
+5. **Add money.** Move USDC from your wallet into the vault. Start small. This step also shows
+   DefiMind's **spending wallet**, in full, with **Copy address**. From Phantom, send it about 1
+   dollar of SOL: it pays the network fees when it draws from the vault and when it trades. The
+   panel shows its balance there and in **Settings**, and the guide waits at **Try it safely**
+   until it has enough.
 6. **Connect your agent.** The panel gives the agent its own key. See the next section.
 7. **Choose the rules.** How much the agent may pay at once and per day, and from which amount it
    must ask you first.
