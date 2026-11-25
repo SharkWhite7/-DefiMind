@@ -24,8 +24,17 @@ describe('trading-agent prompt', () => {
     expect(TRADING_AGENT_PROMPT).toContain('This is not financial advice.')
   })
 
+  it('carries the order rules (CR-026)', () => {
+    expect(TRADING_AGENT_PROMPT).toContain('place_order, cancel_order and list_orders')
+    expect(TRADING_AGENT_PROMPT).toContain('only when I ask for it')
+    expect(TRADING_AGENT_PROMPT).toContain('A stop-loss is not a guarantee')
+    expect(TRADING_AGENT_PROMPT).toContain('Never use orders to get around a limit or a refusal')
+  })
+
   it('names no token and promises no return', () => {
     expect(TRADING_AGENT_PROMPT).not.toMatch(/\b(SOL|JUP|BONK|WIF|ETH|BTC)\b/)
-    expect(TRADING_AGENT_PROMPT).not.toMatch(/profit(?! or loss)|yield|moon|guaranteed|earn/i)
+    expect(TRADING_AGENT_PROMPT).not.toMatch(
+      /(?<!take-)profit(?! or loss)|yield|moon|guaranteed|earn/i,
+    )
   })
 })

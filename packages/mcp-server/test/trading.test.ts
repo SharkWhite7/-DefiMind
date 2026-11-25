@@ -35,14 +35,15 @@ describe('resolveSwap', () => {
   })
 
   it.each([
-    [{ from: BONK, to: 'SOMEOTHERMINT', amountUsd: '1' }, "chain's dollar"],
-    [{ from: 'USDC', to: 'usd', amountUsd: '1' }, "chain's dollar"],
+    [{ from: BONK, to: 'SOMEOTHERMINT', amountUsd: '1' }, 'takes amount'],
+    [{ from: 'USDC', to: 'usd', amountUsd: '1' }, "not the chain's dollar on both"],
+    [{ from: BONK, to: BONK, amount: '1' }, 'the same token'],
     [{ from: 'USDC', to: BONK }, 'exactly one'],
     [{ from: 'USDC', to: BONK, amountUsd: '1', amount: '1' }, 'exactly one'],
     [{ from: 'USDC', to: BONK, amount: '1' }, 'A buy takes amountUsd'],
-    [{ from: BONK, to: 'USDC', amountUsd: '1' }, 'A sell takes amount'],
-    [{ from: BONK, to: 'USDC', amount: '0' }, 'A sell takes amount'],
-    [{ from: BONK, to: 'USDC', amount: '1.5' }, 'A sell takes amount'],
+    [{ from: BONK, to: 'USDC', amountUsd: '1' }, 'Selling or swapping a token takes amount'],
+    [{ from: BONK, to: 'USDC', amount: '0' }, 'Selling or swapping a token takes amount'],
+    [{ from: BONK, to: 'USDC', amount: '1.5' }, 'Selling or swapping a token takes amount'],
     [{ from: 'USDC', to: BONK, amountUsd: '0' }, 'more than zero'],
     [{ from: 'USDC', to: BONK, amountUsd: '1e3' }, 'amountUsd:'],
   ])('refuses %j', (request, message) => {
@@ -154,7 +155,7 @@ describe('swap tool', () => {
     expect(base.text).toMatch(/Trading works on Solana only for now/)
     const both = await call(client, 'swap', { from: BONK, to: BONK, amountUsd: '5', reason: 'r' })
     expect(both.isError).toBe(true)
-    expect(both.text).toContain("chain's dollar")
+    expect(both.text).toContain('the same token')
   })
 
   it('describes controls and limits, never returns', async () => {
@@ -196,7 +197,7 @@ describe('quote tool', () => {
     )
     expect(text).toContain('Slippage 100 bps, price impact 12 bps.')
     expect(text).toContain('No route to sell this token back was found.')
-    expect(text).toContain('DefiMind would refuse this buy:')
+    expect(text).toContain('DefiMind would refuse to buy this token:')
     expect(text).toContain('- NO_EXIT_ROUTE:')
     expect(text).toContain("A buy will wait for the owner's approval, because:")
     expect(text).toContain('- NEW_TOKEN: the first buy of this token')
@@ -322,5 +323,54 @@ describe('a guard-core without trading', () => {
     }
     const result = await call(await connect(fakeGuard({ portfolio: down })), 'get_portfolio')
     expect(result.text).toBe('AgentGuard returned an error (HTTP 500).')
+  })
+})
+
+describe('token-to-token swaps (CR-026)', () => {
+  const JUP = 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN'
+
+  it('resolves a swap from one held token to another, in smallest units of the token spent', () => {
+    expect(resolveSwap({ from: BONK, to: JUP, amount: '500' }, USDC)).toEqual({
+      ok: true,
+      side: 'swap',
+      tokenIn: BONK,
+      tokenOut: JUP,
+      amountIn: 500n,
+    })
+  })
+
+  it('sends any pair to guard-core and says what was swapped', async () => {
+    const swap = vi.fn(async (_order: SwapOrder) => ({
+      intentId: INTENT,
+      status: 'executed' as const,
+      rejectReasons: [],
+    }))
+    const client = await connect(fakeGuard({ swap }))
+    const { text } = await call(client, 'swap', {
+      from: BONK,
+      to: JUP,
+      amount: '500',
+      reason: 'rotate',
+    })
+    expect(swap.mock.calls[0]?.[0]).toMatchObject({ tokenIn: BONK, tokenOut: JUP, amountIn: '500' })
+    expect(text).toContain(`Swap 500 units of ${BONK} for ${JUP} on Solana devnet`)
+  })
+
+  it('explains the new limits with what to do', async () => {
+    const swap = vi.fn(async () => ({
+      intentId: INTENT,
+      status: 'rejected' as const,
+      rejectReasons: ['SWAP_EXCEEDED', 'INSUFFICIENT_POSITION', 'VALUATION_UNAVAILABLE'],
+    }))
+    const { text } = await call(await connect(fakeGuard({ swap })), 'swap', {
+      from: BONK,
+      to: JUP,
+      amount: '500',
+      reason: 'r',
+    })
+    expect(text).toContain('- SWAP_EXCEEDED: the swap is above the per-swap limit')
+    expect(text).toContain('Do not split the swap into smaller ones to get under the limit.')
+    expect(text).toContain('Use at most what get_portfolio shows is held')
+    expect(text).toContain('do not try another route around it')
   })
 })

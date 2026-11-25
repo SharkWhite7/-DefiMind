@@ -11,7 +11,7 @@ import type { ToolDeps } from './deps.js'
 import { failure, guarded, text } from './result.js'
 
 // Controls and limits only: these tools never promise a return, and say so to the model.
-const SWAP_DESCRIPTION = `Buy or sell a token through DefiMind, which trades from the agent's wallet inside limits the owner set. One side is always the chain's dollar: from "USDC" with amountUsd is a buy, to "USDC" with amount is a sell. Trading is on Solana only for now.
+const SWAP_DESCRIPTION = `Buy, sell or swap a token through DefiMind, which trades from the agent's wallet inside limits the owner set. From "USDC" with amountUsd is a buy; to "USDC" with amount is a sell; from one token to another with amount is a swap, spending only what the wallet already holds. Trading is on Solana only for now.
 DefiMind checks every swap against the owner's trading policy (allowed tokens, per-trade, daily and per-token limits, slippage, price impact) and refuses tokens that can be frozen, carry risky token extensions, or have no route to sell back. A buy can wait for the owner's approval. DefiMind limits what a trade can cost; it does not make trades profitable, and a token can lose its value.
 - If the result says pending_approval: tell the user, then poll check_intent with the intent id. Do not swap again while it is pending.
 - If it was rejected: explain the reasons to the user. Do not retry the same swap, and do not split it to get under a limit.
@@ -32,8 +32,8 @@ const chain = z
   )
 
 const pricing = {
-  from: token.describe('Token to spend: "USDC" for a buy, or the mint address of the token sold.'),
-  to: token.describe('Token to get: the mint address of the token bought, or "USDC" for a sell.'),
+  from: token.describe('Token to spend: "USDC" for a buy, or the mint address of a token held.'),
+  to: token.describe('Token to get: a mint address, or "USDC" for a sell.'),
   amountUsd: z
     .string()
     .optional()
@@ -41,7 +41,9 @@ const pricing = {
   amount: z
     .string()
     .optional()
-    .describe('For a sell: how much to sell, in the smallest units of the token (get_portfolio).'),
+    .describe(
+      'For a sell or a swap: how much of `from` to spend, in its smallest units (get_portfolio).',
+    ),
   chain,
 }
 
@@ -65,7 +67,7 @@ export const NOT_AVAILABLE = 'Trading is not available on this DefiMind yet. Tel
  * A guard-core older than trading has no such route, and its 404 would otherwise read as "no record
  * of that". On these routes a 404 can only mean trading is not there.
  */
-function noTradingYet(error: unknown): never {
+export function noTradingYet(error: unknown): never {
   if (error instanceof GuardError && error.httpStatus === 404) {
     throw new GuardError('http', NOT_AVAILABLE, 404)
   }
@@ -177,9 +179,12 @@ function amountOf(tokenAddress: string, atomic: string, deps: ToolDeps, at: stri
 
 function describeTrade(swap: Resolved, deps: ToolDeps, at: string): string {
   const spent = amountOf(swap.tokenIn, swap.amountIn.toString(), deps, at)
-  return swap.side === 'buy'
-    ? `Buy ${swap.tokenOut} with ${spent}`
-    : `Sell ${spent} for ${deps.usd(at)?.symbol ?? 'dollars'}`
+  if (swap.side === 'buy') {
+    return `Buy ${swap.tokenOut} with ${spent}`
+  }
+  return swap.side === 'sell'
+    ? `Sell ${spent} for ${deps.usd(at)?.symbol ?? 'dollars'}`
+    : `Swap ${spent} for ${swap.tokenOut}`
 }
 
 /** A token amount as the agent reads it: exact, from the mint's own decimals, named by its mint. */
@@ -205,7 +210,7 @@ function describeQuote(quote: Quote, swap: Resolved, deps: ToolDeps, at: string)
     `Spend: ${held(quote.tokenIn, quote.amountIn, quote.decimalsIn, quote.symbolIn, deps, at)}.`,
     `Expected: ${out(quote.expectedOut)}; at least ${out(quote.minAmountOut)}.`,
     `Slippage ${quote.slippageBps} bps, price impact ${quote.priceImpactBps} bps.`,
-    swap.side === 'buy'
+    swap.side !== 'sell'
       ? quote.exitImpactBps === null
         ? 'No route to sell this token back was found.'
         : `Selling it back now would move the price ${quote.exitImpactBps} bps.`
@@ -213,7 +218,7 @@ function describeQuote(quote: Quote, swap: Resolved, deps: ToolDeps, at: string)
   ].filter((line) => line !== '')
   if (quote.risks.length > 0) {
     lines.push(
-      'DefiMind would refuse this buy:',
+      'DefiMind would refuse to buy this token:',
       ...quote.risks.map((code) => `- ${explainReject(code)}`),
     )
   }
