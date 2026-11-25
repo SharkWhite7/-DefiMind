@@ -19,7 +19,7 @@ the panel walks you through the rest. You never edit a file or paste a key.
 - [Phantom](https://phantom.app/download) on your phone or in your browser, with a new wallet you
   use for nothing else.
 - About 2 dollars of SOL in that wallet for network fees (half of it goes to DefiMind's spending
-  wallet, under "Set a daily limit" below), and the USDC your agents may spend.
+  wallet, under "Add money" below), and the USDC your agents may spend.
 - The computer where your AI agent runs (Claude Code, Claude Desktop or Cursor).
 
 ## 1. Put DefiMind online
