@@ -222,6 +222,7 @@ async function serve(
           ownerPanelRoutes(deps, rp, {
             ...doctor,
             hosted: config.ADMIN_ROUTES === 'false',
+            traderKey: config.ANTHROPIC_API_KEY !== undefined,
             ...(pushKey === undefined ? {} : { pushKey }),
             ...(keys === undefined ? {} : { keys }),
             ...(host === undefined ? {} : { host }),

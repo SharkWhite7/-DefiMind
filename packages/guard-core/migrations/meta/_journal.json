@@ -148,6 +148,13 @@
       "when": 1795569928628,
       "tag": "0020_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1795572136129,
+      "tag": "0021_trader",
+      "breakpoints": true
     }
   ]
 }
