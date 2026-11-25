@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.22 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.23 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -50,6 +50,7 @@ Neither chain needs a contract we write. Both primitives are audited and already
 /packages/telegram-bot  Session 4 — owner approvals + kill switch (panel role since CR-012)
 /packages/panel         panel role — the owner web app (CR-012)
 /packages/sdk           mcp role — withReceipt and the defimind-verify CLI (CR-013)
+/packages/network       network role — the DefiMind Network, a hosted service (CR-029)
 /e2e                    Session 5 — end-to-end + attack tests, run once per chain
 
 ## Chain identifiers
@@ -229,6 +230,7 @@ The AI trader (CR-027): TRADER_TOKEN_NOT_ALLOWED (the trader asked for a token o
 list).
 Degen autopilot (CR-028): HUNT_LIMIT_EXCEEDED (above hunt.maxBuyUsd or the day's hunt.dailyBuyUsd),
 HUNT_BUDGET_EXCEEDED (hunted positions would pass hunt.budgetUsd).
+The DefiMind Network (CR-029): TOKEN_ON_RADAR (the Rug Radar lists the token).
 
 ## ChainAdapter (packages/onchain/src/ChainAdapter.ts)
 guard-core depends on this interface only and never imports a chain SDK directly.
@@ -411,8 +413,9 @@ POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, sing
     | "agent_wallet" (CR-022, body { agentId, chain })
     | "manual_trade" (CR-025, body { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut })
     | "place_order" (CR-026, body { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps?,
-      expiresAt? })
+      expiresAt?, trailBps? (CR-028) })
     | "trader_settings" (CR-027, body { agentId, config }) | "resume_trader" (CR-027, body { agentId })
+    | "cancel_order" (CR-028, body { orderId }) | "network_link" (CR-029, body { wallet })
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
 GET  /v1/owner/deposit -> { chains: { chain, vault, token, balance, dailyCap?, depositPage? }[] }
@@ -809,7 +812,8 @@ interface TraderConfig {
   cadenceMinutes: 5 | 15 | 60
   tokens: Address[]                // what it may trade; each must also pass the policy
   instructions: string             // the owner's, plain words, at most 2000 characters
-  template?: { id: string, version: number }   // the ready-made strategy it started from
+  template?: { id: string, version: number, source?: "network" }   // the strategy it started from;
+                                   // source absent = TRADER_TEMPLATES, "network" = CR-029
   maxActionsPerTick: number        // 1 to 5, default 3
   maxTicksPerDay: number           // default 24 × 60 / cadenceMinutes
   maxTokensPerTick: number         // input plus output, default 200000
@@ -1117,6 +1121,149 @@ off. Setting it or raising either amount is a loosening and needs the step-up.
   passkey and never use it.
 - **Audit.** Each one is audited as "quick_first_buy".
 
+## The DefiMind Network (CR-029)
+A hosted service, packages/network, run by DefiMind as its own Fly app. Deployments use it only
+when the owner sets NETWORK_URL. Three rules bind every part of it:
+- **It never touches funds.** Nothing it says can make a deployment approve, buy, sell, sign or
+  loosen anything. It can only make one refuse a buy or narrow a list.
+- **No contract.** There is no deployed program and no custody. Weight is read from tokens held in
+  the holder's own wallet.
+- **The token is a setting.** NETWORK_TOKEN_MINT names it on the network. The repository never names
+  it, and a network without it set serves the Radar only.
+
+Stack and storage as guard-core: Fastify, zod at every boundary, SQLite, pino without secrets. The
+Solana reads go through an RPC and the venue reads through Jupiter, as in packages/onchain.
+
+Holder wallets. A deployment links one holder wallet at a time.
+- **Linking.**
+  1. guard-core asks the network for a challenge: POST /v1/link/challenge { wallet } returns
+     { message, nonce, expiresAt }.
+     - The message is plain text that names: the network's domain, the wallet, the nonce, the time,
+       an expiry 10 minutes later, and the purpose "Link this wallet to DefiMind Network. This signs
+       no transaction and moves nothing."
+  2. The owner signs it on the signing page, with action=sign-message. The page uses the wallet's
+     signMessage, never a transaction, and shows the text before signing.
+  3. guard-core posts the result: POST /v1/link { wallet, nonce, signature }. The network checks the
+     ed25519 signature over the exact message it issued and the nonce once, then returns a
+     credential: 32 random bytes, stored by the network as a hash.
+  - The link step-up is OwnerAction "network_link" over { wallet }, since linking shares the wallet
+    with the network operator.
+  - guard-core keeps the credential as a secret in its database, never logged or returned. Unlinking
+    needs the session only and revokes it on the network.
+- **Weight.**
+  - Every hour the network snapshots the NETWORK_TOKEN_MINT balance of every linked wallet, across
+    all its token accounts, read from the chain.
+  - A wallet's weight is the smallest of its last HELD_WINDOW_HOURS (default 24) snapshots. A wallet
+    linked less than that long ago has weight 0, so tokens moved between wallets never count
+    twice within a window.
+  - Thresholds are network settings, in the token's atomic units:
+    - REPORT_MIN to report;
+    - PASS_MIN for the Hunt Pass;
+    - CREATOR_MIN to publish a strategy;
+    - VOTE_MIN to vote.
+- **What a deployment sends.** Only:
+  - its holder wallet;
+  - its reports: a mint, the rule and its evidence;
+  - the votes and strategies the owner sends.
+  Never a vault, a hot wallet, a position, an amount or an agent.
+
+Rug Radar.
+
+```ts
+interface RadarReport {
+  mint: Address
+  rule: "new_risk" | "liquidity_gone"
+  evidence: { slot: number, baseline?: { freezeAuthority: boolean, mintAuthority: boolean,
+              extensions: string[], supply: Amount }, observedAt: string }
+}
+interface RadarListing {
+  mint: Address
+  rule: "new_risk" | "liquidity_gone"
+  facts: string[]                  // what the network itself confirmed, in plain words
+  status: "listed" | "cleared"
+  listedAt: string
+  clearedAt?: string
+}
+```
+
+- **Reporting.** POST /v1/radar/reports needs a credential whose weight is at least REPORT_MIN. At
+  most 20 reports per wallet per day. guard-core reports on its own when a Rug Shield fires, if the
+  owner turned "Report rugs to the network" on; the owner can also report from the panel.
+- **Checking.** The network never takes a report's word. It re-checks each one itself:
+  - **new_risk:** the mint read now shows a freeze authority or a Token-2022 risk extension.
+    Alternatively, a supply jump above the baseline × (10000 + RADAR_SUPPLY_JUMP_BPS) / 10000
+    (default 1000) is confirmed from the mint's own MintTo history since evidence.slot, not from
+    the reported baseline.
+  - **liquidity_gone:** a quoteSell of RADAR_PROBE_USD (default 100 USD) back to the dollar has no
+    route, or is above RADAR_MAX_IMPACT_BPS (default 3000), on 3 checks at least a minute apart.
+  - The check must pass within an hour, or the report is rejected.
+- **The list.** A confirmed mint is listed with the facts the network found.
+  - A liquidity listing is re-checked every 6 hours and cleared after 24 hours back within the
+    limit. A new_risk listing stays.
+  - The owner of the network, with ADMIN_WALLET signing, can clear a listing; every clearance is
+    public with its reason.
+- **Reading.** GET /v1/radar?since= is free and needs no credential: listings and clearances in
+  order, 500 at a time.
+- **In guard-core,** with NETWORK_URL set and the Radar on (the default once a URL is set):
+  - it syncs every 5 minutes and keeps the list in its database, so a network outage keeps the
+    last list;
+  - a buy or a swap into a listed mint is TOKEN_ON_RADAR;
+  - discover_tokens drops listed mints;
+  - when a held token is listed, the owner gets Web Push "radar_listed". It is an alert only: the
+    Radar never sells.
+- **Points.** The first reporter of a mint that gets listed earns one point. Points are public per
+  wallet and month. Rewards are paid by the owner, in the token, from a treasury multisig, after
+  each month, from a table published as a network proposal. The network holds no treasury key.
+
+Hunt Pass.
+- GET /v1/hunt/feed?list=recent|trending needs a credential whose weight is at least PASS_MIN. It
+  returns at most 50 HuntCandidate: the network screens Jupiter's lists all day with the CR-028
+  screen at RADAR_PROBE_USD, and removes listed mints.
+- guard-core's discover_tokens takes list "pass" when the deployment is linked. Each candidate is
+  screened again locally, at hunt.maxBuyUsd, before it is offered: the feed only suggests.
+- The panel shows the pass as active or not, with the wallet's weight and the threshold, and never
+  a price.
+
+Strategy marketplace.
+
+```ts
+interface NetworkStrategy {
+  id: string
+  version: number
+  creator: Address                 // the holder wallet that published it
+  name: string                     // at most 60 characters
+  summary: string                  // at most 200
+  instructions: string             // at most 2000; no mint or address may appear in it
+  suggested: TraderTemplate["suggested"]
+  votes: { up: Amount, down: Amount }   // weight, not heads
+  status: "listed" | "removed"
+  publishedAt: string
+}
+```
+
+- POST /v1/strategies needs a credential with weight at least CREATOR_MIN. Each new version is a
+  new record; at most 5 strategies per wallet.
+- The network refuses text containing a base58 string of 32 to 44 characters or a 0x address, so a
+  strategy cannot steer a trader to a token.
+- GET /v1/strategies is free.
+- In guard-core, picking one copies it as a template, with template { id, version,
+  source: "network" }. The same trader_settings step-up applies, after the panel has shown the full
+  text, the creator's wallet and "Written by a third party: the limits still apply".
+- ADMIN_WALLET can remove a strategy, with a public reason. A removal never changes a trader that
+  already copied it; the panel marks it.
+
+Holder votes.
+- POST /v1/strategies/:id/vote { up: boolean } and POST /v1/proposals/:id/vote { choice } need a
+  credential with weight at least VOTE_MIN. One vote per wallet, which may be changed until the end.
+- A vote counts the wallet's weight at the snapshot taken when voting opened, or at the strategy's
+  publication for strategy votes.
+- Proposals are created by ADMIN_WALLET: a title, a text, choices, and start and end times. Results
+  are advisory; the owner applies them.
+
+Admin. ADMIN_WALLET's actions are ed25519-signed requests over { action, target, reason, at },
+checked against a 5-minute window and a nonce: clearing a listing, removing a strategy, creating a
+proposal. The network has no admin token.
+
 ## Agent wallets (CR-022, HIGH-2)
 Opt-in, per agent and chain. By default every agent spends from the chain's shared spending (hot)
 wallet, as before. An agent given its own wallet spends only from it, under its own onchain limit,
@@ -1223,6 +1370,11 @@ list: it is funded and test-run only once approved.
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.23 (2026-11-25): CR-029, approved by the owner. The DefiMind Network, a hosted, opt-in service:
+  - holder wallets linked by a signed message, weighted by tokens held over 24 hours;
+  - the Rug Radar, a checked list of rugs that only refuses buys;
+  - the Hunt Pass feed, a strategy marketplace and holder votes;
+  - the token as a setting, and no contract or custody.
 - v0.22 (2026-11-25): CR-028, approved by the owner. Degen autopilot on Solana:
   - hunt mode: the AI trader buys screened new and trending tokens inside its own budget;
   - trailing stops, and a rug shield that sells a held token when a risk appears or its liquidity goes;

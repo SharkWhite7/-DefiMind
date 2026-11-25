@@ -394,6 +394,8 @@ export type TradingRejectCode =
   /** CR-028 */
   | 'HUNT_LIMIT_EXCEEDED'
   | 'HUNT_BUDGET_EXCEEDED'
+  /** CR-029 */
+  | 'TOKEN_ON_RADAR'
 
 /** Standing authority an EVM payment must never grant. */
 export type EvmRejectCode = 'APPROVAL_DETECTED' | 'PERMIT_DETECTED' | 'DELEGATION_DETECTED'
@@ -578,7 +580,7 @@ export interface TraderConfig {
   /** The owner's own words, at most 2000 characters. */
   instructions: string
   /** The ready-made strategy it started from; instructions hold the trader's own copy. */
-  template?: { id: string; version: number }
+  template?: { id: string; version: number; source?: 'network' }
   /** 1 to 5; read tools do not count. */
   maxActionsPerTick: number
   maxTicksPerDay: number
