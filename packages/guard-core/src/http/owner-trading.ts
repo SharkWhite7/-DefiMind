@@ -116,7 +116,7 @@ export function ownerTradingRoutes(
         now(),
       )
       try {
-        const intent = await swap(deps, { ...order, reason: REASON }, { minAmountOut })
+        const intent = await swap(deps, { ...order, reason: REASON }, { minAmountOut, by: 'owner' })
         return {
           intentId: intent.id,
           status: intent.status,

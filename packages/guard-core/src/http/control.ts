@@ -9,6 +9,7 @@ import { summarise } from '../domain/report.js'
 import { budget } from '../service/budget.js'
 import { doctor, type DoctorDeps } from '../service/doctor.js'
 import { killTransactions, type KillTransaction } from '../service/kill.js'
+import { cancelOpen } from '../service/orders.js'
 import type { PaymentDeps } from '../service/payments.js'
 import { HttpError } from './errors.js'
 import { REPORT_DEFAULT_SPAN_MS, REPORT_MAX_SPAN_MS, reportQuery } from './schemas.js'
@@ -147,6 +148,7 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
     // guard-core has stopped signing.
     async kill(log: Log) {
       const pausedAgents = repo.pauseAll(db, now().toISOString())
+      cancelOpen(deps, `${via}_kill`)
       const ownerTransactions = await killTransactions(deps, log)
       repo.audit(
         db,
@@ -162,6 +164,7 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
       if (!repo.setPaused(db, agentId, true, now().toISOString())) {
         throw new HttpError(404, 'not_found')
       }
+      cancelOpen(deps, `${via}_kill`, agentId)
       const ownerTransactions = await killTransactions(deps, log, agentId)
       repo.audit(
         db,

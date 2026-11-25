@@ -60,14 +60,14 @@ export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy
 }
 
 /**
- * POST /v1/agent/swap: the same pipeline as a payment, with the trading policy (CR-021). `manual`
- * is the owner's own trade (CR-025): the passkey already approved it, for no less than the
- * minimum the owner saw.
+ * POST /v1/agent/swap: the same pipeline as a payment, with the trading policy (CR-021). `floor`
+ * is the least the trade may bring: the minimum the owner saw on their own trade (CR-025), whose
+ * passkey already approved it, or an order's trigger less its slippage (CR-026).
  */
 export async function swap(
   deps: PaymentDeps,
   req: SwapRequest,
-  manual?: { minAmountOut: Amount },
+  floor?: { minAmountOut: Amount; by: 'owner' | 'order' },
 ): Promise<PayIntent> {
   return deps.serial(req.agentId, async () => {
     const { db, now } = deps
@@ -112,7 +112,7 @@ export async function swap(
     if (priced === undefined) {
       return reject(deps, intent, ['SIM_UNEXPECTED_EFFECT'])
     }
-    if (manual && parseAmount(answer.minAmountOut) < parseAmount(manual.minAmountOut)) {
+    if (floor && parseAmount(answer.minAmountOut) < parseAmount(floor.minAmountOut)) {
       return reject(deps, priced, ['SLIPPAGE_TOO_HIGH'])
     }
     repo.saveIntent(db, priced)
@@ -150,7 +150,7 @@ export async function swap(
         detail: {
           side: pair.side,
           ...(verdict.flags.length > 0 ? { flags: verdict.flags } : {}),
-          ...(manual ? { via: 'owner' } : {}),
+          ...(floor ? { via: floor.by } : {}),
         },
       },
       now(),
@@ -159,7 +159,7 @@ export async function swap(
       return reject(deps, priced, verdict.reasons)
     }
     const how = { side: pair.side, verdict, shadow, policy, valueUsd: valueUsd ?? 0n }
-    if (manual === undefined) {
+    if (floor?.by !== 'owner') {
       return clearSwap(deps, adapter, priced, how)
     }
     recordOwnerApproval(db, intent.id, 'passkey')

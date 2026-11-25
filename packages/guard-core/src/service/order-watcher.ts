@@ -1,0 +1,126 @@
+import type { Order } from '@defimind/shared'
+import { moveOrder, openOrders } from '../db/orders.js'
+import * as repo from '../db/repo.js'
+import { getPosition } from '../db/trades.js'
+import { parseAmount, toAmount } from '../domain/amount.js'
+import { confirmed, fillFloor, hits, step, type Streak } from '../domain/orders.js'
+import type { PaymentDeps } from './payments.js'
+import { swap } from './swap.js'
+import { VenueUnavailable } from './swap-quote.js'
+import { adapterFor } from './wallets.js'
+
+export interface WatchRules {
+  confirmChecks: number
+  confirmSeconds: number
+}
+
+/**
+ * The order watcher (CR-026). Each tick quotes every open order for its whole amount through the
+ * agent's own wallet, and fills one only after enough consecutive hits. A paused agent's orders
+ * stay open and are not even counted; a run of hits is held in memory, so a restart starts it over.
+ */
+export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
+  const streaks = new Map<string, Streak>()
+
+  async function check(order: Order): Promise<void> {
+    const { db, now } = deps
+    const at = now()
+    if (order.expiresAt !== undefined && Date.parse(order.expiresAt) <= at.getTime()) {
+      streaks.delete(order.id)
+      close(order, 'cancelled', {}, 'order_expired')
+      return
+    }
+    const policy = repo.getPolicy(db, order.agentId)
+    const adapter = adapterFor(deps, order.agentId, order.chain)
+    if (policy === undefined || policy.paused || adapter?.quoteSell === undefined) {
+      return
+    }
+    const held = getPosition(db, order.agentId, order.chain, order.token).amount
+    if (policy.mode !== 'shadow' && held < parseAmount(order.amount)) {
+      streaks.delete(order.id)
+      close(order, 'failed', { failReason: 'INSUFFICIENT_POSITION' }, 'order_failed')
+      return
+    }
+    const quoted = await adapter.quoteSell(order.token, order.amount).catch(() => undefined)
+    if (quoted === undefined) {
+      return
+    }
+    const hit = hits(order.kind, parseAmount(quoted.out), parseAmount(order.triggerOut))
+    const maxImpact = policy.trading?.maxPriceImpactBps ?? 0
+    const check = { hit, priceImpactBps: quoted.priceImpactBps, at: at.getTime() }
+    const streak = step(streaks.get(order.id), check, maxImpact)
+    if (streak === undefined) {
+      streaks.delete(order.id)
+      return
+    }
+    streaks.set(order.id, streak)
+    if (confirmed(streak, at.getTime(), rules)) {
+      streaks.delete(order.id)
+      await fill(order)
+    }
+  }
+
+  /** A sell to the dollar that must bring at least the trigger less slippage, never any price. */
+  async function fill(order: Order): Promise<void> {
+    if (!moveOrder(deps.db, order.id, 'triggered')) {
+      return
+    }
+    const dollar = deps.usdc.get(order.chain) ?? ''
+    const request = {
+      agentId: order.agentId,
+      chain: order.chain,
+      tokenIn: order.token,
+      tokenOut: dollar,
+      amountIn: order.amount,
+      maxSlippageBps: order.maxSlippageBps,
+      reason: `order: ${order.kind}`,
+    }
+    const floor = { minAmountOut: toAmount(fillFloor(order)), by: 'order' as const }
+    let intent
+    try {
+      intent = await swap(deps, request, floor)
+    } catch (error) {
+      if (!(error instanceof VenueUnavailable)) {
+        throw error
+      }
+      // The venue went down between the trigger and the sell: the order waits for the next run.
+      moveOrder(deps.db, order.id, 'open', {}, 'triggered')
+      return
+    }
+    if (intent.status === 'executed' || intent.status === 'shadowed') {
+      close(order, 'filled', { filledIntentId: intent.id }, 'order_filled', 'triggered')
+      return
+    }
+    const failReason = intent.rejectReasons[0] ?? 'SIM_FAILED'
+    close(order, 'failed', { failReason, filledIntentId: intent.id }, 'order_failed', 'triggered')
+  }
+
+  function close(
+    order: Order,
+    to: 'cancelled' | 'filled' | 'failed',
+    extra: Parameters<typeof moveOrder>[3],
+    event: 'order_expired' | 'order_filled' | 'order_failed',
+    from: 'open' | 'triggered' = 'open',
+  ) {
+    if (!moveOrder(deps.db, order.id, to, extra, from)) {
+      return
+    }
+    const detail = { id: order.id, kind: order.kind, ...extra }
+    repo.audit(deps.db, { event, agentId: order.agentId, detail }, deps.now())
+    if (event !== 'order_expired') {
+      deps.push?.order(event, order, extra?.filledIntentId)
+    }
+  }
+
+  return {
+    async tick(): Promise<void> {
+      for (const order of openOrders(deps.db)) {
+        try {
+          await check(order)
+        } catch (error) {
+          deps.log.error({ err: error, orderId: order.id }, 'order check failed')
+        }
+      }
+    },
+  }
+}

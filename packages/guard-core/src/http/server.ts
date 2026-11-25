@@ -30,7 +30,7 @@ import type { PushService } from '../adapters/push.js'
 import { pusher } from '../service/push.js'
 import { integrityMonitor } from '../service/integrity.js'
 import type { AnchorPublisher } from '../service/anchor.js'
-import { type Backups, startTimers } from './timers.js'
+import { type Backups, startTimers, type Watch } from './timers.js'
 import { ownerSessionRoutes } from './owner-session.js'
 import { ownerSetupRoutes } from './owner-setup.js'
 import { clientIp } from './client-ip.js'
@@ -57,6 +57,7 @@ export interface ServerDeps {
   /** Runs the expiry sweep on this interval. Off when unset, as in tests that drive it directly. */
   sweepMs?: number
   backups?: Backups
+  orders?: Watch
   /** Signs receipts. Receipts are off without it. */
   receiptKey?: KeyObject
   /** Web Push to the owner's panel, with the VAPID public key the panel subscribes with. */

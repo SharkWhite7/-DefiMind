@@ -137,6 +137,10 @@ const settings = z
     /** Offline chains that move no money. For local development only. */
     GUARD_STUB_CHAINS: z.enum(['true', 'false']).default('false'),
     EXPIRY_SWEEP_MS: z.coerce.number().int().positive().default(30_000),
+    /** CR-026: the order watcher's pace, and how many hits over how long fire an order. */
+    ORDER_CHECK_MS: z.coerce.number().int().min(1_000).default(15_000),
+    ORDER_CONFIRM_CHECKS: z.coerce.number().int().min(1).max(100).default(3),
+    ORDER_CONFIRM_SECONDS: z.coerce.number().int().min(0).max(3_600).default(30),
 
     /**
      * Whether the public listener may read the client's address from Fly-Client-IP. Only behind a

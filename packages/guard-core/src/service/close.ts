@@ -5,6 +5,7 @@ import * as repo from '../db/repo.js'
 import { applyTrade, listPositions } from '../db/trades.js'
 import { listWallets } from '../db/wallets.js'
 import { evaluateTrade } from '../domain/trading.js'
+import { cancelOpen } from './orders.js'
 import { newIntent, reject, type PaymentDeps } from './payments.js'
 import { clearSwap } from './swap.js'
 import { fetchQuote, VenueUnavailable, withQuote } from './swap-quote.js'
@@ -18,6 +19,8 @@ const REASON = 'owner: close positions'
  * price impact is not limited, slippage still is, so the sale cannot be sandwiched.
  */
 export async function closePositions(deps: PaymentDeps): Promise<PayIntent[]> {
+  // An order left open would try to sell a position that is already gone (CR-026).
+  cancelOpen(deps, 'owner_close')
   const intents: PayIntent[] = []
   const shared = [...deps.chains.values()].map((adapter) => ({ adapter, agentId: undefined }))
   const own = (await deps.wallets?.all()) ?? []

@@ -59,8 +59,10 @@ export class Venue extends StubChain {
 
   /** CR-026: any token sells at 1000 for 1 USDC, unless a test moves the price. */
   sellImpactBps = 10
+  /** Set to move the market the order watcher sees. */
+  sellOut: string | undefined
   async quoteSell(_token: string, amount: string) {
-    const out = `${BigInt(amount) / 1000n}`
+    const out = this.sellOut ?? `${BigInt(amount) / 1000n}`
     return { out, priceImpactBps: this.sellImpactBps, quotedAt: NOW.toISOString() }
   }
 
