@@ -370,6 +370,11 @@ export const dailyTrades = sqliteTable(
       .$type<Amount>()
       .notNull()
       .default(sql`'0'`),
+    /** CR-028: first buys decided without the owner under quickFirstBuy. */
+    quick: text('quick')
+      .$type<Amount>()
+      .notNull()
+      .default(sql`'0'`),
   },
   (t) => [primaryKey({ columns: [t.agentId, t.chain, t.day] })],
 )

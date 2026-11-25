@@ -72,6 +72,7 @@ const book: Book = {
   tradedToday: 0n,
   soldToday: 0n,
   swappedToday: 0n,
+  quickToday: 0n,
   positionCost: 0n,
   boughtBefore: true,
 }
@@ -208,5 +209,39 @@ describe('evaluateTrade (CR-021)', () => {
       'PRICE_IMPACT_TOO_HIGH',
       'NO_EXIT_ROUTE',
     ])
+  })
+})
+
+describe('quick first buys (CR-028)', () => {
+  const quick = { maxUsd: '2000000', dailyUsd: '3000000' }
+  const fresh = { ...book, boughtBefore: false }
+  const decide = (trade = buy(), p = policy({ quickFirstBuy: quick }), b = fresh) =>
+    evaluateTrade(trade, p, b, NOW)
+
+  it('lets a small first buy of a listed token through without the owner', () => {
+    expect(decide()).toEqual({
+      decision: 'approve',
+      reasons: [],
+      flags: ['NEW_TOKEN'],
+      quick: true,
+    })
+  })
+
+  it('still asks when off, over either amount, over the threshold, or for any other flag', () => {
+    expect(decide(buy(), policy()).decision).toBe('needs_approval')
+    const big = buy({ amountIn: '3000000' }, { amountIn: '3000000' })
+    expect(decide(big).decision).toBe('needs_approval')
+    expect(decide(buy(), undefined, { ...fresh, quickToday: 2_500_000n }).decision).toBe(
+      'needs_approval',
+    )
+    const low = policy({ quickFirstBuy: quick }, { approvalThreshold: '500000' })
+    expect(decide(buy(), low).decision).toBe('needs_approval')
+    expect(decide(buy({ flags: ['MINT_AUTHORITY'] })).decision).toBe('needs_approval')
+  })
+
+  it('never covers a token admitted only by allowAnyToken, unless the hunt offered it', () => {
+    const any = policy({ quickFirstBuy: quick, tokens: [], allowAnyToken: true })
+    expect(decide(buy(), any).decision).toBe('needs_approval')
+    expect(decide({ ...buy(), offered: true }, any).decision).toBe('approve')
   })
 })

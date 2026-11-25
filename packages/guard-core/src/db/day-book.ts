@@ -42,11 +42,16 @@ export function boughtTodayAll(db: Db, agentId: string, day: string): bigint {
     .reduce((sum, row) => sum + parseAmount(row.bought), 0n)
 }
 
-type Counter = 'bought' | 'sold' | 'swapped'
+type Counter = 'bought' | 'sold' | 'swapped' | 'quick'
 
 function today(db: Db, agentId: string, chain: ChainId, day: string, counter: Counter): bigint {
   const row = db
-    .select({ bought: dailyTrades.bought, sold: dailyTrades.sold, swapped: dailyTrades.swapped })
+    .select({
+      bought: dailyTrades.bought,
+      sold: dailyTrades.sold,
+      swapped: dailyTrades.swapped,
+      quick: dailyTrades.quick,
+    })
     .from(dailyTrades)
     .where(
       and(eq(dailyTrades.agentId, agentId), eq(dailyTrades.chain, chain), eq(dailyTrades.day, day)),
@@ -67,7 +72,12 @@ function addToday(
 ) {
   db.transaction((tx) => {
     const row = tx
-      .select({ bought: dailyTrades.bought, sold: dailyTrades.sold, swapped: dailyTrades.swapped })
+      .select({
+        bought: dailyTrades.bought,
+        sold: dailyTrades.sold,
+        swapped: dailyTrades.swapped,
+        quick: dailyTrades.quick,
+      })
       .from(dailyTrades)
       .where(
         and(
@@ -98,6 +108,10 @@ export const addSold = (db: Db, agentId: string, chain: ChainId, day: string, am
 /** CR-026: a token-to-token swap counts at its valuation. */
 export const addSwapped = (db: Db, agentId: string, chain: ChainId, day: string, amount: Amount) =>
   addToday(db, { agentId, chain, day }, 'swapped', amount)
+
+/** CR-028: a first buy decided without the owner, at what it spent. */
+export const addQuick = (db: Db, agentId: string, chain: ChainId, day: string, amount: Amount) =>
+  addToday(db, { agentId, chain, day }, 'quick', amount)
 
 /** A sell that landed replaces what it was expected to bring with what it brought. */
 export function correctSold(
@@ -176,6 +190,8 @@ export function bookOf(
       : today(db, agentId, chain, day, 'sold'),
     // In shadow the swaps are not counted: paper swaps leave no row to sum. Their limits still hold.
     swappedToday: shadow ? 0n : today(db, agentId, chain, day, 'swapped'),
+    // Shadow decides nothing for real, so its quick first buys use none of the day's room.
+    quickToday: shadow ? 0n : today(db, agentId, chain, day, 'quick'),
     positionCost: position.cost,
     ...(shadow ? {} : { positionAmount: spent.amount }),
     boughtBefore: everHeld(db, chain, token),

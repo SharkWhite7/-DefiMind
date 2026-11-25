@@ -130,6 +130,9 @@ const tradingBody = z.strictObject({
   orders: z
     .strictObject({ enabled: z.boolean(), maxOpen: z.number().int().min(0).max(100) })
     .optional(),
+  // CR-028. Absent: the shield on, and no quick first buys.
+  rugShield: z.strictObject({ enabled: z.boolean() }).optional(),
+  quickFirstBuy: z.strictObject({ maxUsd: atomicAmount, dailyUsd: atomicAmount }).optional(),
 })
 
 export const policyBody = z.object({

@@ -37,12 +37,16 @@ export interface Trade {
   /** What the agent asked for: the quote must answer exactly this. */
   request: { tokenIn: string; tokenOut: string; amountIn: string; maxSlippageBps?: number }
   quote: SwapQuote
+  /** CR-028: the AI trader buys a token its hunt was offered, which quick first buys may cover. */
+  offered?: boolean
 }
 
 export interface TradeVerdict {
   decision: PolicyDecision
   reasons: RejectCode[]
   flags: TradingFlag[]
+  /** CR-028: a first buy decided without the owner under quickFirstBuy. */
+  quick?: boolean
 }
 
 /**
@@ -126,8 +130,40 @@ export function evaluateTrade(
     return { decision: 'approve', reasons: [], flags: [] }
   }
   const flags = buyFlags(quote, book)
-  const waits = flags.length > 0 || (valueUsd ?? 0n) >= parseAmount(policy.approvalThreshold)
-  return { decision: waits ? 'needs_approval' : 'approve', reasons: [], flags }
+  const value = valueUsd ?? 0n
+  const overThreshold = value >= parseAmount(policy.approvalThreshold)
+  const quick = !overThreshold && quickFirst(trading, trade, flags, value, book)
+  const waits = (flags.length > 0 && !quick) || overThreshold
+  return {
+    decision: waits ? 'needs_approval' : 'approve',
+    reasons: [],
+    flags,
+    ...(quick ? { quick } : {}),
+  }
+}
+
+/**
+ * CR-028: a first buy the owner let through without asking. Only NEW_TOKEN may be flagged, it must
+ * fit the per-buy and per-day amounts, and the token must be one the owner listed or the AI
+ * trader's hunt was offered: a token admitted only by allowAnyToken always waits, so a leaked
+ * agent key cannot use it on fresh mints.
+ */
+function quickFirst(
+  trading: TradingPolicy,
+  trade: Trade,
+  flags: TradingFlag[],
+  value: bigint,
+  book: Book,
+): boolean {
+  const quick = trading.quickFirstBuy
+  return (
+    quick !== undefined &&
+    flags.length === 1 &&
+    flags[0] === 'NEW_TOKEN' &&
+    value <= parseAmount(quick.maxUsd) &&
+    book.quickToday + value <= parseAmount(quick.dailyUsd) &&
+    (trading.tokens.includes(trade.token) || trade.offered === true)
+  )
 }
 
 /** The quote answers the request, keeps its own promises, and is fresh. */

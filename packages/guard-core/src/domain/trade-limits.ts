@@ -9,6 +9,8 @@ export interface Book {
   soldToday: bigint
   /** Today's token-to-token swaps, at their valuation (CR-026). */
   swappedToday: bigint
+  /** Today's first buys decided without the owner (CR-028). */
+  quickToday: bigint
   /** What the agent holds, at cost, of the token a buy or swap brings in. */
   positionCost: bigint
   /**

@@ -58,6 +58,12 @@ export function tradingLimits(ctx: Context, policy: PolicyView, save: Save) {
   orders.checked = form.ordersEnabled
   const maxOpen = el('input', { id: 'max-open', inputmode: 'numeric', autocomplete: 'off' })
   maxOpen.value = form.maxOpen
+  const shield = el('input', { id: 'rug-shield', type: 'checkbox' })
+  shield.checked = form.shield
+  const quickBuy = money('quick-buy', 'Quick first buys: each up to, in dollars', form.quickBuy)
+  const quickDay = money('quick-day', 'Quick first buys: all in a day, in dollars', form.quickDay)
+  quickBuy.node.placeholder = 'off'
+  quickDay.node.placeholder = 'off'
   return card(
     el('h2', {}, 'Trading limits'),
     el(
@@ -89,6 +95,20 @@ export function tradingLimits(ctx: Context, policy: PolicyView, save: Save) {
     el('label', { class: 'check' }, orders, 'Allow take-profit and stop-loss orders'),
     el('label', { for: 'max-open' }, 'Most open orders'),
     maxOpen,
+    el('h3', {}, 'Protection'),
+    el(
+      'label',
+      { class: 'check' },
+      shield,
+      'Rug shield: sell a held token if a new risk appears or its liquidity goes',
+    ),
+    el(
+      'p',
+      { class: 'muted' },
+      'A first buy of a token waits for you. Under these amounts, a first buy of a token you listed goes through without asking. Leave both empty to always be asked.',
+    ),
+    ...quickBuy.nodes,
+    ...quickDay.nodes,
     button(
       'Save limits',
       async () => {
@@ -107,6 +127,9 @@ export function tradingLimits(ctx: Context, policy: PolicyView, save: Save) {
           ) as Parameters<typeof fromLimitsForm>[0]['operations'],
           ordersEnabled: orders.checked,
           maxOpen: maxOpen.value,
+          shield: shield.checked,
+          quickBuy: quickBuy.node.value,
+          quickDay: quickDay.node.value,
         })
         if (typeof limits === 'string') {
           ctx.say(limits, 'stop')

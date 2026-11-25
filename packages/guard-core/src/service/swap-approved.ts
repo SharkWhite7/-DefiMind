@@ -4,6 +4,7 @@ import { bookOf } from '../db/day-book.js'
 import { evaluateTrade } from '../domain/trading.js'
 import { reject, type PaymentDeps } from './payments.js'
 import { clearSwap } from './swap.js'
+import { wholeExit } from './swap-autopilot.js'
 import { dollarOf, gasReason, pairOf, swapLegs, valueOf } from './swap-quote.js'
 import { adapterFor, signerKey } from './wallets.js'
 
@@ -67,7 +68,14 @@ export async function sendApprovedSwap(deps: PaymentDeps, first: PayIntent): Pro
     }
     const day = repo.utcDay(now())
     const book = bookOf(db, { ...where, dollar: dollarOf(deps, intent.chain), day }, false)
-    const trade = { ...pair, request, quote, ...(valueUsd === undefined ? {} : { valueUsd }) }
+    // CR-028: the position may have grown, or the pool drained, since the owner was asked.
+    const exitImpactBps = await wholeExit(deps, adapter, request, pair, quote, false)
+    const trade = {
+      ...pair,
+      request,
+      quote: { ...quote, exitImpactBps },
+      ...(valueUsd === undefined ? {} : { valueUsd }),
+    }
     const verdict = evaluateTrade(trade, policy, book, now())
     if (verdict.reasons.length > 0) {
       return reject(deps, intent, verdict.reasons)

@@ -453,3 +453,73 @@ describe('the owner Close (CR-021)', () => {
     expect(res.json().intents).toEqual([expect.objectContaining({ status: 'executed' })])
   })
 })
+
+describe('quick first buys and the whole-position exit (CR-028)', () => {
+  it('lets a small first buy of a listed token through, within the day', async () => {
+    const quickFirstBuy = { maxUsd: '1000000', dailyUsd: '1000000' }
+    const { h, chain } = await setup({ trading: { quickFirstBuy } })
+    const res = await h.agent('POST', '/v1/agent/swap', buy())
+    expect(res.json()).toMatchObject({ status: 'executed' })
+    expect(chain.sent).toHaveLength(1)
+    expect(h.auditEvents()).toContain('quick_first_buy')
+    // The day's room is used: another new token now waits for the owner.
+    const OTHER = 'Wen1111111111111111111111111111111111111111'
+    const second = { trading: { ...trading, quickFirstBuy, tokens: [BONK, OTHER] } }
+    const again = await setup({ trading: second.trading })
+    await again.h.agent('POST', '/v1/agent/swap', buy())
+    const next = await again.h.agent('POST', '/v1/agent/swap', buy('1000000', { tokenOut: OTHER }))
+    expect(next.json()).toMatchObject({ status: 'pending_approval' })
+  })
+
+  it('refuses a buy whose whole position could not be sold within the impact limit', async () => {
+    const { h, chain } = await setup()
+    await bought(h)
+    chain.sellImpactBps = 301
+    const res = await h.agent('POST', '/v1/agent/swap', buy())
+    expect(res.json()).toMatchObject({ status: 'rejected', rejectReasons: ['NO_EXIT_ROUTE'] })
+    chain.sellImpactBps = 10
+    expect((await h.agent('POST', '/v1/agent/swap', buy())).json().status).toBe('executed')
+  })
+})
+
+describe('owner approvals under CR-028', () => {
+  const mintable = (chain: Venue) => {
+    const real = chain.quoteSwap.bind(chain)
+    chain.quoteSwap = async (req) => ({ ...(await real(req)), flags: ['MINT_AUTHORITY'] })
+  }
+  const approve = async (h: Awaited<ReturnType<typeof setup>>['h'], intentId: string) => {
+    const owner = await signedIn(h)
+    return owner.call('POST', `/v1/owner/intents/${intentId}/decision`, {
+      decision: 'approve',
+      assertion: await owner.stepUp('approve_intent', { intentId }),
+    })
+  }
+
+  it('never charges an approved first buy to the quick room', async () => {
+    const { h, chain } = await setup({
+      trading: { quickFirstBuy: { maxUsd: '9000000', dailyUsd: '9000000' } },
+    })
+    mintable(chain)
+    const res = await h.agent('POST', '/v1/agent/swap', buy())
+    expect(res.json().status).toBe('pending_approval')
+    await approve(h, res.json().intentId)
+    expect(chain.sent).toHaveLength(1)
+    expect(h.auditEvents()).not.toContain('quick_first_buy')
+  })
+
+  it('checks the whole position again when the owner approves a buy', async () => {
+    const { h, chain } = await setup()
+    const owner = await bought(h)
+    mintable(chain)
+    const res = await h.agent('POST', '/v1/agent/swap', buy())
+    const intentId = res.json().intentId
+    expect(res.json().status).toBe('pending_approval')
+    chain.sellImpactBps = 5000
+    const done = await owner.call('POST', `/v1/owner/intents/${intentId}/decision`, {
+      decision: 'approve',
+      assertion: await owner.stepUp('approve_intent', { intentId }),
+    })
+    expect(done.json()).toMatchObject({ status: 'rejected', rejectReasons: ['NO_EXIT_ROUTE'] })
+    expect(chain.sent).toHaveLength(1)
+  })
+})

@@ -89,6 +89,11 @@ function tradingLoosened(before: TradingPolicy = CLOSED, after: TradingPolicy = 
       ? ['orders.enabled']
       : []),
     ...((after.orders?.maxOpen ?? 10) > (before.orders?.maxOpen ?? 10) ? ['orders.maxOpen'] : []),
+    // CR-028: absent, the shield is on, so only an explicit false turns it off.
+    ...((before.rugShield?.enabled ?? true) && !(after.rugShield?.enabled ?? true)
+      ? ['rugShield']
+      : []),
+    ...(quickLoosened(before.quickFirstBuy, after.quickFirstBuy) ? ['quickFirstBuy'] : []),
   ]
 }
 
@@ -104,4 +109,17 @@ function amountsLoosened<T extends object>(before: T | undefined, after: T | und
     const now = caps(after)[field]
     return was === undefined || now === undefined || parseAmount(now) > parseAmount(was)
   })
+}
+
+/** Quick first buys are off when absent, so setting them, or raising either amount, loosens. */
+function quickLoosened(
+  before: TradingPolicy['quickFirstBuy'],
+  after: TradingPolicy['quickFirstBuy'],
+) {
+  return (
+    after !== undefined &&
+    (before === undefined ||
+      parseAmount(after.maxUsd) > parseAmount(before.maxUsd) ||
+      parseAmount(after.dailyUsd) > parseAmount(before.dailyUsd))
+  )
 }

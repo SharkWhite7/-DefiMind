@@ -1,10 +1,12 @@
 import { type ChainAdapter, SwapUnavailable } from '@defimind/onchain'
-import type { PayIntent, SwapDetails, SwapQuote } from '@defimind/shared'
+import type { PayIntent, Policy, SwapDetails, SwapQuote } from '@defimind/shared'
 import { z } from 'zod'
 import type { Trade } from '../domain/trading.js'
 import { belowGasReserve, swapValue, WSOL } from '../domain/valuation.js'
+import { HttpError } from '../http/errors.js'
 import type { QuoteRequest } from '../http/schemas.js'
 import type { PaymentDeps } from './payments.js'
+import { adapterFor } from './wallets.js'
 
 /** Read from the mints onchain by the adapter; a quote without them is not one we can record. */
 const mints = z.object({
@@ -140,3 +142,31 @@ export const swapLegs = (
   { token: req.tokenIn, amount: req.amountIn },
   { token: req.tokenOut, amount: minAmountOut },
 ]
+
+/** POST /v1/agent/quote: read-only, so it decides nothing and records nothing. */
+export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy) {
+  const trading = policy.trading
+  const adapter = adapterFor(deps, req.agentId, req.chain)
+  if (trading === undefined || !trading.enabled) {
+    throw new HttpError(403, 'trading_disabled')
+  }
+  const pair = pairOf(deps, req)
+  if (adapter?.quoteSwap === undefined || pair === undefined) {
+    throw new HttpError(400, 'not_tradable')
+  }
+  const slippage = Math.min(trading.maxSlippageBps, req.maxSlippageBps ?? Infinity)
+  const answer = await fetchQuote(adapter, req, slippage)
+  if (answer === 'no_route') {
+    throw new HttpError(404, 'no_route')
+  }
+  if (pair.side !== 'swap') {
+    return answer
+  }
+  const value = await valueOf(
+    adapter,
+    swapLegs(req, answer.minAmountOut),
+    trading.maxPriceImpactBps,
+    deps.now(),
+  )
+  return value === undefined ? answer : { ...answer, valueUsd: value.toString() }
+}

@@ -18,6 +18,7 @@ const book: Book = {
   tradedToday: 0n,
   soldToday: 0n,
   swappedToday: 0n,
+  quickToday: 0n,
   positionCost: 0n,
   positionAmount: 5_000n,
   boughtBefore: true,

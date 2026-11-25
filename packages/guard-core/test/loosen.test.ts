@@ -176,6 +176,27 @@ describe('loosened trading (CR-021)', () => {
     ).toEqual([])
   })
 
+  it('flags turning the rug shield off, and setting or raising quick first buys (CR-028)', () => {
+    const shield = (enabled?: boolean) => ({
+      ...trades,
+      trading: { ...trading, ...(enabled === undefined ? {} : { rugShield: { enabled } }) },
+    })
+    expect(loosened(shield(), shield(false))).toEqual(['trading.rugShield'])
+    expect(loosened(shield(true), shield(false))).toEqual(['trading.rugShield'])
+    expect(loosened(shield(false), shield())).toEqual([])
+    const quick = (maxUsd?: string) => ({
+      ...trades,
+      trading: {
+        ...trading,
+        ...(maxUsd === undefined ? {} : { quickFirstBuy: { maxUsd, dailyUsd: '9' } }),
+      },
+    })
+    expect(loosened(quick(), quick('1'))).toEqual(['trading.quickFirstBuy'])
+    expect(loosened(quick('1'), quick('2'))).toEqual(['trading.quickFirstBuy'])
+    expect(loosened(quick('2'), quick('1'))).toEqual([])
+    expect(loosened(quick('2'), quick())).toEqual([])
+  })
+
   it('flags anything that would disarm an open stop (CR-028)', () => {
     const on = {
       ...trades,
