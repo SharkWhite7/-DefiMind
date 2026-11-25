@@ -74,6 +74,10 @@ export function rugShield(deps: PaymentDeps, rules: ShieldRules) {
       return
     }
     state.told = false
+    // A paper sell said nothing about a live agent: once it goes live, the shield acts again.
+    if (policy.mode !== 'shadow') {
+      state.shadowed = false
+    }
     const quoted = await adapter.quoteSell(held.token, held.amount).then(
       (q) => q,
       (error: unknown) =>
@@ -94,7 +98,9 @@ export function rugShield(deps: PaymentDeps, rules: ShieldRules) {
         state.bad += 1
       }
     }
-    if (confirmed !== undefined) {
+    // With no quote and no good one before it, the floor would be nothing: wait for a quote.
+    const blind = quoted === undefined && state.goods.length === 0
+    if (confirmed !== undefined && !blind) {
       await fire(held, policy, state, 'new_risk', confirmed, out)
     } else if (state.bad >= rules.confirmChecks) {
       await fire(held, policy, state, 'liquidity_gone', 'its liquidity is gone', out)

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { schema } from '../src/db/client.js'
 import { getOrder } from '../src/db/orders.js'
 import { getBaseline, saveBaseline, takeBaseline } from '../src/db/shield.js'
 import { getPosition, applyTrade } from '../src/db/trades.js'
@@ -182,12 +183,15 @@ describe('the rug shield watcher (CR-028)', () => {
     expect(h.auditEvents().filter((e) => e === 'rug_shield')).toHaveLength(1)
   })
 
-  it('sells once on paper in shadow mode, and never cancels real orders', async () => {
-    const { h, chain, tick } = await setup({ mode: 'shadow' })
+  it('sells once on paper in shadow mode, and for real once the agent goes live', async () => {
+    const { h, chain, tick, held } = await setup({ mode: 'shadow' })
     await tick()
     chain.mint.freezeAuthority = true
     await tick(10)
     expect(h.auditEvents().filter((e) => e === 'rug_shield')).toHaveLength(1)
+    h.db.update(schema.policies).set({ mode: 'live' }).run()
+    await tick(3)
+    expect(held()).toBe(0n)
   })
 
   it('keeps the baseline while the position is open, and never reuses an old one', async () => {
