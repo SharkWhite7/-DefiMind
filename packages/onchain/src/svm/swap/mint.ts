@@ -33,6 +33,8 @@ export interface MintFacts {
   risks: RejectCode[]
   /** The mint can still be inflated: the buy goes to the owner. */
   mintAuthority: boolean
+  /** Atomic. CR-028: the rug shield compares it with the supply at the buy. */
+  supply: string
 }
 
 /** What a mint account says about the token, read from the chain and nothing else. */
@@ -53,5 +55,6 @@ export function mintFacts(address: PublicKey, info: AccountInfo<Buffer> | null):
     extensions: types.map((type) => ExtensionType[type] ?? `Unknown${type}`),
     risks,
     mintAuthority: mint.mintAuthority !== null,
+    supply: mint.supply.toString(),
   }
 }

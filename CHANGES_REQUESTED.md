@@ -1593,3 +1593,69 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
   - Token names, symbols and every other venue field are hostile input. They reach the model as
     delimited data, and nothing the model writes can widen the policy: a trade outside it is
     refused.
+
+### CR-028 — Degen autopilot: hunt mode, trailing stops, rug shield, faster prices, quick first buys
+
+- **From:** integrator, from the owner's request
+- **Date:** 2026-11-25
+- **Status:** approved by the owner on 2026-11-25. He picked five gaps from the integrator's review
+  of the trading stack and said, translated: "let's implement this". Specified in SPEC v0.22,
+  "Degen autopilot". It builds on CR-026 and CR-027.
+- **Why:** the guard is in place; what degens miss is speed and discovery. Today:
+  - the AI trader only trades tokens listed one by one;
+  - a stop-loss never follows the price up;
+  - the risk checks run only before a buy, so a token that turns bad later is not noticed;
+  - the trader sees one price sample every 15 minutes, even when it decides every 5;
+  - every first buy of a token waits for the owner, and the move is gone by then.
+- **Scope:** Solana mainnet, spot, through Jupiter, behind every CR-021 and CR-026 check. Nothing about
+  payments changes.
+- **What changes:**
+  1. **Hunt mode.** The AI trader may look at new and trending tokens and buy the ones guard-core
+     admits, inside a separate budget:
+     - guard-core screens candidates first: no freeze authority, no mint authority, no Token-2022
+       risk extension, and an exit route within the price-impact limit;
+     - a hunted buy has its own cap per buy and a total budget held at cost;
+     - a hunted buy can get a trailing stop at once, placed under the owner's settings, which the
+       model cannot cancel;
+     - it needs the policy to allow any token that passes the risk checks, so it is never turned on
+       by accident.
+  2. **Trailing stops.** A new order kind that sells when the price falls a set percentage from its
+     confirmed high. A one-off spike never moves the high, and it is never sold below its trigger.
+  3. **Rug shield.** guard-core keeps watching every held token. It sells the whole position when:
+     - a risk appears after the buy: a freeze authority, a Token-2022 risk extension, or a supply
+       jump on a mint that can still be inflated;
+     - or the exit's price impact goes past the limit, which means the liquidity is gone.
+       It is on by default, and turning it off needs the passkey. A paused agent is not sold; the
+       owner is told to use Close positions.
+  4. **Faster prices.** One-minute price samples for the tokens of 5-minute traders, and a short
+     price summary in each tick, so the model spends fewer tool calls.
+  5. **Quick first buys.** An owner-set amount per buy and per day under which a buy flagged only as
+     a new token goes through without waiting. It covers the AI trader's hunted buys and tokens the
+     owner listed, never an MCP agent's buy of a token admitted only by "any token". It is off by
+     default and raising it needs the passkey. A mint that can still be inflated keeps waiting.
+  6. **Fixes from the independent review of this CR**, before any code:
+     - protective sells (stop fills and the shield) are exempt from the sell limits, so an agent
+       cannot use up its stops' room;
+     - a stop refused on price goes back to open instead of failing for good;
+     - cancelling a stop from the panel, or turning orders off while one is open, needs the passkey;
+     - a buy needs an exit for the whole position after it;
+     - the shield compares with a baseline stored at the buy, and its liquidity rule sells nothing
+       below half the last good quote;
+     - the hunt budget counts swaps at their value, adds a daily cap, binds in shadow mode, and
+       tags hunted positions at the buy.
+- **Rows:**
+  - guard-core: GC-74 (hunt mode and the discover tool, trailing stops in the order watcher, the rug
+    shield watcher, fast price samples, quick first buys);
+  - onchain: ON-36 (tokenRisk also returns the mint's supply);
+  - panel: PANEL-27 (the hunt section of the AI Trader setup, the trailing stop form, the shield
+    switch, the quick first buy amount, shield events in the feed);
+  - mcp: MCP-35 (place_order takes trailing_stop; the rug shield's codes in plain words);
+  - integrator: INT-53 (SPEC, shared types and the fork e2e).
+- **Risks for the owner to accept:**
+  - New tokens are where most rugs are. The screen and the shield cut known traps; they cannot
+    tell whether a token is a good buy, and a hunted token can lose all its value. The hunt budget
+    is the bound.
+  - The rug shield sells at the market. On a token whose liquidity is gone it may get very little,
+    and on a false alarm it sells a position the owner wanted to keep.
+  - A quick first buy skips the owner's look at a new token, up to the amount he sets.
+  - A trailing stop sells into a dip that may recover.

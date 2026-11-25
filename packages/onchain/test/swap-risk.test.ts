@@ -68,6 +68,7 @@ describe("a token's risk card, from mainnet mints", () => {
       decimals: 6,
       freezeAuthority: false,
       mintAuthority: false,
+      supply: expect.stringMatching(/^[1-9]\d*$/),
       extensions: [],
       risks: [],
       exit: { amountUsd: '10000000', priceImpactBps: 125 },

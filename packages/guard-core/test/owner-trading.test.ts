@@ -25,6 +25,7 @@ const facts: Omit<TokenRisk, 'venue' | 'flags'> = {
   decimals: 5,
   freezeAuthority: false,
   mintAuthority: true,
+  supply: '88000000000000000',
   extensions: [],
   risks: [],
   exit: { amountUsd: '10000000', priceImpactBps: 40 },
