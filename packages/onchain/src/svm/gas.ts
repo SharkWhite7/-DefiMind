@@ -21,6 +21,9 @@ export async function hotWalletGas(
     connection.getBalance(hotWallet),
     connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE),
   ])
-  const needed = 2n * BigInt(rent) + TRANSACTIONS * SIGNATURE_FEE
-  return { balance: String(balance), minimum: String((needed * 5n) / 4n), symbol: 'SOL' }
+  return { balance: String(balance), minimum: String(gasMinimum(rent)), symbol: 'SOL' }
 }
+
+/** The lamports a hot wallet needs, at a token account's `rent`. */
+export const gasMinimum = (rent: number) =>
+  ((2n * BigInt(rent) + TRANSACTIONS * SIGNATURE_FEE) * 5n) / 4n

@@ -5,9 +5,9 @@
  * here for the test; it never holds anything on mainnet.
  *
  *   pnpm record:swap                                  USDC → wSOL, one Whirlpool hop
- *   pnpm record:swap <name> <in> <out> <amount> [wrap|nowrap] [dexes]  into jupiter-swap-<name>.json
+ *   pnpm record:swap <name> <in> <out> <amount> [dexes]  into jupiter-swap-<name>.json
  *
- * `wrap` lets Jupiter wrap and unwrap native SOL (CR-026), for a SOL leg. `dexes` keeps the route to
+ * Jupiter wraps native SOL for a SOL leg, as the adapter asks it to (CR-026). `dexes` keeps the route to
  * pools whose state is all in the recorded accounts: an oracle-priced AMM moves with each slot, so
  * its quote and its state never match in a recording.
  */
@@ -26,8 +26,7 @@ const RPC = process.env['SOLANA_MAINNET_RPC'] ?? 'https://api.mainnet-beta.solan
 const JUPITER = 'https://lite-api.jup.ag/swap/v1'
 const USDC = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
 const WSOL = 'So11111111111111111111111111111111111111112'
-const [name, inputMint = USDC, outputMint = WSOL, amount = '1000000', wrap, dexes] =
-  process.argv.slice(2)
+const [name, inputMint = USDC, outputMint = WSOL, amount = '1000000', dexes] = process.argv.slice(2)
 const OUT = new URL(
   `../../test/fixtures/jupiter-swap${name ? `-${name}` : ''}.json`,
   import.meta.url,
@@ -53,7 +52,7 @@ const { swapTransaction } = (await get('/swap', {
   body: JSON.stringify({
     quoteResponse: quote,
     userPublicKey: hot.publicKey.toBase58(),
-    wrapAndUnwrapSol: wrap === 'wrap',
+    wrapAndUnwrapSol: inputMint === WSOL || outputMint === WSOL,
     dynamicComputeUnitLimit: true,
     prioritizationFeeLamports: {
       priorityLevelWithMaxLamports: { priorityLevel: 'medium', maxLamports: 500_000 },

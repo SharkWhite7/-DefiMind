@@ -16,6 +16,7 @@ import {
 } from '@solana/web3.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { JupiterQuote, Venue } from '../src/svm/swap/jupiter.js'
+import { MAX_PRIORITY_LAMPORTS } from '../src/svm/swap/inspect.js'
 import { swaps } from '../src/svm/swap/service.js'
 import { liteConnection } from './litesvm.js'
 import { mainnetPrograms, type PinnedProgram } from './programs.js'
@@ -46,7 +47,7 @@ const BONK = new PublicKey('DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263')
 
 const routes = [
   {
-    name: 'USDC for wSOL',
+    name: 'USDC for SOL',
     file: 'jupiter-swap.json',
     tokenIn: USDC,
     tokenOut: WSOL,
@@ -58,6 +59,13 @@ const routes = [
     tokenIn: JUP,
     tokenOut: BONK,
     decimals: [6, 5],
+  },
+  {
+    name: 'SOL for JUP',
+    file: 'jupiter-swap-sol-jup.json',
+    tokenIn: WSOL,
+    tokenOut: JUP,
+    decimals: [9, 6],
   },
 ] as const
 
@@ -74,6 +82,8 @@ for (const route of routes) {
     if (process.env['FORK_REQUIRED'] === '1') throw new Error(`fork test required: ${skipped}`)
     console.warn(`swap-fork skipped: ${skipped}`)
   }
+  // A SOL leg is native SOL, wrapped and unwrapped in the one shape inspectSwap allows (CR-026).
+  const native = route.tokenIn.equals(WSOL)
   const held = 5n * BigInt(recorded.quote.inAmount)
   const hotWallet = Keypair.fromSecretKey(Uint8Array.from(recorded.hotSecretKey))
   const hot = hotWallet.publicKey
@@ -108,6 +118,7 @@ for (const route of routes) {
       ),
     )
     svm.airdrop(hot, BigInt(LAMPORTS_PER_SOL))
+    if (native) return plug()
     const data = Buffer.alloc(ACCOUNT_SIZE)
     AccountLayout.encode(
       {
@@ -131,6 +142,10 @@ for (const route of routes) {
       executable: false,
       data,
     })
+    plug()
+  }
+
+  function plug() {
     const base = liteConnection(svm)
     // LiteSVM keeps no owner index; the hot wallet's accounts are its two associated ones.
     connection = Object.assign(base, {
@@ -189,6 +204,8 @@ for (const route of routes) {
     const info = svm.getAccount(account)
     return info ? AccountLayout.decode(Buffer.from(info.data)).amount : 0n
   }
+  /** What the hot wallet holds of tokenIn: its lamports when that is SOL. */
+  const holdsIn = () => (native ? BigInt(svm.getBalance(hot) ?? 0n) : balance(inAccount))
   const trade = () => swaps({ connection, hotWallet, dollar: USDC, venue })
 
   describe.skipIf(skipped)(
@@ -204,15 +221,24 @@ for (const route of routes) {
         const outcome = await s.simulate(intent())
         expect(outcome.rejectReasons).toEqual([])
         const changes = new Map(outcome.simulation.balanceChanges.map((c) => [c.token, c.delta]))
+        // Each leg reported gross of fees and rent, a SOL leg as any other (CR-026).
         expect(changes.get(route.tokenIn.toBase58())).toBe(`-${recorded.quote.inAmount}`)
         const bought = BigInt(changes.get(route.tokenOut.toBase58())!)
         expect(bought).toBeGreaterThanOrEqual(BigInt(recorded.quote.otherAmountThreshold))
         // Route intermediates net to zero: only the two legs move (CR-026).
         expect(changes.size).toBe(2)
 
+        const was = holdsIn()
         await s.send(intent())
-        expect(balance(inAccount)).toBe(held - BigInt(recorded.quote.inAmount))
-        expect(balance(outAccount)).toBe(bought)
+        // Selling SOL, the same lamports also pay the fee and the rent of the account it opens.
+        const spent = was - holdsIn()
+        if (native)
+          expect(spent - BigInt(recorded.quote.inAmount)).toBeLessThanOrEqual(
+            5_000n + MAX_PRIORITY_LAMPORTS + 2_039_280n,
+          )
+        else expect(spent).toBe(BigInt(recorded.quote.inAmount))
+        if (route.tokenOut.equals(WSOL)) expect(svm.getAccount(outAccount)).toBeNull()
+        else expect(balance(outAccount)).toBe(bought)
       })
 
       it("refuses the same transaction with the route's slippage opened to 100%", async () => {
@@ -227,8 +253,9 @@ for (const route of routes) {
           jupiter.data.length,
         ).writeUInt16LE(10_000, jupiter.data.length - 3)
         swapTransaction = Buffer.from(tx.serialize()).toString('base64')
+        const was = holdsIn()
         expect((await trade().simulate(intent())).rejectReasons).toEqual(['SLIPPAGE_TOO_HIGH'])
-        expect(balance(inAccount)).toBe(held)
+        expect(holdsIn()).toBe(was)
       })
 
       it('refuses a route that cannot deliver the approved minimum', async () => {
