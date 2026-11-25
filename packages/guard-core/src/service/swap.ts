@@ -45,7 +45,7 @@ const UNTESTED = {
 export async function swap(
   deps: PaymentDeps,
   req: SwapRequest,
-  floor?: { minAmountOut: Amount; by: 'owner' | 'order' | 'stop' },
+  floor?: { minAmountOut: Amount; by: 'owner' | 'order' | 'stop' | 'shield' },
   trader?: { shadow: boolean; guard: () => RejectCode | undefined },
 ): Promise<PayIntent> {
   const shadow = trader?.shadow ?? false
@@ -131,7 +131,7 @@ export async function swap(
       { ...where, dollar: dollarOf(deps, req.chain), day: repo.utcDay(now()) },
       shadow || policy.mode === 'shadow',
     )
-    const protective = floor?.by === 'stop'
+    const protective = floor?.by === 'stop' || floor?.by === 'shield' ? floor.by : undefined
     const verdict = evaluateTrade(trade, policy, book, now(), protective)
     repo.audit(
       db,
@@ -158,7 +158,7 @@ export async function swap(
       shadow: shadow || policy.mode === 'shadow',
       policy,
       valueUsd: valueUsd ?? 0n,
-      protective,
+      protective: protective !== undefined,
     }
     if (floor?.by !== 'owner') {
       return clearSwap(deps, adapter, priced, how)

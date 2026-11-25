@@ -457,4 +457,25 @@ export const orders = sqliteTable(
   (t) => [index('orders_status').on(t.status), index('orders_agent').on(t.agentId)],
 )
 
+/**
+ * CR-028: what a held token's mint said when it was bought, for the rug shield to compare against.
+ * Taken again at every buy or swap into the token.
+ */
+export const shieldBaselines = sqliteTable(
+  'shield_baselines',
+  {
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id),
+    chain: text('chain').$type<ChainId>().notNull(),
+    token: text('token').$type<Address>().notNull(),
+    freezeAuthority: integer('freeze_authority', { mode: 'boolean' }).notNull(),
+    mintAuthority: integer('mint_authority', { mode: 'boolean' }).notNull(),
+    extensions: text('extensions', { mode: 'json' }).$type<string[]>().notNull(),
+    supply: text('supply').$type<Amount>().notNull(),
+    takenAt: text('taken_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.agentId, t.chain, t.token] })],
+)
+
 export * from './trader-schema.js'

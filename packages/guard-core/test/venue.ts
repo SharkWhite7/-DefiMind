@@ -81,6 +81,32 @@ export class Venue extends StubChain {
     return { out, priceImpactBps: this.sellImpactBps, quotedAt: NOW.toISOString() }
   }
 
+  /** CR-028: what a mint read says, for the rug shield; a test changes it to make a rug. */
+  mint = {
+    freezeAuthority: false,
+    mintAuthority: false,
+    extensions: [] as string[],
+    supply: '1000000',
+  }
+  /** When set, the mint read fails, as an RPC that is down. */
+  mintDown = false
+  async mintFacts(_mint: string) {
+    if (this.mintDown) {
+      throw new Error('rpc down')
+    }
+    return { ...this.mint, extensions: [...this.mint.extensions] }
+  }
+  async tokenRisk(mint: string) {
+    return {
+      chain: CHAIN,
+      mint,
+      decimals: 5,
+      ...this.mint,
+      risks: [],
+      exit: { amountUsd: '10000000', priceImpactBps: this.sellImpactBps },
+    }
+  }
+
   /** What the swap really brings in, when the market moved after its test run. */
   landed: bigint | undefined
 

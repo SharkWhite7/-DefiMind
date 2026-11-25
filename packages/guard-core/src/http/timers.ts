@@ -7,6 +7,7 @@ import type { BucketConfig } from '../adapters/bucket.js'
 import { scheduleBackups } from '../service/backup.js'
 import { alert } from '../service/events.js'
 import { orderWatcher } from '../service/order-watcher.js'
+import { rugShield, type ShieldRules } from '../service/rug-shield.js'
 import type { Claude } from '../adapters/claude.js'
 import { jupiterTokens } from '../adapters/jupiter-tokens.js'
 import { dueTicks, samplePrices } from '../service/trader-schedule.js'
@@ -32,6 +33,7 @@ export function startTimers(
     sweepMs?: number
     backups?: Backups
     orders?: Watch
+    shield?: ShieldRules
     traders?: Traders
   },
 ): void {
@@ -60,6 +62,21 @@ export function startTimers(
         running = false
       })
     }, checkMs)
+    timer.unref()
+    first.addHook('onClose', async () => clearInterval(timer))
+  }
+  if (options.shield !== undefined) {
+    const shield = rugShield(deps, options.shield)
+    let running = false
+    const timer = setInterval(() => {
+      if (running) {
+        return
+      }
+      running = true
+      void shield.tick().finally(() => {
+        running = false
+      })
+    }, options.shield.checkMs)
     timer.unref()
     first.addHook('onClose', async () => clearInterval(timer))
   }

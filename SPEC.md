@@ -1,17 +1,19 @@
 # DefiMind SPEC v0.23 (source of truth — do not change without owner approval)
 
 ## Goal
+
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
 Every payment is checked against a policy, simulated, and either auto-approved, sent to the owner
 on Telegram for approval, or rejected. Funds live in the owner's multisig; the agent only ever spends
 from a small hot wallet that is refilled under an ONCHAIN daily cap.
 
 ## Money flow
+
 Owner multisig (holds funds)
-  └─ Spend-limit primitive: delegate = Guard hot wallet, token = USDC, amount = dailyCap, period = 24h
-       └─ Guard hot wallet (small balance, key held ONLY by guard-core)
-            └─ pays x402 APIs / transfers, after policy + simulation + (optional) human approval
-            └─ swaps (CR-021), the same checks; what it buys stays in the hot wallet
+└─ Spend-limit primitive: delegate = Guard hot wallet, token = USDC, amount = dailyCap, period = 24h
+└─ Guard hot wallet (small balance, key held ONLY by guard-core)
+└─ pays x402 APIs / transfers, after policy + simulation + (optional) human approval
+└─ swaps (CR-021), the same checks; what it buys stays in the hot wallet
 
 Onchain guarantees: max loss per day = dailyCap + hot wallet balance (with trading, the tokens it
 holds count in that balance).
@@ -21,12 +23,14 @@ approval threshold, pause, simulation checks.
 Neither chain needs a contract we write. Both primitives are audited and already deployed:
 
                  | Solana                          | Base (EVM)
-  multisig       | Squads v4                       | Safe
-  spend limit    | Squads Spending Limit           | Safe Allowance Module (resetTimeMin = 1440)
-  dev network    | Solana devnet                   | Base Sepolia (84532)
-  launch network | Solana mainnet-beta             | Base mainnet (8453)
+
+multisig | Squads v4 | Safe
+spend limit | Squads Spending Limit | Safe Allowance Module (resetTimeMin = 1440)
+dev network | Solana devnet | Base Sepolia (84532)
+launch network | Solana mainnet-beta | Base mainnet (8453)
 
 ## Stack
+
 - Monorepo: pnpm workspaces, TypeScript (strict), Node 20+
 - Chains: Solana first, then Robinhood Chain, then Base (D6, CR-007). Token: each chain's dollar
   only: USDC, and USDG from Paxos on Robinhood Chain, which has no Circle USDC.
@@ -43,25 +47,27 @@ Neither chain needs a contract we write. Both primitives are audited and already
   program id: read it from official sources and put it in packages/shared/src/addresses.ts.
 
 ## Repo layout
-/packages/shared        types, zod schemas, addresses, constants (owned by Session 5, read-only for others)
-/packages/onchain       Session 1 — ChainAdapter interface + svm/ (Squads) and evm/ (Safe) implementations
-/packages/guard-core    Session 2 — policy engine, simulation, signer, x402 client, HTTP API, DB
-/packages/mcp-server    Session 3 — MCP server exposing tools to agents
-/packages/telegram-bot  Session 4 — owner approvals + kill switch (panel role since CR-012)
-/packages/panel         panel role — the owner web app (CR-012)
-/packages/sdk           mcp role — withReceipt and the defimind-verify CLI (CR-013)
-/packages/network       network role — the DefiMind Network, a hosted service (CR-029)
-/e2e                    Session 5 — end-to-end + attack tests, run once per chain
+
+/packages/shared types, zod schemas, addresses, constants (owned by Session 5, read-only for others)
+/packages/onchain Session 1 — ChainAdapter interface + svm/ (Squads) and evm/ (Safe) implementations
+/packages/guard-core Session 2 — policy engine, simulation, signer, x402 client, HTTP API, DB
+/packages/mcp-server Session 3 — MCP server exposing tools to agents
+/packages/telegram-bot Session 4 — owner approvals + kill switch (panel role since CR-012)
+/packages/panel panel role — the owner web app (CR-012)
+/packages/sdk mcp role — withReceipt and the defimind-verify CLI (CR-013)
+/packages/network network role — the DefiMind Network, a hosted service (CR-029)
+/e2e Session 5 — end-to-end + attack tests, run once per chain
 
 ## Chain identifiers
+
 Chains are CAIP-2 strings, never numbers: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp" style for Solana,
 "eip155:8453" for Base mainnet, "eip155:84532" for Base Sepolia, "eip155:4663" for Robinhood Chain and
 "eip155:46630" for its testnet (CR-007). The values live in
 packages/shared/src/constants.ts. The Solana references are the first 32 characters of each cluster's
 genesis hash, confirmed with `solana genesis-hash` (CR-002):
 
-  mainnet-beta | solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp
-  devnet       | solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1
+mainnet-beta | solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp
+devnet | solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1
 
 Each chain's dollar is `ChainAddresses.usd = { address, symbol }` in packages/shared/src/addresses.ts,
 symbol "USDC" or "USDG", always 6 decimals. Exactly that address is the chain's dollar: a token with
@@ -71,135 +77,137 @@ Addresses, token identifiers and transaction ids are opaque strings. Solana uses
 nothing outside a chain adapter may assume either.
 
 ## Shared types (packages/shared/src/types.ts)
+
 type Amount = string // atomic units (the chain's dollar = 6 decimals), decimal string, never JS number
 
 interface Policy {
-  agentId: string
-  chains: string[]                 // CAIP-2, e.g. ["solana:5eykt4..."]
-  tokens: string[]                 // allowed mints / token addresses
-  perTxMax: Amount
-  dailyMax: Amount                 // offchain daily max (<= onchain dailyCap)
-  approvalThreshold: Amount        // >= this requires the owner's approval (CR-012: the panel)
-  allowedRecipients: string[]      // empty = deny all direct transfers
-  allowedDomains: string[]         // for x402, e.g. ["api.example.com"]; empty = deny all
-  paused: boolean
-  // v0.6 (CR-010). Optional on PUT: omitted keeps the stored value, and a policy that has none gets
-  // the default. So a v0.5 client's PUT never turns shadow back into live. The defaults only add protection.
-  mode?: "live" | "shadow"         // default "live"; shadow evaluates and simulates, never signs
-  priceIncreaseMaxPct?: number     // default 100: an x402 price above the pinned one by more goes to the owner
-  maxPaymentsPerMinute?: number    // default 10: the payment that would exceed it trips the breaker
-  requireMandate?: boolean         // default false: when true, every payment needs an open mandate
-  trading?: TradingPolicy          // CR-021; absent = no trading at all
+agentId: string
+chains: string[] // CAIP-2, e.g. ["solana:5eykt4..."]
+tokens: string[] // allowed mints / token addresses
+perTxMax: Amount
+dailyMax: Amount // offchain daily max (<= onchain dailyCap)
+approvalThreshold: Amount // >= this requires the owner's approval (CR-012: the panel)
+allowedRecipients: string[] // empty = deny all direct transfers
+allowedDomains: string[] // for x402, e.g. ["api.example.com"]; empty = deny all
+paused: boolean
+// v0.6 (CR-010). Optional on PUT: omitted keeps the stored value, and a policy that has none gets
+// the default. So a v0.5 client's PUT never turns shadow back into live. The defaults only add protection.
+mode?: "live" | "shadow" // default "live"; shadow evaluates and simulates, never signs
+priceIncreaseMaxPct?: number // default 100: an x402 price above the pinned one by more goes to the owner
+maxPaymentsPerMinute?: number // default 10: the payment that would exceed it trips the breaker
+requireMandate?: boolean // default false: when true, every payment needs an open mandate
+trading?: TradingPolicy // CR-021; absent = no trading at all
 }
 
-interface TradingPolicy {          // CR-021. Every loosening needs the passkey step-up (CR-015)
-  enabled: boolean                 // default false
-  venues: string[]                 // e.g. ["jupiter"]; empty = none
-  tokens: string[]                 // tradable mints / token addresses; empty = none
-  allowAnyToken: boolean           // default false: true admits any token that passes the risk checks
-  maxTradeUsd: Amount              // the most one buy may spend, in the chain's dollar
-  dailyTradeMax: Amount            // the most a day's buys may spend; sells are not counted
-  maxPositionUsd: Amount           // the most held in one token, at cost
-  maxSlippageBps: number           // default 100
-  maxPriceImpactBps: number        // default 300
-  tokenLimits?: Record<string, TokenLimit>   // CR-026: per mint, overrides the two defaults below
-  operations?: OperationLimits     // CR-026: per kind of trade; absent = CR-021's behaviour
-  orders?: { enabled: boolean, maxOpen: number }   // CR-026: default { false, 10 }; the agent's own
-  rugShield?: { enabled: boolean } // CR-028: absent = enabled; turning it off needs the passkey
-  quickFirstBuy?: { maxUsd: Amount, dailyUsd: Amount }   // CR-028: absent = off
+interface TradingPolicy { // CR-021. Every loosening needs the passkey step-up (CR-015)
+enabled: boolean // default false
+venues: string[] // e.g. ["jupiter"]; empty = none
+tokens: string[] // tradable mints / token addresses; empty = none
+allowAnyToken: boolean // default false: true admits any token that passes the risk checks
+maxTradeUsd: Amount // the most one buy may spend, in the chain's dollar
+dailyTradeMax: Amount // the most a day's buys may spend; sells are not counted
+maxPositionUsd: Amount // the most held in one token, at cost
+maxSlippageBps: number // default 100
+maxPriceImpactBps: number // default 300
+tokenLimits?: Record<string, TokenLimit> // CR-026: per mint, overrides the two defaults below
+operations?: OperationLimits // CR-026: per kind of trade; absent = CR-021's behaviour
+orders?: { enabled: boolean, maxOpen: number } // CR-026: default { false, 10 }; the agent's own
+rugShield?: { enabled: boolean } // CR-028: absent = enabled; turning it off needs the passkey
+quickFirstBuy?: { maxUsd: Amount, dailyUsd: Amount } // CR-028: absent = off
 }
 
-interface TokenLimit {             // CR-026. Each field absent = the agent's default
-  maxBuyUsd?: Amount               // overrides maxTradeUsd for a buy or a swap into this mint
-  maxHeldUsd?: Amount              // overrides maxPositionUsd for this mint, at cost
+interface TokenLimit { // CR-026. Each field absent = the agent's default
+maxBuyUsd?: Amount // overrides maxTradeUsd for a buy or a swap into this mint
+maxHeldUsd?: Amount // overrides maxPositionUsd for this mint, at cost
 }
 
-interface OperationLimits {        // CR-026. Each per-trade and per-day, in the chain's dollar
-  buy?:  { maxTradeUsd: Amount, dailyMax: Amount }   // default maxTradeUsd and dailyTradeMax
-  sell?: { maxTradeUsd: Amount, dailyMax: Amount }   // default none: sells are not capped
-  swap?: { maxTradeUsd: Amount, dailyMax: Amount }   // default the buy limits
+interface OperationLimits { // CR-026. Each per-trade and per-day, in the chain's dollar
+buy?: { maxTradeUsd: Amount, dailyMax: Amount } // default maxTradeUsd and dailyTradeMax
+sell?: { maxTradeUsd: Amount, dailyMax: Amount } // default none: sells are not capped
+swap?: { maxTradeUsd: Amount, dailyMax: Amount } // default the buy limits
 }
 
-interface Mandate {                // CR-010: a budget for one task
-  id: string                       // uuid
-  agentId: string
-  budget: Amount
-  spent: Amount
-  domains: string[]                // x402 domains it may pay; a subset of Policy.allowedDomains
-  recipients: string[]             // transfer recipients; a subset of Policy.allowedRecipients
-  reason: string                   // untrusted, shown to the owner
-  status: "pending_approval" | "active" | "exhausted" | "expired" | "revoked"
-  createdAt: string; expiresAt: string
+interface Mandate { // CR-010: a budget for one task
+id: string // uuid
+agentId: string
+budget: Amount
+spent: Amount
+domains: string[] // x402 domains it may pay; a subset of Policy.allowedDomains
+recipients: string[] // transfer recipients; a subset of Policy.allowedRecipients
+reason: string // untrusted, shown to the owner
+status: "pending_approval" | "active" | "exhausted" | "expired" | "revoked"
+createdAt: string; expiresAt: string
 }
 
 type IntentStatus = "approved" | "pending_approval" | "rejected" | "executed" | "failed" | "expired"
-  | "shadowed"                     // CR-010: would have been sent; shadow mode signs nothing
+| "shadowed" // CR-010: would have been sent; shadow mode signs nothing
 
 interface PayIntent {
-  id: string                       // uuid
-  agentId: string
-  kind: "x402" | "transfer" | "swap"   // swap: CR-021
-  chain: string                    // CAIP-2
-  token: string
-  amount: Amount
-  recipient: string
-  domain?: string                  // x402 only
-  reason: string                   // agent-provided, shown to owner, never trusted for decisions
-  status: IntentStatus
-  rejectReasons: RejectCode[]
-  txId?: string                    // base58 signature on Solana, hex hash on EVM
-  mandateId?: string               // CR-010
-  swap?: {                         // CR-021, kind "swap" only. token/amount are tokenIn/amountIn and
-                                   // recipient is the hot wallet itself: a swap sends nothing elsewhere
-    venue: string
-    tokenOut: string
-    minAmountOut: Amount
-    slippageBps: number
-    priceImpactBps: number
-    decimalsIn: number             // read from each mint onchain by the adapter, never from a venue
-    decimalsOut: number
-    symbolIn?: string              // display only, untrusted: always shown beside the mint
-    symbolOut?: string
-    quotedAt: string
-  }
-  createdAt: string; expiresAt: string
+id: string // uuid
+agentId: string
+kind: "x402" | "transfer" | "swap" // swap: CR-021
+chain: string // CAIP-2
+token: string
+amount: Amount
+recipient: string
+domain?: string // x402 only
+reason: string // agent-provided, shown to owner, never trusted for decisions
+status: IntentStatus
+rejectReasons: RejectCode[]
+txId?: string // base58 signature on Solana, hex hash on EVM
+mandateId?: string // CR-010
+swap?: { // CR-021, kind "swap" only. token/amount are tokenIn/amountIn and
+// recipient is the hot wallet itself: a swap sends nothing elsewhere
+venue: string
+tokenOut: string
+minAmountOut: Amount
+slippageBps: number
+priceImpactBps: number
+decimalsIn: number // read from each mint onchain by the adapter, never from a venue
+decimalsOut: number
+symbolIn?: string // display only, untrusted: always shown beside the mint
+symbolOut?: string
+quotedAt: string
+}
+createdAt: string; expiresAt: string
 }
 
-interface Receipt {                // CR-010: one per executed intent
-  intent: PayIntent
-  policyHash: string               // hex SHA-256 of the canonical JSON of the policy in force
-  simulation: string               // the simulation summary
-  approvedBy: "policy" | "owner" | "passkey"
-  issuedAt: string
-  signature: string                // hex Ed25519 over the canonical JSON of the fields above
+interface Receipt { // CR-010: one per executed intent
+intent: PayIntent
+policyHash: string // hex SHA-256 of the canonical JSON of the policy in force
+simulation: string // the simulation summary
+approvedBy: "policy" | "owner" | "passkey"
+issuedAt: string
+signature: string // hex Ed25519 over the canonical JSON of the fields above
 }
 
-interface ExecutionReceipt {       // CR-013: one per tool call or payment, one chain per deployment
-  type: "defimind.execution.v1"    // domain separation from Receipt
-  seq: number                      // 1, 2, 3… with no gap
-  prevHash: string                 // hash of receipt seq-1; 64 zeros for seq 1
-  agentId: string
-  kind: "tool_call" | "payment"
-  server: string                   // the downstream MCP server, or "defimind" for payments
-  tool: string
-  requestHash: string              // hex SHA-256 of the canonical JSON of the arguments
-  responseHash: string             // hex SHA-256 of the canonical JSON of the result
-  outcome: "ok" | "error" | "refused"
-  assurance: "executed" | "relayed"
-  paymentReceipt?: string          // kind "payment" only
-  startedAt: string; endedAt: string; issuedAt: string
-  hash: string                     // hex SHA-256 of the canonical JSON of the fields above
-  signature: string                // hex Ed25519 over the same bytes
+interface ExecutionReceipt { // CR-013: one per tool call or payment, one chain per deployment
+type: "defimind.execution.v1" // domain separation from Receipt
+seq: number // 1, 2, 3… with no gap
+prevHash: string // hash of receipt seq-1; 64 zeros for seq 1
+agentId: string
+kind: "tool_call" | "payment"
+server: string // the downstream MCP server, or "defimind" for payments
+tool: string
+requestHash: string // hex SHA-256 of the canonical JSON of the arguments
+responseHash: string // hex SHA-256 of the canonical JSON of the result
+outcome: "ok" | "error" | "refused"
+assurance: "executed" | "relayed"
+paymentReceipt?: string // kind "payment" only
+startedAt: string; endedAt: string; issuedAt: string
+hash: string // hex SHA-256 of the canonical JSON of the fields above
+signature: string // hex Ed25519 over the same bytes
 }
 
 interface Anchor { fromSeq: number; toSeq: number; root: string; chain: string; txId: string; anchoredAt: string }
-interface ProofBundle {            // what the owner hands a third party
-  receipt: ExecutionReceipt
-  siblings: { side: "left" | "right"; hash: string }[]   // leaf to root
-  anchor: Anchor
+interface ProofBundle { // what the owner hands a third party
+receipt: ExecutionReceipt
+siblings: { side: "left" | "right"; hash: string }[] // leaf to root
+anchor: Anchor
 }
 
 ## Reject codes
+
 Shared: PAUSED, CHAIN_NOT_ALLOWED, TOKEN_NOT_ALLOWED, RECIPIENT_NOT_ALLOWED, DOMAIN_NOT_ALLOWED,
 PER_TX_EXCEEDED, DAILY_EXCEEDED, SIM_FAILED, SIM_UNEXPECTED_EFFECT, OWNER_REJECTED, APPROVAL_TIMEOUT,
 INVALID_402, MANDATE_REQUIRED, MANDATE_EXCEEDED, MANDATE_EXPIRED, BREAKER_TRIPPED (CR-010)
@@ -233,60 +241,61 @@ HUNT_BUDGET_EXCEEDED (hunted positions would pass hunt.budgetUsd).
 The DefiMind Network (CR-029): TOKEN_ON_RADAR (the Rug Radar lists the token).
 
 ## ChainAdapter (packages/onchain/src/ChainAdapter.ts)
+
 guard-core depends on this interface only and never imports a chain SDK directly.
 
-type AllowanceState =                            // CR-008
-  | { status: 'active'; cap: Amount; spent: Amount; resetsAt: string; delegate: string }
-  | { status: 'none'; delegate: string }           // the chain shows no limit: after a kill
-  // getAllowanceState throws when it cannot read the chain; it never reports a failed read as 'none',
-  // and never reports 'none' as an active limit with a zero cap.
+type AllowanceState = // CR-008
+| { status: 'active'; cap: Amount; spent: Amount; resetsAt: string; delegate: string }
+| { status: 'none'; delegate: string } // the chain shows no limit: after a kill
+// getAllowanceState throws when it cannot read the chain; it never reports a failed read as 'none',
+// and never reports 'none' as an active limit with a zero cap.
 interface SimulationOutcome { simulation: SimulationResult; rejectReasons: RejectCode[] }
 
 interface ChainAdapter {
-  chain: string                                  // CAIP-2
-  getAllowanceState(): Promise<AllowanceState>
-  topUpHotWallet(amount: Amount): Promise<string>  // returns txId
-  getHotWalletBalance(token: string): Promise<Amount>
-  getHotWalletGas(): Promise<{ balance: Amount; minimum: Amount; symbol: string }>  // CR-011: native
-                                                   // coin, and what a few draws need
-  getVault(): Promise<{ address: string; token: string; balance: Amount }>  // CR-019: the owner's
-                                                   // vault (Squads vault index 0, or the Safe),
-                                                   // where deposits go, and its balance
-    // CR-022: plus control?: { threshold: number; signers: number }, read onchain: the Safe's
-    // threshold and owners, or the multisig's voters. A controlled Squads multisig (every
-    // DefiMind vault: the kill uses its config authority) is { 1, 1 }: that authority alone can
-    // empty it. Doctor warns at threshold 1. On Solana, it names the config authority as the key
-    // to protect (a hardware wallet); on EVM, it advises another owner or a 2-of-3.
-  getLandedChanges?(txId: TxId): Promise<BalanceChange[]>  // CR-024: the hot wallet's token deltas
-                                                   // in a confirmed transaction, for settlement
-  tokenRisk?(mint: Address): Promise<Omit<TokenRisk, "venue" | "flags">>  // CR-025: the mint read
-                                                   // onchain, plus the exit for 10 USD
-  buildKillTx(): Promise<{ description: string; payload: unknown }>  // owner signs this
-  simulate(intent: PayIntent): Promise<SimulationOutcome>
-  send(intent: PayIntent): Promise<string>         // returns txId
-  x402Scheme(intent: PayIntent, requirements: PaymentRequirements): SchemeNetworkClient
-  // CR-021, optional: an adapter without them refuses every swap with VENUE_NOT_ALLOWED.
-  // simulate() and send() take kind "swap" too; send() re-quotes nothing and signs only the
-  // transaction whose simulated balance deltas matched the intent.
-  quoteSwap?(req: { tokenIn: string; tokenOut: string; amountIn: Amount; slippageBps: number })
-    : Promise<SwapQuote>
-  getPositions?(): Promise<{ token: string; amount: Amount; decimals: number }[]>
-  // CR-026: an amount of a token quoted back to the chain's dollar, for valuation and the order
-  // watcher. An untrusted venue claim: never cached, never signed, and no liquidity field.
-  quoteSell?(token: string, amount: Amount)
-    : Promise<{ out: Amount; priceImpactBps: number; quotedAt: string }>
+chain: string // CAIP-2
+getAllowanceState(): Promise<AllowanceState>
+topUpHotWallet(amount: Amount): Promise<string> // returns txId
+getHotWalletBalance(token: string): Promise<Amount>
+getHotWalletGas(): Promise<{ balance: Amount; minimum: Amount; symbol: string }> // CR-011: native
+// coin, and what a few draws need
+getVault(): Promise<{ address: string; token: string; balance: Amount }> // CR-019: the owner's
+// vault (Squads vault index 0, or the Safe),
+// where deposits go, and its balance
+// CR-022: plus control?: { threshold: number; signers: number }, read onchain: the Safe's
+// threshold and owners, or the multisig's voters. A controlled Squads multisig (every
+// DefiMind vault: the kill uses its config authority) is { 1, 1 }: that authority alone can
+// empty it. Doctor warns at threshold 1. On Solana, it names the config authority as the key
+// to protect (a hardware wallet); on EVM, it advises another owner or a 2-of-3.
+getLandedChanges?(txId: TxId): Promise<BalanceChange[]> // CR-024: the hot wallet's token deltas
+// in a confirmed transaction, for settlement
+tokenRisk?(mint: Address): Promise<Omit<TokenRisk, "venue" | "flags">> // CR-025: the mint read
+// onchain, plus the exit for 10 USD
+buildKillTx(): Promise<{ description: string; payload: unknown }> // owner signs this
+simulate(intent: PayIntent): Promise<SimulationOutcome>
+send(intent: PayIntent): Promise<string> // returns txId
+x402Scheme(intent: PayIntent, requirements: PaymentRequirements): SchemeNetworkClient
+// CR-021, optional: an adapter without them refuses every swap with VENUE_NOT_ALLOWED.
+// simulate() and send() take kind "swap" too; send() re-quotes nothing and signs only the
+// transaction whose simulated balance deltas matched the intent.
+quoteSwap?(req: { tokenIn: string; tokenOut: string; amountIn: Amount; slippageBps: number })
+: Promise<SwapQuote>
+getPositions?(): Promise<{ token: string; amount: Amount; decimals: number }[]>
+// CR-026: an amount of a token quoted back to the chain's dollar, for valuation and the order
+// watcher. An untrusted venue claim: never cached, never signed, and no liquidity field.
+quoteSell?(token: string, amount: Amount)
+: Promise<{ out: Amount; priceImpactBps: number; quotedAt: string }>
 }
 
-interface SwapQuote {               // CR-021. Venues are untrusted: every field is checked again
-  venue: string; tokenIn: string; amountIn: Amount; tokenOut: string
-  expectedOut: Amount; minAmountOut: Amount; slippageBps: number; priceImpactBps: number
-  decimalsIn: number; decimalsOut: number   // from each mint onchain, never from the venue
-  symbolIn?: string; symbolOut?: string     // display only, untrusted
-  exitImpactBps: number | null      // a sell quote for the amount bought; null = no exit route
-  risks: RejectCode[]               // TOKEN_FREEZABLE, TOKEN_EXTENSION_RISK, NO_EXIT_ROUTE
-  flags: ("NEW_TOKEN" | "MINT_AUTHORITY")[]
-  valueUsd?: Amount                 // CR-026, token to token: the value the limits use
-  quotedAt: string
+interface SwapQuote { // CR-021. Venues are untrusted: every field is checked again
+venue: string; tokenIn: string; amountIn: Amount; tokenOut: string
+expectedOut: Amount; minAmountOut: Amount; slippageBps: number; priceImpactBps: number
+decimalsIn: number; decimalsOut: number // from each mint onchain, never from the venue
+symbolIn?: string; symbolOut?: string // display only, untrusted
+exitImpactBps: number | null // a sell quote for the amount bought; null = no exit route
+risks: RejectCode[] // TOKEN_FREEZABLE, TOKEN_EXTENSION_RISK, NO_EXIT_ROUTE
+flags: ("NEW_TOKEN" | "MINT_AUTHORITY")[]
+valueUsd?: Amount // CR-026, token to token: the value the limits use
+quotedAt: string
 }
 
 x402Scheme returns a scheme client for @x402/core that signs this one intent and nothing else: it
@@ -295,105 +304,108 @@ PaymentRequirements and SchemeNetworkClient are the @x402/core types. This keeps
 guard-core even for x402 signing.
 
 ## guard-core HTTP API (port 8787). Auth: header `Authorization: Bearer <token>`
-Agent token (per agent) for /v1/agent/*; admin token for /v1/admin/*; bot token for /v1/bot/*.
-The /v1/bot/* routes exist only when the Telegram bot is configured (CR-017).
 
-POST /v1/agent/x402/fetch   { agentId, url, method, headers?, body?, maxAmount? }
-  -> 200 { intentId?, status?, response?: { status, headers, body } , rejectReasons }
-  Guard performs the request; on 402 parses requirements, runs policy + simulation,
-  signs the payment ONLY if approved, retries, returns the paid response.
-  If pending_approval: returns { status: "pending_approval", intentId } immediately.
-  No payment, no intent: when the resource does not ask for a payment, intentId and status are absent
-  and the response passes through with rejectReasons: []. When the host is refused before any request
-  is made, intentId is absent and the result is { status: "rejected", rejectReasons: ["DOMAIN_NOT_ALLOWED"] }.
-  After the owner approves, the agent repeats the same request. The approval is redeemed once, for
-  exactly the approved chain, token, amount, recipient and domain, and (CR-022) only by the same
-  request: guard-core keeps the SHA-256 of the method, the full URL with its query, and the body.
-  Another request is a new intent. An approval not redeemed before
-  expiresAt expires with APPROVAL_TIMEOUT.
-POST /v1/agent/transfer     { agentId, chain, token, amount, recipient, reason, mandateId? } -> { intentId, status, txId?, rejectReasons }
-  x402 fetch takes mandateId? too. With one, the payment must also fit that mandate (CR-010).
-POST /v1/agent/mandates     { agentId, budget, domains, recipients?, ttlSeconds, reason } -> Mandate
-  Inside the policy only; ttlSeconds is 60 to 86400. At or above approvalThreshold it starts
-  pending_approval and goes to the owner.
-GET  /v1/agent/intents/:id/receipt -> Receipt   (404 until the intent is executed)
-GET  /v1/agent/intents/:id  -> PayIntent
-GET  /v1/agent/budget/:agentId -> { spentToday, shadowSpentToday, dailyMax, perTxMax, hotWalletBalances, paused, chains, mandates }
-  mandates: the agent's active mandates (CR-010).
-  shadow?: { since, total, count }: since the agent's first shadowed payment, what shadow mode would
-  have spent in all and how many payments (CR-011). Absent when it never ran in shadow. It carries
-  asked: { count, flags }, how many of those live would have taken to the owner and the distinct
-  flags behind them, at most 16 (CR-024).
-  chains: the CAIP-2 ids guard-core runs an adapter for AND this agent's Policy.chains allows, so an
-  agent learns only where it may actually pay, never the operator's full setup.
+Agent token (per agent) for /v1/agent/_; admin token for /v1/admin/_; bot token for /v1/bot/_.
+The /v1/bot/_ routes exist only when the Telegram bot is configured (CR-017).
 
-POST /v1/bot/decision       { intentId, decision: "approve" | "reject", telegramUserId } -> PayIntent
+POST /v1/agent/x402/fetch { agentId, url, method, headers?, body?, maxAmount? }
+-> 200 { intentId?, status?, response?: { status, headers, body } , rejectReasons }
+Guard performs the request; on 402 parses requirements, runs policy + simulation,
+signs the payment ONLY if approved, retries, returns the paid response.
+If pending_approval: returns { status: "pending_approval", intentId } immediately.
+No payment, no intent: when the resource does not ask for a payment, intentId and status are absent
+and the response passes through with rejectReasons: []. When the host is refused before any request
+is made, intentId is absent and the result is { status: "rejected", rejectReasons: ["DOMAIN_NOT_ALLOWED"] }.
+After the owner approves, the agent repeats the same request. The approval is redeemed once, for
+exactly the approved chain, token, amount, recipient and domain, and (CR-022) only by the same
+request: guard-core keeps the SHA-256 of the method, the full URL with its query, and the body.
+Another request is a new intent. An approval not redeemed before
+expiresAt expires with APPROVAL_TIMEOUT.
+POST /v1/agent/transfer { agentId, chain, token, amount, recipient, reason, mandateId? } -> { intentId, status, txId?, rejectReasons }
+x402 fetch takes mandateId? too. With one, the payment must also fit that mandate (CR-010).
+POST /v1/agent/mandates { agentId, budget, domains, recipients?, ttlSeconds, reason } -> Mandate
+Inside the policy only; ttlSeconds is 60 to 86400. At or above approvalThreshold it starts
+pending_approval and goes to the owner.
+GET /v1/agent/intents/:id/receipt -> Receipt (404 until the intent is executed)
+GET /v1/agent/intents/:id -> PayIntent
+GET /v1/agent/budget/:agentId -> { spentToday, shadowSpentToday, dailyMax, perTxMax, hotWalletBalances, paused, chains, mandates }
+mandates: the agent's active mandates (CR-010).
+shadow?: { since, total, count }: since the agent's first shadowed payment, what shadow mode would
+have spent in all and how many payments (CR-011). Absent when it never ran in shadow. It carries
+asked: { count, flags }, how many of those live would have taken to the owner and the distinct
+flags behind them, at most 16 (CR-024).
+chains: the CAIP-2 ids guard-core runs an adapter for AND this agent's Policy.chains allows, so an
+agent learns only where it may actually pay, never the operator's full setup.
+
+POST /v1/bot/decision { intentId, decision: "approve" | "reject", telegramUserId } -> PayIntent
 POST /v1/bot/mandates/:id/decision { decision: "approve" | "reject", telegramUserId } -> Mandate (CR-010)
-  409 { error: "already_decided" } or 410 { error: "expired" }, as for intents. A pending mandate
-  expires after the same 10 minutes as a pending intent.
+409 { error: "already_decided" } or 410 { error: "expired" }, as for intents. A pending mandate
+expires after the same 10 minutes as a pending intent.
 Bot routes that only tighten or read (CR-016). The bot holds BOT_TOKEN only, never the admin token;
 every write is audited with via: "bot".
 POST /v1/bot/pause { agentId }; POST /v1/bot/kill {} -> the same body as POST /v1/admin/kill
 POST /v1/bot/agents/:id/revoke -> { agentId, revoked: true }
 POST /v1/bot/policy/:agentId/tighten { removeDomains?, removeRecipients?, mode?: "shadow",
-  perTxMax?, dailyMax?, approvalThreshold? } -> Policy
-  Each limit given must be at or below the current one. Anything loosened() would count is refused
-  with 403 { error: "loosen_in_panel" }.
-GET  /v1/bot/agents, /v1/bot/policy/:agentId, /v1/bot/budget/:agentId, /v1/bot/chains,
-GET  /v1/bot/report?from&to, /v1/bot/doctor   the same bodies as the admin reads
+perTxMax?, dailyMax?, approvalThreshold? } -> Policy
+Each limit given must be at or below the current one. Anything loosened() would count is refused
+with 403 { error: "loosen_in_panel" }.
+GET /v1/bot/agents, /v1/bot/policy/:agentId, /v1/bot/budget/:agentId, /v1/bot/chains,
+GET /v1/bot/report?from&to, /v1/bot/doctor the same bodies as the admin reads
 The bot has no route that creates agents, adds to an allowlist, raises a limit, goes live, resumes or
 issues an enrolment code: those are the panel's, with a passkey, or the machine's, with the admin
 token within the CR-022 rule below. A bot started with GUARD_ADMIN_TOKEN set logs a warning and does not use it.
-POST /v1/admin/pause        { agentId } ; POST /v1/admin/resume { agentId }
-POST /v1/admin/kill         {} -> pauses all agents AND prepares, for every chain, the owner tx that
-                                  sets the allowance to 0 and removes the delegate
-  -> { pausedAgents: number,
-       ownerTransactions: { chain: string, description: string, payload: unknown }[] }
-  Each ownerTransactions entry is one chain's ChainAdapter.buildKillTx() with its CAIP-2 chain added.
-  A chain whose kill tx could not be built stays in the list with payload: null and a description
-  telling the owner to remove the spend limit by hand: that chain's allowance is still live.
-GET/PUT /v1/admin/policy/:agentId  Policy
-  Admin only tightens (CR-022). A PUT that loosens, as loosened() counts it, and every
-  POST /v1/admin/resume are refused with 403 { error: "loosen_in_panel" }, as for the bot (CR-016):
-  loosening is the panel's, with the passkey. POST /v1/admin/mandates opens the mandate
-  as the agent's own request would (CR-010): at or above approvalThreshold it waits for the owner in
-  the panel, so the admin token gets no more than the agent's token already has. Each refusal is audited (event
-  "admin_loosen_refused", via "admin") and alerts the owner: { kind: "admin_loosen_refused" } to the
-  bot and Web Push "attack". Reads, tightening, pause, kill, revoke and creating an agent (deny-all,
-  shadow) are unchanged. Tests and local tools write a policy into the database directly.
-POST /v1/admin/agents { agentId } -> { agentId, token }   (CR-011) the token once; only its hash is
-  kept. The new agent gets a deny-all policy with mode "shadow". 409 { error: "exists" }.
-GET  /v1/admin/agents -> { agents: { agentId, paused, mode }[] }
-POST /v1/admin/agents/:id/revoke -> { agentId, revoked: true }   cuts it off at its next request
-GET  /v1/admin/doctor -> { checks: { id, status: "ok" | "warn" | "fail", message, fix? }[] }
-  Plain-English checks, never a secret: database writable, each chain's allowance readable, each
-  hot wallet's gas (getHotWalletGas) and token balance, the bot reachable, the last backup's age.
+POST /v1/admin/pause { agentId } ; POST /v1/admin/resume { agentId }
+POST /v1/admin/kill {} -> pauses all agents AND prepares, for every chain, the owner tx that
+sets the allowance to 0 and removes the delegate
+-> { pausedAgents: number,
+ownerTransactions: { chain: string, description: string, payload: unknown }[] }
+Each ownerTransactions entry is one chain's ChainAdapter.buildKillTx() with its CAIP-2 chain added.
+A chain whose kill tx could not be built stays in the list with payload: null and a description
+telling the owner to remove the spend limit by hand: that chain's allowance is still live.
+GET/PUT /v1/admin/policy/:agentId Policy
+Admin only tightens (CR-022). A PUT that loosens, as loosened() counts it, and every
+POST /v1/admin/resume are refused with 403 { error: "loosen_in_panel" }, as for the bot (CR-016):
+loosening is the panel's, with the passkey. POST /v1/admin/mandates opens the mandate
+as the agent's own request would (CR-010): at or above approvalThreshold it waits for the owner in
+the panel, so the admin token gets no more than the agent's token already has. Each refusal is audited (event
+"admin_loosen_refused", via "admin") and alerts the owner: { kind: "admin_loosen_refused" } to the
+bot and Web Push "attack". Reads, tightening, pause, kill, revoke and creating an agent (deny-all,
+shadow) are unchanged. Tests and local tools write a policy into the database directly.
+POST /v1/admin/agents { agentId } -> { agentId, token } (CR-011) the token once; only its hash is
+kept. The new agent gets a deny-all policy with mode "shadow". 409 { error: "exists" }.
+GET /v1/admin/agents -> { agents: { agentId, paused, mode }[] }
+POST /v1/admin/agents/:id/revoke -> { agentId, revoked: true } cuts it off at its next request
+GET /v1/admin/doctor -> { checks: { id, status: "ok" | "warn" | "fail", message, fix? }[] }
+Plain-English checks, never a secret: database writable, each chain's allowance readable, each
+hot wallet's gas (getHotWalletGas) and token balance, the bot reachable, the last backup's age.
 POST /v1/admin/mandates { agentId, budget, domains, recipients?, ttlSeconds, reason } -> Mandate
-  (since CR-022, opened as an agent's own: pending_approval at or above approvalThreshold)
+(since CR-022, opened as an agent's own: pending_approval at or above approvalThreshold)
 POST /v1/admin/mandates/:id/revoke -> Mandate
-GET  /v1/admin/receipts?from&to -> { receipts: Receipt[] }
-GET  /v1/admin/report?from&to -> { agents: { agentId, spent, payments, refused: Record<RejectCode, number>,
-                                   domains: { domain, spent }[] }[] }
+GET /v1/admin/receipts?from&to -> { receipts: Receipt[] }
+GET /v1/admin/report?from&to -> { agents: { agentId, spent, payments, refused: Record<RejectCode, number>,
+domains: { domain, spent }[] }[] }
 POST /v1/admin/passkeys/options -> WebAuthn registration options; POST /v1/admin/passkeys { response }
-POST /v1/admin/passkeys/code -> { code, expiresAt }   one-time, 10 minutes, hashed at rest; for
-  GET /owner/enrol#code=… on the public listener (in the fragment, so no request line or log holds it),
-  which runs WebAuthn registration for this origin via POST /v1/owner/passkeys/options { code } and
-  POST /v1/owner/passkeys { code, response }. The bot's /passkey enrol sends the link.
-  First passkey (CR-022). With SETUP_CODE set, only POST /v1/owner/setup { setupCode } issues the
-  code for the first passkey: the admin passkey routes (code, options and the first enrolment) refuse
-  it with 403 { error: "use_setup_code" }, audited
-  and alerted as admin_loosen_refused, so an admin token cannot take over a fresh deployment. Without
-  SETUP_CODE, guard-core warns at every start while no passkey exists.
-  Code enrolment adds the FIRST passkey only. Once one exists, POST /v1/owner/passkeys also needs an
-  assertion from an enrolled passkey (step-up), so a stolen Telegram account cannot add its own key.
-  Every enrolment sends the bot an alert { kind: "passkey_enrolled" }. GET /v1/admin/passkeys lists them
-  (id, created, last used); removing one is a command on the machine, never an API call.
-GET  /v1/receipts/key -> { publicKey }   public: lets anyone check a receipt
-GET  /owner/approve/:intentId            public page: WebAuthn for this origin, then
+POST /v1/admin/passkeys/code -> { code, expiresAt } one-time, 10 minutes, hashed at rest; for
+GET /owner/enrol#code=… on the public listener (in the fragment, so no request line or log holds it),
+which runs WebAuthn registration for this origin via POST /v1/owner/passkeys/options { code } and
+POST /v1/owner/passkeys { code, response }. The bot's /passkey enrol sends the link.
+First passkey (CR-022). With SETUP_CODE set, only POST /v1/owner/setup { setupCode } issues the
+code for the first passkey: the admin passkey routes (code, options and the first enrolment) refuse
+it with 403 { error: "use_setup_code" }, audited
+and alerted as admin_loosen_refused, so an admin token cannot take over a fresh deployment. Without
+SETUP_CODE, guard-core warns at every start while no passkey exists.
+Code enrolment adds the FIRST passkey only. Once one exists, POST /v1/owner/passkeys also needs an
+assertion from an enrolled passkey (step-up), so a stolen Telegram account cannot add its own key.
+Every enrolment sends the bot an alert { kind: "passkey_enrolled" }. GET /v1/admin/passkeys lists them
+(id, created, last used); removing one is a command on the machine, never an API call.
+GET /v1/receipts/key -> { publicKey } public: lets anyone check a receipt
+GET /owner/approve/:intentId public page: WebAuthn for this origin, then
 POST /v1/owner/approve { intentId, assertion } -> PayIntent
-  With PASSKEY_ABOVE set, an intent at or above it is approved only here; /v1/bot/decision still
-  rejects it but refuses to approve it. The challenge is single-use and expires with the intent.
+With PASSKEY_ABOVE set, an intent at or above it is approved only here; /v1/bot/decision still
+rejects it but refuses to approve it. The challenge is single-use and expires with the intent.
+
 ## Owner panel (CR-012)
+
 guard-core serves the panel (packages/panel, static) at /panel on the public listener, with
 CSP default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self';
 worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'.
@@ -403,66 +415,67 @@ Step-up (CR-015): no assertion gives 403 step_up_required; one that fails verifi
 action or body, or was already used gives 401 passkey_not_verified. Only a 401 no_session ends the
 panel's session.
 POST /v1/owner/session/options -> WebAuthn authentication options (single use, 2 minutes)
-POST /v1/owner/session { assertion } -> { expiresAt }   sets dm_session: HttpOnly, Secure,
-  SameSite=Strict, Path=/v1/owner; 30 minutes idle, 12 hours in all; stored as its SHA-256
+POST /v1/owner/session { assertion } -> { expiresAt } sets dm_session: HttpOnly, Secure,
+SameSite=Strict, Path=/v1/owner; 30 minutes idle, 12 hours in all; stored as its SHA-256
 POST /v1/owner/session/logout -> { ok: true }
 POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, single use, bound to
-  sha256(canonical JSON of { action, body }); the step-up assertion for that exact action and body
-  OwnerAction = "approve_intent" | "approve_mandate" | "loosen_policy" | "resume" | "create_agent"
-    | "change_settings" (CR-019) | "close_positions" (CR-021, body {})
-    | "agent_wallet" (CR-022, body { agentId, chain })
-    | "manual_trade" (CR-025, body { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut })
-    | "place_order" (CR-026, body { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps?,
-      expiresAt?, trailBps? (CR-028) })
-    | "trader_settings" (CR-027, body { agentId, config }) | "resume_trader" (CR-027, body { agentId })
-    | "cancel_order" (CR-028, body { orderId }) | "network_link" (CR-029, body { wallet })
-    | "radar_ignore" (CR-029, body { mint })
-GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
-  pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
-GET  /v1/owner/deposit -> { chains: { chain, vault, token, balance, dailyCap?, depositPage? }[] }
-  (CR-019) Session only. vault is where deposits go; depositPage opens the signing page's deposit.
+sha256(canonical JSON of { action, body }); the step-up assertion for that exact action and body
+OwnerAction = "approve_intent" | "approve_mandate" | "loosen_policy" | "resume" | "create_agent"
+| "change_settings" (CR-019) | "close_positions" (CR-021, body {})
+| "agent_wallet" (CR-022, body { agentId, chain })
+| "manual_trade" (CR-025, body { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut })
+| "place_order" (CR-026, body { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps?,
+expiresAt?, trailBps? (CR-028) })
+| "trader_settings" (CR-027, body { agentId, config }) | "resume_trader" (CR-027, body { agentId })
+| "cancel_order" (CR-028, body { orderId }) | "network_link" (CR-029, body { wallet })
+| "radar_ignore" (CR-029, body { mint })
+GET /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
+pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
+GET /v1/owner/deposit -> { chains: { chain, vault, token, balance, dailyCap?, depositPage? }[] }
+(CR-019) Session only. vault is where deposits go; depositPage opens the signing page's deposit.
 POST /v1/owner/intents/:id/decision { decision: "approve" | "reject", assertion? } -> PayIntent
 POST /v1/owner/mandates/:id/decision { decision, assertion? } -> Mandate
-  approve needs the step-up assertion; every panel approval records approvedBy "passkey"
-GET  /v1/owner/report?from&to, GET /v1/owner/doctor, GET /v1/owner/budget/:agentId,
-GET  /v1/owner/receipts?from&to   as the admin ones (the panel matches a payment execution's
-  paymentReceipt to its Receipt to show the amount)
-GET  /v1/owner/agents; POST /v1/owner/agents { agentId, assertion } -> { agentId, token } (once);
+approve needs the step-up assertion; every panel approval records approvedBy "passkey"
+GET /v1/owner/report?from&to, GET /v1/owner/doctor, GET /v1/owner/budget/:agentId,
+GET /v1/owner/receipts?from&to as the admin ones (the panel matches a payment execution's
+paymentReceipt to its Receipt to show the amount)
+GET /v1/owner/agents; POST /v1/owner/agents { agentId, assertion } -> { agentId, token } (once);
 POST /v1/owner/agents/:id/revoke
-GET  /v1/owner/policy/:agentId; PUT /v1/owner/policy/:agentId { policy, assertion? }
-  assertion required when the PUT raises perTxMax, dailyMax or approvalThreshold, adds to chains,
-  tokens, allowedRecipients or allowedDomains, sets mode "live", sets requireMandate false, or (CR-015)
-  sets paused from true to false, or raises maxPaymentsPerMinute or priceIncreaseMaxPct
+GET /v1/owner/policy/:agentId; PUT /v1/owner/policy/:agentId { policy, assertion? }
+assertion required when the PUT raises perTxMax, dailyMax or approvalThreshold, adds to chains,
+tokens, allowedRecipients or allowedDomains, sets mode "live", sets requireMandate false, or (CR-015)
+sets paused from true to false, or raises maxPaymentsPerMinute or priceIncreaseMaxPct
 POST /v1/owner/pause { agentId }; POST /v1/owner/resume { agentId, assertion }
 POST /v1/owner/kill {} -> the same body as POST /v1/admin/kill, plus on each ownerTransactions entry
-  link?: string (Phantom universal link) and pageLink?: string (the signing page itself), built with
-  phantomKillUrl / killPageUrl from @defimind/shared, on SIGN_PAGE_URL or, without it, on
-  HOSTED_SIGN_PAGE (CR-020), whenever the chain has a signing-page target. Each target names the
-  vault and this deployment's hot wallet: multisig and hot on Solana, safe and hot on EVM. The
-  admin kill never carries them.
-GET  /v1/owner/passkeys -> as GET /v1/admin/passkeys
+link?: string (Phantom universal link) and pageLink?: string (the signing page itself), built with
+phantomKillUrl / killPageUrl from @defimind/shared, on SIGN_PAGE_URL or, without it, on
+HOSTED_SIGN_PAGE (CR-020), whenever the chain has a signing-page target. Each target names the
+vault and this deployment's hot wallet: multisig and hot on Solana, safe and hot on EVM. The
+admin kill never carries them.
+GET /v1/owner/passkeys -> as GET /v1/admin/passkeys
 POST /v1/owner/push { subscription: { endpoint, keys: { p256dh, auth } } } -> { id }
 DELETE /v1/owner/push/:id
-GET  /v1/owner/push/key -> { publicKey }   the VAPID public key, base64url; session only (CR-014)
-  Web Push with VAPID (VAPID_PRIVATE_KEY_FILE, VAPID_SUBJECT) and RFC 8291 encryption. Payload
-  { kind: "approval" | "mandate" | "executed" | "attack" | "breaker" | "passkey_enrolled" | "kill"
-  | "chain_broken" (CR-013) | "backup_failed" (CR-024) | "order_filled" | "order_failed" (CR-026)
-  | "trader_paused" (CR-027),
-  agentId?, chain?, amount?, intentId?, sentAt } and never a recipient or URL. A 404 or 410 from the
-  push service deletes the subscription.
-GET  /panel/enrol#code=…   the first-passkey page; src/scripts/passkey-code.ts prints the link
+GET /v1/owner/push/key -> { publicKey } the VAPID public key, base64url; session only (CR-014)
+Web Push with VAPID (VAPID_PRIVATE_KEY_FILE, VAPID_SUBJECT) and RFC 8291 encryption. Payload
+{ kind: "approval" | "mandate" | "executed" | "attack" | "breaker" | "passkey_enrolled" | "kill"
+| "chain_broken" (CR-013) | "backup_failed" (CR-024) | "order_filled" | "order_failed" (CR-026)
+| "trader_paused" (CR-027),
+agentId?, chain?, amount?, intentId?, sentAt } and never a recipient or URL. A 404 or 410 from the
+push service deletes the subscription.
+GET /panel/enrol#code=… the first-passkey page; src/scripts/passkey-code.ts prints the link
 TELEGRAM_APPROVALS (default false): when false, POST /v1/bot/decision and /v1/bot/mandates/:id/decision
-  refuse "approve" with 403 { error: "approve_in_panel" } and still accept "reject".
+refuse "approve" with 403 { error: "approve_in_panel" } and still accept "reject".
 
-GET  /v1/admin/budget/:agentId -> BudgetView   same body as GET /v1/agent/budget/:agentId;
-                                  404 { error: "not_found" } for an unknown agent
-GET  /v1/admin/chains -> { chains: { chain: string, allowance: AllowanceState | null }[] }
-  One entry per configured ChainAdapter, in the order guard-core holds them. allowance is that
-  adapter's getAllowanceState(), or null when reading it failed. An empty list means no chain is
-  configured, so every payment is refused. The bot shows status 'none' as "no onchain limit (killed)"
-  and null as "could not be read" (CR-008).
+GET /v1/admin/budget/:agentId -> BudgetView same body as GET /v1/agent/budget/:agentId;
+404 { error: "not_found" } for an unknown agent
+GET /v1/admin/chains -> { chains: { chain: string, allowance: AllowanceState | null }[] }
+One entry per configured ChainAdapter, in the order guard-core holds them. allowance is that
+adapter's getAllowanceState(), or null when reading it failed. An empty list means no chain is
+configured, so every payment is refused. The bot shows status 'none' as "no onchain limit (killed)"
+and null as "could not be read" (CR-008).
 
 ## Verified execution (CR-013)
+
 One hash chain of ExecutionReceipt per deployment, signed with RECEIPT_SIGNING_KEY. A single writer
 appends in one DB transaction, so seq and prevHash cannot fork. guard-core stores hashes and metadata
 only, never tool arguments or results. Every executed payment also appends a "payment" entry whose
@@ -472,14 +485,14 @@ call it made; guard-core vouches for when it heard of it and that the record nev
 for what the tool really did. Docs and the panel must say this plainly.
 
 POST /v1/agent/executions { server, tool, requestHash, responseHash, outcome, startedAt, endedAt }
-  -> ExecutionReceipt (assurance "relayed")   agent token; agentId comes from the token
-GET  /v1/owner/executions?agentId&from&to -> { receipts: ExecutionReceipt[] }   the panel timeline
-GET  /v1/owner/executions/integrity -> { lastSeq, lastHash, brokenAt?: number, lastAnchor?: Anchor }
-  The whole chain is re-checked at start-up and daily. A break sends the alert
-  { kind: "chain_broken", detail, sentAt } to the bot and a push to the panel.
-GET  /v1/owner/executions/:seq/proof -> ProofBundle   404 until the receipt is anchored
-GET  /v1/admin/executions?from&to -> { receipts: ExecutionReceipt[] }
-GET  /v1/anchors?from&to -> { anchors: Anchor[] }   public; anchors only, never a receipt
+-> ExecutionReceipt (assurance "relayed") agent token; agentId comes from the token
+GET /v1/owner/executions?agentId&from&to -> { receipts: ExecutionReceipt[] } the panel timeline
+GET /v1/owner/executions/integrity -> { lastSeq, lastHash, brokenAt?: number, lastAnchor?: Anchor }
+The whole chain is re-checked at start-up and daily. A break sends the alert
+{ kind: "chain_broken", detail, sentAt } to the bot and a push to the panel.
+GET /v1/owner/executions/:seq/proof -> ProofBundle 404 until the receipt is anchored
+GET /v1/admin/executions?from&to -> { receipts: ExecutionReceipt[] }
+GET /v1/anchors?from&to -> { anchors: Anchor[] } public; anchors only, never a receipt
 
 Anchoring, only with ANCHOR_CHAIN set (CAIP-2; Solana first): every hour or 1,000 receipts, whichever
 comes first, and never with no new receipt. Merkle leaf = SHA-256(0x00 || hash), node =
@@ -501,6 +514,7 @@ receipt hash, the Merkle path and the root in the anchor tx, and, given a run of
 has no gap and every prevHash links. Prints pass or fail per check; trusts no DefiMind server.
 
 ## Guided setup (CR-019)
+
 A one-click deployment (render.yaml) starts guard-core with only ADMIN_TOKEN and SETUP_CODE, both
 generated by the host, and a persistent disk at /data. Everything else is set from the panel.
 
@@ -578,25 +592,27 @@ takes the client address for rate limits from the hop the host's proxy adds, nev
 client sent.
 
 ## Trading (CR-021)
+
 Phase 1: Solana through Jupiter only. Every swap has the chain's dollar on one side: a buy spends it,
 a sell returns to it. CR-026 adds token-to-token swaps and orders: see "Degen trading". EVM chains need their own design (router approvals) in a later CR.
 
 POST /v1/agent/quote { agentId, chain, tokenIn, tokenOut, amountIn, maxSlippageBps? } -> SwapQuote
-POST /v1/agent/swap  { agentId, chain, tokenIn, tokenOut, amountIn, maxSlippageBps?, reason, mandateId? }
-  -> { intentId, status, txId?, rejectReasons }
-GET  /v1/agent/portfolio/:agentId -> { positions: Position[], tradedToday, dailyTradeMax }
-GET  /v1/owner/portfolio -> { agents: { agentId, positions: Position[], tradedToday, dailyTradeMax }[] }
-  session only
-POST /v1/owner/positions/close { assertion } -> { intents: PayIntent[] }   step-up, OwnerAction
-  "close_positions" with body {}; sells every token the hot wallets hold back to the chain's dollar,
-  through the same checks. Works while agents are paused. SOL (CR-026) is sold only as far as
-  trading bought it: at most min(the booked SOL position, the balance above the gas reserve). SOL the
-  owner sends to a hot wallet, for gas or above it, is never sold by Close or by the AI trader.
+POST /v1/agent/swap { agentId, chain, tokenIn, tokenOut, amountIn, maxSlippageBps?, reason, mandateId? }
+-> { intentId, status, txId?, rejectReasons }
+GET /v1/agent/portfolio/:agentId -> { positions: Position[], tradedToday, dailyTradeMax }
+GET /v1/owner/portfolio -> { agents: { agentId, positions: Position[], tradedToday, dailyTradeMax }[] }
+session only
+POST /v1/owner/positions/close { assertion } -> { intents: PayIntent[] } step-up, OwnerAction
+"close_positions" with body {}; sells every token the hot wallets hold back to the chain's dollar,
+through the same checks. Works while agents are paused. SOL (CR-026) is sold only as far as
+trading bought it: at most min(the booked SOL position, the balance above the gas reserve). SOL the
+owner sends to a hot wallet, for gas or above it, is never sold by Close or by the AI trader.
 Position = { chain, token, amount, cost, decimals, symbol?, hunted? (CR-028) }: decimals read from the mint onchain by
-  the adapter, never from a venue's token list; symbol is display only and untrusted, so a client
-  always shows the mint beside it.
+the adapter, never from a venue's token list; symbol is display only and untrusted, so a client
+always shows the mint beside it.
 
 Checks, in order, all default deny:
+
 1. Policy: trading enabled, the venue allowed, the token in tokens (or allowAnyToken), a buy within
    maxTradeUsd and dailyTradeMax, the position at cost within maxPositionUsd, the quote's slippage
    and price impact within the limits, and the quote no older than 30 seconds (QUOTE_STALE).
@@ -613,66 +629,69 @@ Checks, in order, all default deny:
    waits. Shadow mode simulates and signs nothing (paper trading). A shadowed swap records the
    flags and the needs-approval verdict live would have had (CR-024), and the owner's views show
    "Live would have asked you: …".
-Buys count against dailyTradeMax, not dailyMax. A top-up for a buy draws the chain's dollar under the
-same onchain cap, and never before the buy is decided (CR-024): a buy that waits for the owner is
-asked with steps 1 to 3 done, and its top-up and test run (step 4) follow the approval, just before
-signing. A failed test run then rejects the approved buy. When the hot wallet already holds enough,
-the test run also runs before asking, and the request shows its balance changes.
-Settlement (CR-024): positions, cost and proceeds come from what the confirmed transaction moved,
-read with ChainAdapter.getLandedChanges(txId) -> BalanceChange[] (the hot wallet's token deltas,
-from the transaction's own pre- and post-balances). The test run's deltas are only the check. A
-position whose onchain balance is 0 after a sell is closed, dust included.
+   Buys count against dailyTradeMax, not dailyMax. A top-up for a buy draws the chain's dollar under the
+   same onchain cap, and never before the buy is decided (CR-024): a buy that waits for the owner is
+   asked with steps 1 to 3 done, and its top-up and test run (step 4) follow the approval, just before
+   signing. A failed test run then rejects the approved buy. When the hot wallet already holds enough,
+   the test run also runs before asking, and the request shows its balance changes.
+   Settlement (CR-024): positions, cost and proceeds come from what the confirmed transaction moved,
+   read with ChainAdapter.getLandedChanges(txId) -> BalanceChange[] (the hot wallet's token deltas,
+   from the transaction's own pre- and post-balances). The test run's deltas are only the check. A
+   position whose onchain balance is 0 after a sell is closed, dust included.
 
 ## Owner trading tools (CR-025)
+
 The owner finds a token, reads its risk, allows it, and trades it from the panel. Solana mainnet
 through Jupiter only, as for agents (CR-021). Every route here needs the owner's session.
 
-GET  /v1/owner/tokens/search?q=&chain= -> { tokens: TokenInfo[] }
-  guard-core proxies Jupiter's token search, since the panel's CSP allows no other origin. q is 1 to
-  64 characters. The search is rate-limited per session to 30 a minute and cached for 60 seconds.
-  The venue's answer is untrusted: it is validated with zod, its strings are bounded, and its
-  fields are dropped except those below. Verified tokens come first; the panel shows unverified
-  ones only after an explicit "Show unverified tokens", with a warning.
-  TokenInfo = { chain, mint, symbol, name, decimals, verified, venue: { holders?, liquidityUsd?,
-  organicScore?, createdAt? } }. liquidityUsd is the venue's figure as a decimal string, display
-  only: never money and never in a decision. The symbol and name are display only and always shown
-  beside the full mint. The decimals are the venue's and are re-read from the mint before any use. No remote
-  image is ever loaded: the CSP allows img-src 'self' data: only, so at most a mint-derived
-  identicon.
-GET  /v1/owner/tokens/:mint/risk?chain= -> TokenRisk
-  TokenRisk = { chain, mint, decimals, freezeAuthority: boolean, mintAuthority: boolean,
-  supply: Amount (CR-028, atomic, read from the mint), extensions: string[], risks: RejectCode[],
-  flags: TradingFlag[],
-  exit: { amountUsd: Amount, priceImpactBps: number } | null, venue: TokenInfo["venue"] & { verified } }
-  Every field outside venue is read onchain by ChainAdapter.tokenRisk?(mint) or computed by guard-core:
-  - decimals, the supply, the authorities and the Token-2022 extensions come from the mint;
-  - risks are the CR-021 rejections a buy would meet (TOKEN_FREEZABLE, TOKEN_EXTENSION_RISK,
-    NO_EXIT_ROUTE);
-  - flags are the CR-021 approval flags (NEW_TOKEN, MINT_AUTHORITY);
-  - exit is the price impact of selling 10 USD worth back to the dollar, or null without a route.
+GET /v1/owner/tokens/search?q=&chain= -> { tokens: TokenInfo[] }
+guard-core proxies Jupiter's token search, since the panel's CSP allows no other origin. q is 1 to
+64 characters. The search is rate-limited per session to 30 a minute and cached for 60 seconds.
+The venue's answer is untrusted: it is validated with zod, its strings are bounded, and its
+fields are dropped except those below. Verified tokens come first; the panel shows unverified
+ones only after an explicit "Show unverified tokens", with a warning.
+TokenInfo = { chain, mint, symbol, name, decimals, verified, venue: { holders?, liquidityUsd?,
+organicScore?, createdAt? } }. liquidityUsd is the venue's figure as a decimal string, display
+only: never money and never in a decision. The symbol and name are display only and always shown
+beside the full mint. The decimals are the venue's and are re-read from the mint before any use. No remote
+image is ever loaded: the CSP allows img-src 'self' data: only, so at most a mint-derived
+identicon.
+GET /v1/owner/tokens/:mint/risk?chain= -> TokenRisk
+TokenRisk = { chain, mint, decimals, freezeAuthority: boolean, mintAuthority: boolean,
+supply: Amount (CR-028, atomic, read from the mint), extensions: string[], risks: RejectCode[],
+flags: TradingFlag[],
+exit: { amountUsd: Amount, priceImpactBps: number } | null, venue: TokenInfo["venue"] & { verified } }
+Every field outside venue is read onchain by ChainAdapter.tokenRisk?(mint) or computed by guard-core:
+
+- decimals, the supply, the authorities and the Token-2022 extensions come from the mint;
+- risks are the CR-021 rejections a buy would meet (TOKEN_FREEZABLE, TOKEN_EXTENSION_RISK,
+  NO_EXIT_ROUTE);
+- flags are the CR-021 approval flags (NEW_TOKEN, MINT_AUTHORITY);
+- exit is the price impact of selling 10 USD worth back to the dollar, or null without a route.
   venue holds what Jupiter says, labelled as such. The card states facts only and never calls a token
   safe.
-Allowing a token adds it to policy.trading.tokens: PUT /v1/owner/policy/:agentId with the step-up,
-as any loosening. The panel shows the risk card before the passkey prompt.
-POST /v1/owner/quote { agentId, chain, tokenIn, tokenOut, amountIn, maxSlippageBps? } -> SwapQuote
+  Allowing a token adds it to policy.trading.tokens: PUT /v1/owner/policy/:agentId with the step-up,
+  as any loosening. The panel shows the risk card before the passkey prompt.
+  POST /v1/owner/quote { agentId, chain, tokenIn, tokenOut, amountIn, maxSlippageBps? } -> SwapQuote
   The same quote an agent gets for that agent's policy, read-only: it decides nothing and records
   nothing.
-POST /v1/owner/trade { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut, maxSlippageBps?,
+  POST /v1/owner/trade { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut, maxSlippageBps?,
   assertion } -> { intentId, status, rejectReasons, txId? }
   A manual trade for that agent. It always needs the step-up, OwnerAction "manual_trade" over
   { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut }, even below approvalThreshold. It runs
   the same pipeline as an agent's swap:
-  - the policy, every limit and every risk check;
-  - a fresh quote, which must still promise minAmountOut (the amount the owner saw) or the trade is
-    SLIPPAGE_TOO_HIGH;
-  - the inspection, the top-up and the test run;
-  - with the assertion as the owner's approval, so no second request is made.
+- the policy, every limit and every risk check;
+- a fresh quote, which must still promise minAmountOut (the amount the owner saw) or the trade is
+  SLIPPAGE_TOO_HIGH;
+- the inspection, the top-up and the test run;
+- with the assertion as the owner's approval, so no second request is made.
   It is audited via "owner" with reason "owner: manual trade", counts in that agent's day (buys
   against dailyTradeMax), and uses that agent's wallet (its own once it has one). A paused agent
   is refused (PAUSED); Close positions stays the way out. In shadow mode it is shadowed like any
   swap. The panel's copy describes controls, never returns.
 
 ## Degen trading (CR-026)
+
 Solana mainnet through Jupiter only, behind every CR-021 check. It ships after CR-021 and CR-025;
 nothing here changes payments.
 
@@ -686,6 +705,7 @@ Buys keep counting against dailyTradeMax (or operations.buy.dailyMax); sells and
 against their own operations entry when it is set, and against nothing otherwise.
 
 Limits, all in the chain's dollar, applied in step 1 of the checks:
+
 - per operation: operations.<kind>.maxTradeUsd for one trade (SELL_EXCEEDED, SWAP_EXCEEDED; a buy
   stays TRADE_EXCEEDED) and operations.<kind>.dailyMax over the UTC day (SELL_DAILY_EXCEEDED,
   SWAP_DAILY_EXCEEDED, TRADE_DAILY_EXCEEDED);
@@ -693,8 +713,8 @@ Limits, all in the chain's dollar, applied in step 1 of the checks:
   cap, and tokenLimits[mint].maxHeldUsd replaces maxPositionUsd for it (TOKEN_LIMIT_EXCEEDED);
 - a sell, a swap or an order never spends more of a token than the position holds
   (INSUFFICIENT_POSITION).
-Adding or raising any of these, enabling orders or raising orders.maxOpen is a loosening and needs
-the step-up, as for every policy change.
+  Adding or raising any of these, enabling orders or raising orders.maxOpen is a loosening and needs
+  the step-up, as for every policy change.
 
 Valuation. A trade whose sides are both tokens is valued in the chain's dollar for every limit,
 from two fresh quotes back to the dollar, one for tokenIn's amountIn and one for tokenOut's
@@ -728,20 +748,20 @@ chain's dollar under every CR-021 check.
 interface Order {
   id: string
   agentId: string
-  chain: ChainId                   // "solana" only in this phase
+  chain: ChainId // "solana" only in this phase
   token: Address
-  kind: "take_profit" | "stop_loss" | "trailing_stop"   // trailing_stop: CR-028
-  amount: Amount                   // atomic units of token
-  triggerOut: Amount               // the chain's dollar, atomic, for the whole amount
-  maxSlippageBps: number           // at most the policy's maxSlippageBps
-  createdBy: "agent" | "owner"
-  status: "open" | "triggered" | "filled" | "cancelled" | "failed"
+  kind: 'take_profit' | 'stop_loss' | 'trailing_stop' // trailing_stop: CR-028
+  amount: Amount // atomic units of token
+  triggerOut: Amount // the chain's dollar, atomic, for the whole amount
+  maxSlippageBps: number // at most the policy's maxSlippageBps
+  createdBy: 'agent' | 'owner'
+  status: 'open' | 'triggered' | 'filled' | 'cancelled' | 'failed'
   createdAt: string
   expiresAt?: string
   filledIntentId?: string
   failReason?: RejectCode
-  trailBps?: number                // CR-028, trailing_stop only
-  peakOut?: Amount                 // CR-028, trailing_stop only
+  trailBps?: number // CR-028, trailing_stop only
+  peakOut?: Amount // CR-028, trailing_stop only
 }
 ```
 
@@ -775,16 +795,16 @@ interface Order {
 
 Routes:
 POST /v1/agent/quote and /v1/agent/swap, /v1/owner/quote and /v1/owner/trade take any pair: tokenIn
-  and tokenOut are mints or the chain's dollar.
+and tokenOut are mints or the chain's dollar.
 POST /v1/agent/orders { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps?, expiresAt? }
-  -> Order
-POST /v1/agent/orders/:id/cancel { agentId } -> Order   only orders the agent placed: an order the
-  owner placed for it is listed, marked createdBy "owner", and cancelling it answers 404
-GET  /v1/agent/orders/:agentId -> { orders: Order[] }   open ones and the last 50 others
+-> Order
+POST /v1/agent/orders/:id/cancel { agentId } -> Order only orders the agent placed: an order the
+owner placed for it is listed, marked createdBy "owner", and cancelling it answers 404
+GET /v1/agent/orders/:agentId -> { orders: Order[] } open ones and the last 50 others
 POST /v1/owner/orders { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps?, expiresAt?,
-  assertion } -> Order   step-up, OwnerAction "place_order"
-POST /v1/owner/orders/:id/cancel -> Order   session only: cancelling only tightens
-GET  /v1/owner/orders -> { orders: Order[] }   session only
+assertion } -> Order step-up, OwnerAction "place_order"
+POST /v1/owner/orders/:id/cancel -> Order session only: cancelling only tightens
+GET /v1/owner/orders -> { orders: Order[] } session only
 The agent routes take the agent's key, as for swaps. An agent's order follows its own policy;
 placing one never waits for the owner, since a fill only sells.
 An order that cannot be placed answers 409 { error: "order_refused", rejectReasons }, with the codes
@@ -793,61 +813,68 @@ sent one, so the passkey signs exactly what was asked. order_filled and order_fa
 kinds only, not bot alerts.
 
 ## The AI trader (CR-027)
+
 Solana mainnet, spot, through Jupiter. The AI trader is an agent that runs inside guard-core on a
 schedule and decides its own trades with a Claude model. It is attached to one agent, at most one
 per agent, and trades with that agent's wallet and policy. Each action it takes is an intent through
 the CR-021 and CR-026 pipeline, exactly as an MCP agent's:
+
 - the policy and every limit;
 - the risk reads;
 - the inspection and the test run;
 - the approval rules and orders.
-Its sells never wait. What the model writes, its reasons included, is shown to the owner and never
-used in a decision.
+  Its sells never wait. What the model writes, its reasons included, is shown to the owner and never
+  used in a decision.
 
 ```ts
 interface TraderConfig {
   enabled: boolean
-  mode: "shadow" | "live"          // shadow until the owner goes live with the passkey
-  model: "claude-opus-5-5" | "claude-sonnet-5-5" | "claude-haiku-5-5"   // default the first
-  effort: "low" | "medium" | "high"                                     // default "medium"
+  mode: 'shadow' | 'live' // shadow until the owner goes live with the passkey
+  model: 'claude-opus-5-5' | 'claude-sonnet-5-5' | 'claude-haiku-5-5' // default the first
+  effort: 'low' | 'medium' | 'high' // default "medium"
   cadenceMinutes: 5 | 15 | 60
-  tokens: Address[]                // what it may trade; each must also pass the policy
-  instructions: string             // the owner's, plain words, at most 2000 characters
-  template?: { id: string, version: number, source?: "network" }   // the strategy it started from;
-                                   // source absent = TRADER_TEMPLATES, "network" = CR-029
-  maxActionsPerTick: number        // 1 to 5, default 3
-  maxTicksPerDay: number           // default 24 × 60 / cadenceMinutes
-  maxTokensPerTick: number         // input plus output, default 200000
-  maxTokensPerDay: number          // default 2000000
-  hunt?: HuntConfig                // CR-028; absent = off
+  tokens: Address[] // what it may trade; each must also pass the policy
+  instructions: string // the owner's, plain words, at most 2000 characters
+  template?: { id: string; version: number; source?: 'network' } // the strategy it started from;
+  // source absent = TRADER_TEMPLATES, "network" = CR-029
+  maxActionsPerTick: number // 1 to 5, default 3
+  maxTicksPerDay: number // default 24 × 60 / cadenceMinutes
+  maxTokensPerTick: number // input plus output, default 200000
+  maxTokensPerDay: number // default 2000000
+  hunt?: HuntConfig // CR-028; absent = off
 }
 
 interface TraderTick {
   id: string
   agentId: string
   startedAt: string
-  model: string                    // the model that served the tick, fallbacks included
-  outcome: "acted" | "held" | "skipped" | "error" | "refused"
-  actions: { tool: string, intentId?: string, orderId?: string, status?: IntentStatus,
-             rejectReasons: RejectCode[] }[]
-  reason: string                   // the model's own words; untrusted, display only, 500 characters
-  usage: { input: number, output: number, cacheRead: number, cacheWrite: number }
-  detail?: string                  // why a tick was skipped, errored or refused
+  model: string // the model that served the tick, fallbacks included
+  outcome: 'acted' | 'held' | 'skipped' | 'error' | 'refused'
+  actions: {
+    tool: string
+    intentId?: string
+    orderId?: string
+    status?: IntentStatus
+    rejectReasons: RejectCode[]
+  }[]
+  reason: string // the model's own words; untrusted, display only, 500 characters
+  usage: { input: number; output: number; cacheRead: number; cacheWrite: number }
+  detail?: string // why a tick was skipped, errored or refused
 }
 
 interface TraderStatus {
   config: TraderConfig
-  state: "off" | "running" | "paused"
-  pausedBy?: "owner" | "kill" | "agent_paused" | "errors" | "refusals"
-  keySet: boolean                  // whether ANTHROPIC_API_KEY is set; the key is never returned
-  today: { ticks: number, tokens: number }
+  state: 'off' | 'running' | 'paused'
+  pausedBy?: 'owner' | 'kill' | 'agent_paused' | 'errors' | 'refusals'
+  keySet: boolean // whether ANTHROPIC_API_KEY is set; the key is never returned
+  today: { ticks: number; tokens: number }
   report: TraderReport
 }
 
 interface TraderReport {
-  trades: number                   // landed trades; shadowed ones when shadow
-  realizedPnlUsd?: string          // signed atomic units of the chain's dollar; absent in shadow
-  positions: Position[]            // the agent's, at cost
+  trades: number // landed trades; shadowed ones when shadow
+  realizedPnlUsd?: string // signed atomic units of the chain's dollar; absent in shadow
+  positions: Position[] // the agent's, at cost
   shadow: boolean
 }
 ```
@@ -856,48 +883,52 @@ The model. guard-core calls the Claude API through the official TypeScript SDK (
 with the owner's own ANTHROPIC_API_KEY, a secret on the deployment like the others: it is never
 logged, never returned, and never stored in the database. Without it the trader cannot be turned on.
 Each request has:
+
 - the chosen model, with adaptive thinking;
 - an explicit effort in output_config;
 - the trader's tools with strict: true and tool_choice auto, since a forced tool_choice is refused
   on these models.
-On claude-opus-5-5 and claude-sonnet-5-5 it opts into server-side refusal fallbacks (beta
-server-side-fallback-2026-07-01, fallbacks "default"). claude-haiku-5-5 has none. The stop_reason
-is checked before any tool runs:
+  On claude-opus-5-5 and claude-sonnet-5-5 it opts into server-side refusal fallbacks (beta
+  server-side-fallback-2026-07-01, fallbacks "default"). claude-haiku-5-5 has none. The stop_reason
+  is checked before any tool runs:
 - "refusal" ends the tick as refused;
 - "max_tokens" ends it as an error and runs nothing.
-Prompt caching covers the frozen part:
+  Prompt caching covers the frozen part:
 - the tool list;
 - the fixed system prompt;
 - the owner's instructions, which change only with the passkey.
-The tick's data comes after the last breakpoint. The guard-core session reads the current SDK and
-API documentation before writing this code, and does not rely on memory.
+  The tick's data comes after the last breakpoint. The guard-core session reads the current SDK and
+  API documentation before writing this code, and does not rely on memory.
 
 Ready-made strategies. TRADER_TEMPLATES in @defimind/shared holds the DefiMind strategies the owner
 can pick instead of writing instructions. Each one has an id, a version, a name, a summary, the
 instruction text, and suggested values for the cadence, the actions per tick, the trading limits and
 whether orders are on. The first set is:
+
 - "Accumulate on dips" (accumulate-dips);
 - "Trend follower with tight stops" (trend-stops);
 - "Degen: new tokens, small size, quick exits" (degen-quick);
 - "Keep a steady balance" (steady-balance).
-Picking one copies its text into instructions and records { id, version }. The owner may edit the
-text and every value before saving. Saving follows the passkey rules, and a suggested limit never
-goes past the policy without them. A new version of a template never changes a trader that
-already runs it. Every view calls them "ready-made" and makes no claim of performance. "Tested" is
-reserved for a template with a recorded shadow-mode history the panel can show, which this CR does
-not add.
+  Picking one copies its text into instructions and records { id, version }. The owner may edit the
+  text and every value before saving. Saving follows the passkey rules, and a suggested limit never
+  goes past the policy without them. A new version of a template never changes a trader that
+  already runs it. Every view calls them "ready-made" and makes no claim of performance. "Tested" is
+  reserved for a template with a recorded shadow-mode history the panel can show, which this CR does
+  not add.
 
 A tick. Every cadenceMinutes, while the trader is running and within its caps, guard-core starts a
 fresh conversation:
+
 - a system prompt that states the tools, the limits, that nothing it writes can change the policy,
   and that this is not financial advice;
 - the owner's instructions;
 - a user message with the time, the portfolio and the day's budgets.
-The model calls tools until it ends its turn, holds, or reaches maxActionsPerTick. The read tools
-do not count toward that cap. A tick that would pass maxTicksPerDay or maxTokensPerDay is skipped;
-one that passes maxTokensPerTick mid-turn stops there and runs nothing further.
+  The model calls tools until it ends its turn, holds, or reaches maxActionsPerTick. The read tools
+  do not count toward that cap. A tick that would pass maxTicksPerDay or maxTokensPerDay is skipped;
+  one that passes maxTokensPerTick mid-turn stops there and runs nothing further.
 
 Tools:
+
 - get_portfolio {} -> positions at cost and the day's trade budget;
 - quote { from, to, amount } -> SwapQuote, read-only;
 - token_risk { mint } -> TokenRisk (CR-025);
@@ -905,8 +936,8 @@ Tools:
 - swap { from, to, amount, maxSlippageBps?, reason } -> { intentId, status, rejectReasons };
 - place_order and cancel_order, as the CR-026 MCP tools;
 - hold { reason } -> ends the tick with no action.
-swap and place_order only take tokens in config.tokens (or the chain's dollar or SOL), and a
-token outside that list is refused with TRADER_TOKEN_NOT_ALLOWED, whatever the policy allows.
+  swap and place_order only take tokens in config.tokens (or the chain's dollar or SOL), and a
+  token outside that list is refused with TRADER_TOKEN_NOT_ALLOWED, whatever the policy allows.
 
 recent_prices reads samples guard-core records: every 15 minutes, for each token in any trader's
 list, the price of a quoteSell for 10 USD worth. They are kept for 7 days and never used in a
@@ -917,31 +948,33 @@ reaches the model as JSON inside a delimited block. The system prompt says it is
 instructions. The model's reasons are bounded to 500 characters and shown as plain text.
 
 Pausing. The trader pauses itself and tells the owner with Web Push "trader_paused":
+
 - after 3 ticks in a row that end in an API error (pausedBy "errors");
 - after 3 in a row that end refused, by the model or by the pipeline (pausedBy "refusals").
-Its trades also stop when:
+  Its trades also stop when:
 - the agent is paused (pausedBy "agent_paused");
 - Stop everything or kill is used (pausedBy "kill");
 - Close positions is used, which turns the trader off.
-A rate-limited or overloaded API answer is retried by the SDK, then counts as one error.
+  A rate-limited or overloaded API answer is retried by the SDK, then counts as one error.
 
 Shadow mode. A trader in shadow mode, or attached to an agent in shadow mode, has every trade
 shadowed. Its report has shadow: true and no realizedPnlUsd, and every view labels it "Shadow:
 nothing was traded".
 
 Routes (every route needs the owner's session; no agent route exists):
-GET  /v1/owner/trader/:agentId -> TraderStatus
-PUT  /v1/owner/trader/:agentId { config, assertion? } -> TraderStatus
-  step-up, OwnerAction "trader_settings" over { agentId, config }, except when the change only
-  turns the trader off or lowers a cap
-POST /v1/owner/trader/:agentId/pause -> TraderStatus   session only
-POST /v1/owner/trader/:agentId/resume { assertion } -> TraderStatus   step-up, OwnerAction
-  "resume_trader" over { agentId }
-GET  /v1/owner/trader/:agentId/ticks?before= -> { ticks: TraderTick[] }   50 at a time, newest first
+GET /v1/owner/trader/:agentId -> TraderStatus
+PUT /v1/owner/trader/:agentId { config, assertion? } -> TraderStatus
+step-up, OwnerAction "trader_settings" over { agentId, config }, except when the change only
+turns the trader off or lowers a cap
+POST /v1/owner/trader/:agentId/pause -> TraderStatus session only
+POST /v1/owner/trader/:agentId/resume { assertion } -> TraderStatus step-up, OwnerAction
+"resume_trader" over { agentId }
+GET /v1/owner/trader/:agentId/ticks?before= -> { ticks: TraderTick[] } 50 at a time, newest first
 Each tick and each change is audited. The views show controls, landed amounts and the tokens used,
 never projections or returns.
 
 ## Degen autopilot (CR-028)
+
 Solana mainnet, spot, through Jupiter, behind every CR-021 and CR-026 check. Nothing here changes
 payments or the vault's onchain cap. Every default below is applied before the loosening diff
 compares two policies or two trader configs, so an absent field reads as its default, never as off.
@@ -951,21 +984,21 @@ venue's new and trending lists after guard-core screens them.
 
 ```ts
 interface HuntConfig {
-  enabled: boolean                 // default false
-  budgetUsd: Amount                // the most held over every hunted position together
-  maxBuyUsd: Amount                // the most one hunted buy or swap-in may spend
-  dailyBuyUsd: Amount              // the most all hunted buys and swap-ins may spend in a UTC day
-  minAgeMinutes: number            // 5 to 1440, default 30: younger tokens are not offered
-  autoTrailBps?: number            // 100 to 5000: a trailing stop placed with every hunted buy
+  enabled: boolean // default false
+  budgetUsd: Amount // the most held over every hunted position together
+  maxBuyUsd: Amount // the most one hunted buy or swap-in may spend
+  dailyBuyUsd: Amount // the most all hunted buys and swap-ins may spend in a UTC day
+  minAgeMinutes: number // 5 to 1440, default 30: younger tokens are not offered
+  autoTrailBps?: number // 100 to 5000: a trailing stop placed with every hunted buy
 }
 
 interface HuntCandidate {
   mint: Address
-  symbol: string                   // venue text: untrusted, at most 16 characters
-  name: string                     // venue text: untrusted, at most 48 characters
-  ageMinutes: number               // the venue's figure
-  venue: VenueTokenFacts           // CR-025, labelled as the venue's
-  exit: { amountUsd: Amount, priceImpactBps: number }   // selling maxBuyUsd worth back
+  symbol: string // venue text: untrusted, at most 16 characters
+  name: string // venue text: untrusted, at most 48 characters
+  ageMinutes: number // the venue's figure
+  venue: VenueTokenFacts // CR-025, labelled as the venue's
+  exit: { amountUsd: Amount; priceImpactBps: number } // selling maxBuyUsd worth back
 }
 ```
 
@@ -974,8 +1007,8 @@ interface HuntCandidate {
   - raising budgetUsd, maxBuyUsd or dailyBuyUsd;
   - lowering minAgeMinutes;
   - removing or raising autoTrailBps.
-  Hunt also needs policy.trading.allowAnyToken. Without it a hunted buy is TOKEN_NOT_TRADABLE, so
-  hunting always rests on that passkey-signed choice.
+    Hunt also needs policy.trading.allowAnyToken. Without it a hunted buy is TOKEN_NOT_TRADABLE, so
+    hunting always rests on that passkey-signed choice.
 - **Hunted positions.** A position is hunted when the AI trader opened it with a buy or a swap into
   a token outside config.tokens. The tag is set at that trade and kept until the position closes,
   whatever later edits make to config.tokens. Hunt limits apply only to the AI trader's own actions:
@@ -991,24 +1024,24 @@ interface HuntCandidate {
     extension (the CR-021 risk reads, with MINT_AUTHORITY excluded rather than flagged);
   - a quoteSell of maxBuyUsd worth back to the dollar is within maxPriceImpactBps;
   - the venue gives an age, and it is at least minAgeMinutes. A token without an age is not offered.
-  Venue fields only narrow the list and never admit a token past a check.
+    Venue fields only narrow the list and never admit a token past a check.
 - **Which mints it may trade.** swap and place_order take a token outside config.tokens only when it
   is one of these:
   - a token discover_tokens offered this trader in the last 60 minutes;
   - a hunted position the agent holds.
-  Any other mint is TRADER_TOKEN_NOT_ALLOWED, so the model cannot buy a mint it read anywhere else.
-  At the buy, every CR-021 risk read runs again and the screen's mint rules apply once more; an
-  offer never stands in for them.
+    Any other mint is TRADER_TOKEN_NOT_ALLOWED, so the model cannot buy a mint it read anywhere else.
+    At the buy, every CR-021 risk read runs again and the screen's mint rules apply once more; an
+    offer never stands in for them.
 - **Hunt limits.** A hunted buy or swap-in is checked in step 1 of the checks against:
   - hunt.maxBuyUsd for the one trade (HUNT_LIMIT_EXCEEDED);
   - hunt.dailyBuyUsd for the UTC day's hunted buys and swap-ins, gross (HUNT_LIMIT_EXCEEDED);
   - hunt.budgetUsd for every hunted position after it (HUNT_BUDGET_EXCEEDED);
   - every policy limit as well, so the lower one applies.
-  The budget counts each hunted position at its hunt cost. Hunt cost adds a buy at what it spent and
-  a swap-in at its valueUsd (CR-026), and falls on a sell in proportion to the amount sold. A swap
-  from a token that has risen therefore books the hunted token at today's value, not at the old
-  cost. In shadow mode guard-core keeps the same hunt book from the shadowed trades, so the budget
-  and the day bind on paper as they would live.
+    The budget counts each hunted position at its hunt cost. Hunt cost adds a buy at what it spent and
+    a swap-in at its valueUsd (CR-026), and falls on a sell in proportion to the amount sold. A swap
+    from a token that has risen therefore books the hunted token at today's value, not at the old
+    cost. In shadow mode guard-core keeps the same hunt book from the shadowed trades, so the budget
+    and the day bind on paper as they would live.
 - **Approval.** A hunted buy carries NEW_TOKEN only when no agent has held that token before. Without
   the flag it is decided by approvalThreshold alone. With it, it waits for the owner unless a quick
   first buy covers it.
@@ -1041,6 +1074,7 @@ Trailing stops. OrderKind gains "trailing_stop", and Order gains two fields:
 
 Protective sells. This amends CR-026 for stop_loss and trailing_stop fills and for the rug shield's
 sells. A take-profit's fill is an ordinary sell.
+
 - **Checks.** They are exempt from operations.sell, requireMandate and the sell day, and they do not
   count toward it. The rest still applies: a fresh quote, the price impact limit (except where the
   shield says otherwise), the minAmountOut floor, the inspection and the test run. An agent's own
@@ -1056,7 +1090,7 @@ sells. A take-profit's fill is an ordinary sell.
     "order_failed" with reopened: true.
   - It fires again only once a check's quote is at or above its fill floor, and not before a wait
     of ORDER_CHECK_MS × 2^refusals, at most an hour, in case the venue's two quotes disagree.
-  A gap-down therefore never disarms a stop for good, and never sets it firing over and over.
+    A gap-down therefore never disarms a stop for good, and never sets it firing over and over.
 - **Disarming a stop.** These need the step-up:
   - cancelling a stop_loss or trailing_stop from the owner's routes (OwnerAction "cancel_order" over
     { orderId }); a take-profit is still cancelled with the session;
@@ -1064,7 +1098,7 @@ sells. A take-profit's fill is an ordinary sell.
     live to shadow, dropping its chain or venue, or lowering maxPriceImpactBps, above which its
     checks do not count. This holds on every route that changes a policy, the bot's tightening
     included.
-  An agent still cancels only the orders it placed.
+    An agent still cancels only the orders it placed.
 - **Priority.** Stop and trailing checks come before the shield's, the price samples and
   discover_tokens on the venue's rate limit.
 
@@ -1076,14 +1110,19 @@ Rug shield. TradingPolicy.rugShield = { enabled: boolean }, absent meaning enabl
 a loosening and needs the step-up; turning it on needs the session only.
 
 - **What it watches.** guard-core watches every position of an agent whose shield is on, every
-  SHIELD_CHECK_MS (default 60000). It skips a position worth less than SHIELD_DUST_USD (default 1
-  USD) at its last quote. Each check reads the mint with ChainAdapter.tokenRisk, now with its
-  supply, and makes a quoteSell of the whole position.
-- **The baseline.** Each position has one, stored in the database, taken at the settlement of every
-  buy or swap into it:
+  SHIELD_CHECK_MS (default 60000), skipping SOL and the chain's dollar. Each check first reads the
+  mint with ChainAdapter.mintFacts, from the chain alone with no venue call, so a busy venue never
+  blinds the new-risk rule. It then quotes a quoteSell of the whole position. A position worth less
+  than SHIELD_DUST_USD (default 1 USD) before any good quote is skipped.
+- **The baseline.** Each position has one, stored in the database:
   - the freeze and mint authorities;
   - the Token-2022 extensions and their settings (a transfer fee's rate, a hook's program);
   - the supply.
+    It is taken from the mint when a position opens, and kept while the position is held, so a later
+    buy cannot wipe out inflation the shield is counting. A read that fails twice leaves none, never
+    an old one from a position held before; the shield then takes it at its first check.
+    Until mintFacts reports extension settings (ON-38), the shield compares the extensions' names,
+    and a changed setting goes unseen.
 - **When it fires.** A shield run is SHIELD_CONFIRM_CHECKS (default 3) consecutive shield checks. The
   shield fires on one of two rules:
   - **A new risk.** Two checks in a row each differ from the baseline in the same way: an authority
@@ -1091,26 +1130,33 @@ a loosening and needs the step-up; turning it on needs the session only.
     supply above baseline × (10000 + SHIELD_SUPPLY_JUMP_BPS) / 10000 (default 1000). One bad RPC
     answer never sells, and slow inflation adds up against the baseline.
   - **Liquidity gone.** The whole position's exit is above maxPriceImpactBps, or has no route, on
-    every check of a shield run, after an earlier check found it within the limit. A price fall
-    alone is the stop orders' job, not the shield's.
-- **The sell.** When the shield fires, guard-core cancels the agent's open orders on that token and
-  sells that agent's booked amount, and only that, to the chain's dollar as a protective sell.
-  - The new-risk rule sells with minAmountOut = the fresh quote × (10000 − maxSlippageBps) / 10000.
-    It sells at the market and is allowed above maxPriceImpactBps.
-  - The liquidity rule's minAmountOut is the higher of that and the last within-limit quote ×
-    (10000 − SHIELD_MAX_LOSS_BPS) / 10000 (default 5000). A pool drained for a few minutes to shake
-    out holders therefore cannot take the whole position at the bottom. When the floor is not met it
-    sells nothing and pushes.
+    every check of a shield run, after an earlier check found it within the limit. A venue error
+    is neither. A price fall alone is the stop orders' job, not the shield's.
+- **The sell.** When the shield fires, guard-core sells that agent's booked amount, at most what it
+  books at that moment, to the chain's dollar as a protective sell. The sell is allowed above
+  maxPriceImpactBps.
+  - Its minAmountOut is the higher of two amounts: the fresh quote × (10000 − maxSlippageBps) /
+    10000, and the reference × (10000 − SHIELD_MAX_LOSS_BPS) / 10000 (default 5000).
+  - The reference is the lowest of the last run's good quotes, scaled to the amount held now. A
+    pool drained, or pumped for one check, therefore cannot take the whole position at the bottom.
+    When the floor is not met it sells nothing: after a real crash of more than half, the shield
+    keeps the position, tells the owner once, and retries quietly. A new risk seen with no quote
+    and no good one before it waits for a quote.
+  - The token's open orders are cancelled only once the sell has landed. A refused sell leaves the
+    stops in place.
 - **Telling the owner.** Each sell is audited as "rug_shield" with the rule that fired and pushed as
-  Web Push "rug_shield". A refused or failed sell is pushed with failed: true, and the next run may
-  fire again.
-- **No sell.** A paused or killed agent is not sold: the owner gets "rug_shield" with paused: true, and
-  Close positions stays the way out. Shadow mode shadows the sell. An agent without trading.enabled
-  is only pushed.
+  Web Push "rug_shield".
+  - A refused or failed sell is pushed once with failed: true. The shield tries again after 15
+    minutes, then after a wait that doubles each time, up to 6 hours.
+  - In shadow mode the sell is shadowed once and not repeated.
+- **No sell.** A paused or killed agent, or one without trading.enabled, is not sold and not quoted:
+  the owner gets "rug_shield" with paused: true, once per pause, and Close positions stays the way
+  out.
 - **Gas.** The doctor warns when a hot wallet's SOL above the gas reserve covers fewer sell fees than
   it has positions.
 
 Faster prices. recent_prices takes { mint, window?: "1h" | "24h" }:
+
 - "24h" returns up to 96 samples, one every 15 minutes, as in CR-027;
 - "1h" returns up to 60 samples, one a minute.
 - One-minute samples are recorded for the tokens of every trader whose cadenceMinutes is 5, its
@@ -1122,6 +1168,7 @@ Faster prices. recent_prices takes { mint, window?: "1h" | "24h" }:
 
 Quick first buys. TradingPolicy.quickFirstBuy = { maxUsd: Amount, dailyUsd: Amount }, absent meaning
 off. Setting it or raising either amount is a loosening and needs the step-up.
+
 - **What it covers.** A buy, or a swap into a token, is decided without the owner when all of these
   hold:
   - its only flag is NEW_TOKEN;
@@ -1139,8 +1186,10 @@ off. Setting it or raising either amount is a loosening and needs the step-up.
   allow.
 
 ## The DefiMind Network (CR-029)
+
 A hosted service, packages/network, run by DefiMind as its own Fly app. Deployments use it only
 when the owner sets NETWORK_URL. Three rules bind every part of it:
+
 - **It never touches funds.**
   - Nothing it says can make a deployment approve, buy, sell, sign or loosen anything. It can only
     make a deployment refuse a buy or narrow a list.
@@ -1156,6 +1205,7 @@ Solana reads go through an RPC (an archive RPC for history) and the venue reads 
 in packages/onchain. A venue or RPC error or timeout is never read as "no route" or as a fact.
 
 Holder wallets. A deployment links one holder wallet at a time.
+
 - **Linking.**
   1. guard-core asks the network for a challenge: POST /v1/link/challenge { wallet } returns
      { nonce, issuedAt, expiresAt }, expiring after 10 minutes.
@@ -1203,25 +1253,25 @@ Holder wallets. A deployment links one holder wallet at a time.
   - its holder wallet;
   - its reports, as below;
   - the votes and strategies the owner sends.
-  Never a vault, a hot wallet, a position, an amount or an agent. A report still reveals that the
-  deployment held the mint, and the panel's switch says so.
+    Never a vault, a hot wallet, a position, an amount or an agent. A report still reveals that the
+    deployment held the mint, and the panel's switch says so.
 
 Rug Radar.
 
 ```ts
 interface RadarReport {
   mint: Address
-  rule: "new_risk" | "liquidity_gone"
-  slot: number                     // where the deployment saw it; within RADAR_MAX_LOOKBACK
+  rule: 'new_risk' | 'liquidity_gone'
+  slot: number // where the deployment saw it; within RADAR_MAX_LOOKBACK
 }
 interface RadarListing {
   mint: Address
-  rule: "new_risk" | "liquidity_gone"
-  facts: string[]                  // what the network itself confirmed, in plain words
-  status: "listed" | "cleared"
+  rule: 'new_risk' | 'liquidity_gone'
+  facts: string[] // what the network itself confirmed, in plain words
+  status: 'listed' | 'cleared'
   listedAt: string
   clearedAt?: string
-  clearance?: AdminSignature       // required to clear a new_risk listing
+  clearance?: AdminSignature // required to clear a new_risk listing
 }
 ```
 
@@ -1242,7 +1292,7 @@ interface RadarListing {
       program changed;
     - or MintTo instructions that raise the supply above its supply at the slot ×
       (10000 + RADAR_SUPPLY_JUMP_BPS) / 10000 (default 1000).
-    A risk the token always had is never a report.
+      A risk the token always had is never a report.
   - **liquidity_gone.** The network must have quoted a quoteSell of RADAR_PROBE_USD (default 100
     USD) within RADAR_MAX_IMPACT_BPS (default 3000) itself, in the 7 days before the report:
     screening the feed, or watching tokens it was asked about. Then 3 quotes at least a minute
@@ -1280,6 +1330,7 @@ interface RadarListing {
     table published as a network proposal. The network holds no treasury key.
 
 Hunt Pass.
+
 - GET /v1/hunt/feed?list=recent|trending needs a credential whose weight is at least PASS_MIN. The
   network returns at most 50 mints, each with its own checks as data (for example, "creator also
   created 2 listed mints"). It screens Jupiter's lists all day with the CR-028 screen at
@@ -1300,14 +1351,14 @@ Strategy marketplace.
 ```ts
 interface NetworkStrategy {
   id: string
-  version: number                  // versions share one strategy's votes and its slot
-  creator: Address                 // the holder wallet that published it
-  name: string                     // at most 60 characters
-  summary: string                  // at most 200
-  instructions: string             // at most 2000
-  suggested: TraderTemplate["suggested"]
-  votes: { up: Amount, down: Amount }   // weight, not heads
-  status: "listed" | "removed"
+  version: number // versions share one strategy's votes and its slot
+  creator: Address // the holder wallet that published it
+  name: string // at most 60 characters
+  summary: string // at most 200
+  instructions: string // at most 2000
+  suggested: TraderTemplate['suggested']
+  votes: { up: Amount; down: Amount } // weight, not heads
+  status: 'listed' | 'removed'
   publishedAt: string
 }
 ```
@@ -1318,7 +1369,7 @@ interface NetworkStrategy {
   - is not NFKC-normalized printable text, so no zero-width, bidirectional or tag characters;
   - holds a base58 run of 32 to 44 characters, a 0x address, a cashtag ($ before letters) or a
     quoted word.
-  guard-core checks the same rules again before saving.
+    guard-core checks the same rules again before saving.
 - **Reading.** GET /v1/strategies is free.
 - **Using one.** Picking one copies it as a template, with template { id, version,
   source: "network" }.
@@ -1334,6 +1385,7 @@ interface NetworkStrategy {
   changes a trader that already copied it; the panel marks it.
 
 Holder votes.
+
 - POST /v1/strategies/:id/vote { up: boolean } needs a credential with weight at least VOTE_MIN. One
   vote per wallet, which may be changed while the strategy is listed.
 - POST /v1/proposals/:id/vote { choice } follows the same rules, and the vote may be changed until
@@ -1346,12 +1398,14 @@ Holder votes.
 Admin. ADMIN_WALLET (NETWORK_ADMIN_WALLET in guard-core) signs each admin action with ed25519. The
 signed bytes are "DefiMind Network admin v1\n" followed by the canonical JSON of { domain, action,
 target, bodySha256, reason, at, nonce }.
+
 - The network checks the domain, a 5-minute window and the nonce once.
 - The actions are: clearing a listing, removing a strategy, and creating a proposal, whose title,
   text, choices and times are the signed body.
 - The network has no admin token.
 
 ## Agent wallets (CR-022, HIGH-2)
+
 Opt-in, per agent and chain. By default every agent spends from the chain's shared spending (hot)
 wallet, as before. An agent given its own wallet spends only from it, under its own onchain limit,
 so a bug or a hijacked agent can never cost more than that agent's own cap.
@@ -1369,11 +1423,11 @@ serves add-limit.
 
 Routes (session, step-up "agent_wallet" over { agentId, chain }):
 POST /v1/owner/agents/:id/wallets { chain, assertion } -> AgentWallet
-  { chain, address, status: "pending_limit" | "active", addLimitPage, gas: { balance, minimum, symbol } }
-  Idempotent: a second call returns the same wallet. The wallet is "active" only once guard-core
-  reads its limit or allowance onchain, as for vault adoption (CR-019). Until then the agent keeps
-  using the shared wallet.
-GET  /v1/owner/agents/:id/wallets -> { wallets: AgentWallet[] }
+{ chain, address, status: "pending_limit" | "active", addLimitPage, gas: { balance, minimum, symbol } }
+Idempotent: a second call returns the same wallet. The wallet is "active" only once guard-core
+reads its limit or allowance onchain, as for vault adoption (CR-019). Until then the agent keeps
+using the shared wallet.
+GET /v1/owner/agents/:id/wallets -> { wallets: AgentWallet[] }
 AgentSummary gains wallets?: { chain, address, status }[]. GET /v1/owner/keys adds
 agentWallets: { agentId, chain, address }[], public keys only.
 
@@ -1400,27 +1454,28 @@ all, and the bound is then the sum of the onchain caps, shared and per agent. Mo
 server (KMS or a signer service) is a later CR.
 
 ## Webhook guard-core -> telegram-bot
+
 The Telegram bot is optional (CR-017). BOT_URL, BOT_TOKEN and BOT_WEBHOOK_SECRET are all set or all
 unset; a partial set is a configuration error. With none set, guard-core sends no webhook, registers
 no /v1/bot/* route, and doctor does not check a bot: the owner is reached through the panel and its
 Web Push only. Push always goes out before the webhook, so a bot that is down never delays the panel.
-POST {BOT_URL}/hooks/approval-request  (header X-Guard-Signature: HMAC-SHA256 of body with BOT_WEBHOOK_SECRET)
+POST {BOT_URL}/hooks/approval-request (header X-Guard-Signature: HMAC-SHA256 of body with BOT_WEBHOOK_SECRET)
 { intent: PayIntent, simulation: { summary: string, balanceChanges: {token, delta}[] }, approveBefore: string }
 Pending intents expire after 10 minutes -> status "expired", reason APPROVAL_TIMEOUT.
 
-POST {BOT_URL}/hooks/intent-event      (same X-Guard-Signature scheme as approval-request)
-{ intent: PayIntent, sentAt: string }  // sentAt: ISO time guard-core sent it
+POST {BOT_URL}/hooks/intent-event (same X-Guard-Signature scheme as approval-request)
+{ intent: PayIntent, sentAt: string } // sentAt: ISO time guard-core sent it
 Sent when an intent reaches executed, rejected, failed or expired. The bot decides what to show
 (executed at or above NOTIFY_ABOVE_AMOUNT, any per-chain attack code); guard-core has no notification
 policy of its own. The bot refuses events older than 5 minutes and deduplicates on intent id plus
 status. Attack-code alerts are throttled per agent and code; large-payment alerts are not.
 
-POST {BOT_URL}/hooks/alert             (same X-Guard-Signature scheme; CR-010)
+POST {BOT_URL}/hooks/alert (same X-Guard-Signature scheme; CR-010)
 { kind: "breaker_tripped", agentId: string, detail: string, sentAt: string }
-  | { kind: "passkey_enrolled", detail: string, sentAt: string }
-  | { kind: "chain_broken", detail: string, sentAt: string }   (CR-013)
-  | { kind: "admin_loosen_refused", detail: string, sentAt: string }   (CR-022)
-  | { kind: "backup_failed", detail: string, sentAt: string }   (CR-024: never a URL or a key)
+| { kind: "passkey_enrolled", detail: string, sentAt: string }
+| { kind: "chain_broken", detail: string, sentAt: string } (CR-013)
+| { kind: "admin_loosen_refused", detail: string, sentAt: string } (CR-022)
+| { kind: "backup_failed", detail: string, sentAt: string } (CR-024: never a URL or a key)
 The approval-request body gains flags: ("RECIPIENT_CHANGED" | "PRICE_JUMP")[] (empty when none),
 pinned?: { recipient, amount } (the last executed payment to that domain, present with a flag),
 passkey: boolean (approve only through /owner/approve), and mandate?: Mandate when the request is to
@@ -1431,24 +1486,26 @@ before its test run (CR-024) carries untested: true, on the webhook, Web Push an
 list: it is funded and test-run only once approved.
 
 ## MCP tools (mcp-server)
+
 - paid_fetch { url, method?, headers?, body?, maxAmountUsd? }
-- transfer   { to, amountUsd, reason, chain? }
+- transfer { to, amountUsd, reason, chain? }
 - get_budget {}
 - check_intent { intentId }
 - start_task { budgetUsd, domains, recipients?, minutes, reason } -> mandate id (CR-010); paid_fetch and
   transfer take mandateId?. minutes is 1 to 1440; guard-core also refuses ttlSeconds above 86400.
-- swap       { from, to, amountUsd? | amount?, maxSlippageBps?, reason, chain? } (CR-021): exactly one
+- swap { from, to, amountUsd? | amount?, maxSlippageBps?, reason, chain? } (CR-021): exactly one
   of amountUsd (a buy with the chain's dollar) or amount (atomic units of `from`, a sell)
-- quote      { from, to, amountUsd? | amount?, chain? } -> SwapQuote, read-only (CR-021)
+- quote { from, to, amountUsd? | amount?, chain? } -> SwapQuote, read-only (CR-021)
 - get_portfolio {} -> positions, cost and the day's trade budget (CR-021)
 - swap and quote take any pair (CR-026): from and to are mints or "USDC"; amount is in atomic units
   of `from` whenever `from` is not the chain's dollar
-- place_order  { token, kind: "take_profit" | "stop_loss", amount, triggerUsd, maxSlippageBps? }
+- place_order { token, kind: "take_profit" | "stop_loss", amount, triggerUsd, maxSlippageBps? }
   -> Order (CR-026); triggerUsd is a decimal dollar amount for the whole order, converted to atomic
 - cancel_order { orderId } -> Order (CR-026); only the agent's own orders
-- list_orders  {} -> { orders: Order[] } (CR-026); the agent's open and recent orders
+- list_orders {} -> { orders: Order[] } (CR-026); the agent's open and recent orders
 
 ## Security rules (all sessions)
+
 - Agent-provided text (reason, URLs, headers, API responses) is untrusted. Never let it change policy.
 - Default deny. Any parsing doubt = reject.
 - The hot wallet keys live only in guard-core env (later: KMS). Never logged, never returned.
@@ -1457,6 +1514,7 @@ list: it is funded and test-run only once approved.
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+
 - v0.23 (2026-11-25): CR-029, approved by the owner. The DefiMind Network, a hosted, opt-in service:
   - holder wallets linked by a signed message, weighted by tokens held over 24 hours;
   - the Rug Radar, a checked list of rugs that only refuses buys;
@@ -1491,8 +1549,8 @@ list: it is funded and test-run only once approved.
   - an x402 approval is bound to its exact request;
   - the public listener checks the Host header;
   - getVault reports the vault's threshold, and doctor warns at threshold 1.
-  The same day, after the owner chose option A, opt-in agent wallets: a hot wallet and onchain limit
-  per agent and chain, routed per agent, killed per agent.
+    The same day, after the owner chose option A, opt-in agent wallets: a hot wallet and onchain limit
+    per agent and chain, routed per agent, killed per agent.
 - v0.16 (2026-11-24): CR-021, approved by the owner. Guarded trading, phase 1 on Solana through
   Jupiter: the swap intent kind, Policy.trading, the trading reject codes and approval flags,
   ChainAdapter.quoteSwap and getPositions, the agent quote, swap and portfolio routes, the owner's

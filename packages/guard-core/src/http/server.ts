@@ -30,6 +30,7 @@ import type { PushService } from '../adapters/push.js'
 import { pusher } from '../service/push.js'
 import { integrityMonitor } from '../service/integrity.js'
 import type { AnchorPublisher } from '../service/anchor.js'
+import type { ShieldRules } from '../service/rug-shield.js'
 import { type Backups, startTimers, type Watch } from './timers.js'
 import type { Claude } from '../adapters/claude.js'
 import { ownerSessionRoutes } from './owner-session.js'
@@ -59,6 +60,8 @@ export interface ServerDeps {
   sweepMs?: number
   backups?: Backups
   orders?: Watch
+  /** CR-028: the rug shield; off when unset. */
+  shield?: ShieldRules
   /** Runs the AI traders on this interval (CR-027); a test passes its own Claude client. */
   traders?: { checkMs: number; claude?: Claude }
   /** Signs receipts. Receipts are off without it. */

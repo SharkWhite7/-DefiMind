@@ -141,6 +141,13 @@ const settings = z
     ORDER_CHECK_MS: z.coerce.number().int().min(1_000).default(15_000),
     ORDER_CONFIRM_CHECKS: z.coerce.number().int().min(1).max(100).default(3),
     ORDER_CONFIRM_SECONDS: z.coerce.number().int().min(0).max(3_600).default(30),
+    /** CR-028: the rug shield's pace and rules. */
+    SHIELD_CHECK_MS: z.coerce.number().int().min(10_000).default(60_000),
+    SHIELD_CONFIRM_CHECKS: z.coerce.number().int().min(2).max(100).default(3),
+    SHIELD_SUPPLY_JUMP_BPS: z.coerce.number().int().min(1).max(100_000).default(1000),
+    SHIELD_MAX_LOSS_BPS: z.coerce.number().int().min(0).max(10_000).default(5000),
+    /** In the chain's dollar, atomic: 1 USD. */
+    SHIELD_DUST_USD: z.coerce.bigint().min(0n).default(1_000_000n),
     /** CR-027. The owner's own key for the AI trader: never logged, returned or stored. */
     ANTHROPIC_API_KEY: optional(z.string().min(1)),
 

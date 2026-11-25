@@ -54,15 +54,17 @@ export interface TradeVerdict {
  * from a venue nobody trusts, so it is checked against the request and against itself, never
  * believed. Pure, so every attack case is a test.
  *
- * A protective sell (CR-028: a stop's fill) skips the sell limits and the mandate rule: an agent
- * must not be able to use up the room its own stops need to sell.
+ * A protective sell (CR-028: a stop's fill or the rug shield's) skips the sell limits and the
+ * mandate rule: an agent must not be able to use up the room its own stops need to sell. The
+ * shield's also sells above the impact limit: it fires because the token is no longer safe to hold,
+ * and its floor bounds the price.
  */
 export function evaluateTrade(
   trade: Trade,
   policy: Policy,
   book: Book,
   now: Date,
-  protective = false,
+  protective?: 'stop' | 'shield',
 ): TradeVerdict {
   const trading = policy.trading
   if (trading === undefined || !trading.enabled) {
@@ -80,7 +82,7 @@ export function evaluateTrade(
   // A swap cannot name a mandate yet, so an owner who allows payments only inside a task budget
   // gets no swaps at all until mandates have a design for trades.
   const { quote, request, side } = trade
-  const guarded = protective && side === 'sell'
+  const guarded = protective !== undefined && side === 'sell'
   if (policy.requireMandate === true && !guarded) {
     add('MANDATE_REQUIRED')
   }
@@ -93,7 +95,9 @@ export function evaluateTrade(
     add('TOKEN_NOT_TRADABLE')
   }
   for (const reason of quoteReasons(trade, trading, now)) {
-    add(reason)
+    if (!(guarded && protective === 'shield' && reason === 'PRICE_IMPACT_TOO_HIGH')) {
+      add(reason)
+    }
   }
 
   const amountIn = parseAmount(request.amountIn)

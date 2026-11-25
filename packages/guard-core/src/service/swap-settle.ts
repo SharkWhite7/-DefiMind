@@ -1,8 +1,9 @@
 import type { ChainAdapter } from '@defimind/onchain'
 import type { BalanceChange, PayIntent, SimulationResult } from '@defimind/shared'
 import { applySwap } from '../db/swap-book.js'
-import { applyTrade, capPositions } from '../db/trades.js'
+import { applyTrade, capPositions, getPosition } from '../db/trades.js'
 import { correctSold } from '../db/day-book.js'
+import { takeBaseline } from '../db/shield.js'
 import { expectedOf } from '../domain/trading.js'
 import { listWallets } from '../db/wallets.js'
 import { parseAmount } from '../domain/amount.js'
@@ -110,7 +111,11 @@ export async function settle(
       ...(details.symbolOut === undefined ? {} : { symbol: details.symbolOut }),
     }
     const from = { token: intent.token, amount: spent > 0n ? spent : parseAmount(intent.amount) }
+    const opened = isNew(deps, intent, to.token)
     applySwap(deps.db, { agentId: intent.agentId, chain: intent.chain, from, to }, deps.now())
+    if (opened) {
+      await baseline(deps, adapter, intent, to.token)
+    }
     if (changes === undefined) {
       await reconcile(deps, adapter, intent, from.token)
       await reconcile(deps, adapter, intent, to.token)
@@ -133,11 +138,15 @@ export async function settle(
           decimals: details.decimalsIn,
           ...(details.symbolIn === undefined ? {} : { symbol: details.symbolIn }),
         }
+  const opened = side === 'buy' && isNew(deps, intent, position.token)
   applyTrade(
     deps.db,
     { agentId: intent.agentId, chain: intent.chain, side, ...position },
     deps.now(),
   )
+  if (opened) {
+    await baseline(deps, adapter, intent, position.token)
+  }
   // The day's sells counted what this one was expected to bring; it now says what it brought.
   if (side === 'sell' && changes !== undefined) {
     const key = { agentId: intent.agentId, chain: intent.chain, day }
@@ -147,4 +156,18 @@ export async function settle(
     await reconcile(deps, adapter, intent, position.token)
   }
   return finish(deps, intent, { status: 'executed', txId })
+}
+
+/**
+ * CR-028: the baseline is taken when a position opens and kept while it is held, so a later buy
+ * cannot wipe out inflation the shield is counting.
+ */
+function isNew(deps: PaymentDeps, intent: PayIntent, token: string): boolean {
+  return getPosition(deps.db, intent.agentId, intent.chain, token).amount === 0n
+}
+
+/** What the mint says when a position opens, for the rug shield to compare against later. */
+function baseline(deps: PaymentDeps, adapter: ChainAdapter, intent: PayIntent, token: string) {
+  const key = { agentId: intent.agentId, chain: intent.chain, token }
+  return takeBaseline(deps.db, adapter, key, deps.now())
 }

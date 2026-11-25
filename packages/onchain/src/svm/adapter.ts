@@ -39,6 +39,7 @@ import { confirm, connect, findSpendingLimit, spendingLimitPda, VAULT_INDEX } fr
 import { useSpendingLimit } from './draw.js'
 import { expectedTransfer, transferInstructions, type Payment } from './transfer.js'
 import { jupiter, type Venue } from './swap/jupiter.js'
+import { mintFacts } from './swap/mint.js'
 import { sellQuote, tokenRisk } from './swap/risk.js'
 import { swaps } from './swap/service.js'
 import { gatedScheme } from './x402.js'
@@ -180,6 +181,14 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
             tokenRisk({ connection, dollar: mint, venue: deps.venue!, chain }, token),
           quoteSell: (token: Address, amount: Amount) =>
             sellQuote(deps.venue!, mint, token, atomic(amount)),
+          async mintFacts(token: Address) {
+            const key = new PublicKey(token)
+            const { freezeAuthority, mintAuthority, extensions, supply } = mintFacts(
+              key,
+              await connection.getAccountInfo(key),
+            )
+            return { freezeAuthority, mintAuthority, extensions, supply }
+          },
         }
       : {}),
 
