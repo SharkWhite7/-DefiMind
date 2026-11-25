@@ -176,6 +176,20 @@ and by the slot its code was deployed at. The test reads that code from mainnet 
 
 To refresh the fixtures, run `pnpm record:swap` again.
 
+### SOL legs and the gas reserve (CR-026)
+
+Native SOL can be either side of a swap; its mint is wSOL. Jupiter wraps it for that swap only, and
+`inspectSwap` allows one shape alone:
+
+- the hot wallet's own wSOL account, created;
+- when SOL is sold, exactly amountIn moved into it from the hot wallet, then SyncNative;
+- that account closed back to the hot wallet in the same transaction.
+
+The test run counts the lamports and the hot wallet's wSOL as one leg. Selling SOL, they may fall
+by amountIn plus fees and rent. Buying SOL, they must rise by the minimum less those. Every swap is
+refused with `GAS_RESERVE` if it would leave the hot wallet below `getHotWalletGas().minimum`
+after fees, so it can still pay for the next sell.
+
 ### Sell quotes (CR-026)
 
 `quoteSell(token, amount)` (Solana mainnet, with the swap venue) is what `amount` of a token would
@@ -185,9 +199,9 @@ for the take-profit and stop-loss watcher. It is a venue claim: it sizes limits 
 never signed. A token with no route back throws `SwapUnavailable('no_route')`. It does not cache;
 cadence and caching are guard-core's.
 
-The fork test (`test/swap-fork.test.ts`) runs two recorded mainnet routes in LiteSVM: USDC for wSOL
-and JUP for BONK over three hops, whose intermediates net to zero. Record a pair with
-`pnpm record:swap <name> <in> <out> <amount> [wrap|nowrap] [dexes]`. Keep `dexes` to pools whose
+The fork test (`test/swap-fork.test.ts`) runs three recorded mainnet routes in LiteSVM: USDC for
+SOL, JUP for BONK over three hops (whose intermediates net to zero), and SOL for JUP. Record a pair with
+`pnpm record:swap <name> <in> <out> <amount> [dexes]`. Keep `dexes` to pools whose
 whole state is in the recorded accounts: an oracle-priced AMM moves with every slot, so its quote and
 its state never match in a recording.
 

@@ -90,6 +90,7 @@ let sent: Buffer[]
 
 const connection = {
   getSlot: async () => 1_000,
+  getMinimumBalanceForRentExemption: async () => 2_039_280,
   getMultipleAccountsInfo: async (keys: PublicKey[]) =>
     keys.map((k) => before.get(k.toBase58()) ?? null),
   getTokenAccountsByOwner: async (_owner: PublicKey, { programId }: { programId: PublicKey }) => ({
@@ -356,6 +357,12 @@ describe('simulate and send a swap', () => {
   it('refuses a run that drains SOL past fees and rent', async () => {
     after.set(hot.toBase58(), wallet(90_000_000))
     expect((await s.simulate(buy())).rejectReasons).toEqual(['SIM_UNEXPECTED_EFFECT'])
+  })
+
+  it('refuses a swap that would leave the hot wallet short of gas for the next sell', async () => {
+    before.set(hot.toBase58(), wallet(7_000_000))
+    after.set(hot.toBase58(), wallet(7_000_000 - 5_000 - 2_039_280))
+    expect((await s.simulate(buy())).rejectReasons).toEqual(['GAS_RESERVE'])
   })
 
   it('refuses a transaction whose route would accept less than the approved minimum', async () => {

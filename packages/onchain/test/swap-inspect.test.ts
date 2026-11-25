@@ -3,8 +3,10 @@ import {
   createAssociatedTokenAccountIdempotentInstruction,
   createCloseAccountInstruction,
   createSetAuthorityInstruction,
+  createSyncNativeInstruction,
   AuthorityType,
   getAssociatedTokenAddressSync,
+  NATIVE_MINT,
 } from '@solana/spl-token'
 import {
   ComputeBudgetProgram,
@@ -156,5 +158,67 @@ describe('a swap transaction, read before the test run', () => {
     expect(check([shared])).toEqual([])
     const short = new TransactionInstruction({ ...route, data: route.data.subarray(0, 20) })
     expect(check([short])).toEqual(['SIM_UNEXPECTED_EFFECT'])
+  })
+})
+
+describe('a SOL leg (CR-026), in its one shape', () => {
+  const wsol = getAssociatedTokenAddressSync(NATIVE_MINT, hotWallet)
+  const selling = { ...sides, tokenIn: NATIVE_MINT }
+  const buying = { ...sides, tokenOut: NATIVE_MINT }
+  const wrap = (lamports = 10_000_000) =>
+    SystemProgram.transfer({ fromPubkey: hotWallet, toPubkey: wsol, lamports })
+  const sync = createSyncNativeInstruction(wsol)
+  const unwrap = createCloseAccountInstruction(wsol, hotWallet, hotWallet)
+  const run = (instructions: TransactionInstruction[], with_ = selling) => {
+    const expanded = new TransactionMessage({
+      payerKey: hotWallet,
+      recentBlockhash: key().toBase58(),
+      instructions,
+    })
+    return inspectSwap(expanded.compileToV0Message(), expanded, with_)
+  }
+
+  it('passes selling SOL: its own wSOL account, amountIn in, synced, route, closed back', () => {
+    expect(run([...budget, create(NATIVE_MINT), wrap(), sync, create(), route, unwrap])).toEqual([])
+  })
+
+  it('passes buying SOL: the route into its own wSOL account, closed back', () => {
+    const shape = [...budget, create(tokenIn), create(NATIVE_MINT), route, unwrap]
+    expect(run(shape, buying)).toEqual([])
+  })
+
+  it.each([
+    [
+      'more SOL wrapped than amountIn',
+      [create(NATIVE_MINT), wrap(10_000_001), sync, route, unwrap],
+    ],
+    [
+      'SOL sent anywhere else',
+      [
+        create(NATIVE_MINT),
+        SystemProgram.transfer({ fromPubkey: hotWallet, toPubkey: key(), lamports: 10_000_000 }),
+        sync,
+        route,
+        unwrap,
+      ],
+    ],
+    ['no close back', [create(NATIVE_MINT), wrap(), sync, route]],
+    [
+      'a close to someone else',
+      [
+        create(NATIVE_MINT),
+        wrap(),
+        sync,
+        route,
+        createCloseAccountInstruction(wsol, key(), hotWallet),
+      ],
+    ],
+    ['a second wrap', [create(NATIVE_MINT), wrap(), wrap(), sync, route, unwrap]],
+  ])('refuses %s', (_case, instructions) => {
+    expect(run([...budget, ...instructions])).not.toEqual([])
+  })
+
+  it('refuses the wrap shape on a swap with no SOL leg', () => {
+    expect(check([...budget, create(NATIVE_MINT), wrap(), sync, route, unwrap])).not.toEqual([])
   })
 })

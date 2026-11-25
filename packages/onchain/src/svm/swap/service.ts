@@ -1,5 +1,6 @@
 import type { Amount, PayIntent, RejectCode, SwapQuote } from '@defimind/shared'
 import {
+  ACCOUNT_SIZE,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   unpackAccount,
@@ -14,6 +15,7 @@ import {
   type VersionedTransaction,
 } from '@solana/web3.js'
 import type { SimulationOutcome } from '../../ChainAdapter.js'
+import { gasMinimum } from '../gas.js'
 import { confirm } from '../squads.js'
 import { swapEffects, type Holding } from './effects.js'
 import { inspectSwap, MAX_PRIORITY_LAMPORTS } from './inspect.js'
@@ -140,11 +142,15 @@ export function swaps({ connection, hotWallet, dollar, venue }: SwapDeps) {
     }
     const after = value.accounts.map(fromSimulation)
     const effects = holdings(watched, before, after, minAmountOut, request)
-    const outcome = {
-      simulation: describe(intent, effects.changes),
-      rejectReasons: effects.reasons,
-    }
-    if (effects.reasons.length === 0) checked.set(intent.id, { tx, at: Date.now() })
+    // The hot wallet must still pay for the next sell after this one's fees (CR-026).
+    const minimum = gasMinimum(await connection.getMinimumBalanceForRentExemption(ACCOUNT_SIZE))
+    const left = BigInt(after[0]?.lamports ?? 0) - SIGNATURE_FEE - MAX_PRIORITY_LAMPORTS
+    const reasons: RejectCode[] = [
+      ...effects.reasons,
+      ...(left < minimum ? (['GAS_RESERVE'] as const) : []),
+    ]
+    const outcome = { simulation: describe(intent, effects.changes), rejectReasons: reasons }
+    if (reasons.length === 0) checked.set(intent.id, { tx, at: Date.now() })
     return outcome
   }
 

@@ -96,3 +96,63 @@ describe('the test run of a swap', () => {
     expect(effects.reasons).toEqual(['SIM_UNEXPECTED_EFFECT'])
   })
 })
+
+describe('a SOL leg (CR-026): lamports and wSOL as one leg', () => {
+  const WSOL = 'So11111111111111111111111111111111111111112'
+  const fees = 5_000n
+  const judge = (
+    leg: Partial<Deal>,
+    before: Record<string, Holding | null>,
+    after: Record<string, Holding | null>,
+    lamports: { before: bigint; after: bigint },
+  ) =>
+    swapEffects(new Map(Object.entries(before)), new Map(Object.entries(after)), lamports, {
+      ...deal,
+      ...leg,
+    })
+
+  it('passes selling SOL: amountIn and fees leave the lamports, the wSOL account comes and goes', () => {
+    const effects = judge(
+      { tokenIn: WSOL, amountIn: 10_000_000n },
+      { w: null, b: holding(bonk, 0n) },
+      { w: null, b: holding(bonk, 600n) },
+      { before: 1_000_000_000n, after: 1_000_000_000n - 10_000_000n - fees },
+    )
+    expect(effects.reasons).toEqual([])
+    expect(effects.changes).toEqual([
+      { token: bonk, delta: '600' },
+      { token: WSOL, delta: `-${10_000_000n + fees}` },
+    ])
+  })
+
+  it('refuses selling more SOL than amountIn and the fees and rent allow', () => {
+    const effects = judge(
+      { tokenIn: WSOL, amountIn: 10_000_000n },
+      { b: holding(bonk, 0n) },
+      { b: holding(bonk, 600n) },
+      { before: 1_000_000_000n, after: 1_000_000_000n - 10_000_000n - 3_000_001n },
+    )
+    expect(effects.reasons).toEqual(['SIM_UNEXPECTED_EFFECT'])
+  })
+
+  it('passes buying SOL into the lamports, the unwrapped wSOL account closing back', () => {
+    const effects = judge(
+      { tokenIn: usdc, tokenOut: WSOL, minAmountOut: 50_000_000n },
+      { a: holding(usdc, 25_000_000n), w: holding(WSOL, 2_000n) },
+      { a: holding(usdc, 15_000_000n), w: null },
+      { before: 1_000_000_000n, after: 1_000_000_000n + 50_000_000n - fees },
+    )
+    expect(effects.reasons).toEqual([])
+    expect(effects.changes).toContainEqual({ token: WSOL, delta: `${50_000_000n - fees - 2_000n}` })
+  })
+
+  it('still refuses a closed account that is not the wSOL one', () => {
+    const effects = judge(
+      { tokenIn: WSOL, amountIn: 10_000_000n },
+      { b: holding(bonk, 7n) },
+      { b: null },
+      { before: 1_000_000_000n, after: 1_000_000_000n - 10_000_000n - fees },
+    )
+    expect(effects.reasons).toEqual(['SIM_UNEXPECTED_EFFECT'])
+  })
+})

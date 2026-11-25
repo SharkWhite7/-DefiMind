@@ -1,6 +1,8 @@
 import type { RejectCode } from '@defimind/shared'
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+  NATIVE_MINT,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
   TokenInstruction,
@@ -9,6 +11,7 @@ import {
   ComputeBudgetInstruction,
   ComputeBudgetProgram,
   PublicKey,
+  SystemInstruction,
   SystemProgram,
   type TransactionInstruction,
   type TransactionMessage,
@@ -46,8 +49,9 @@ const CREATE_IDEMPOTENT = 1
  * The swap transaction, with its lookup tables written out, read against every inspectTransfer
  * rule. Jupiter is untrusted, so what it routes through is left to the test run; this only refuses
  * what no swap of ours needs: another signer, a standing authority over the hot wallet's tokens, a
- * program outside the list, or a priority fee past the cap. Wrapped SOL stays wrapped, so no System
- * instruction belongs here either.
+ * program outside the list, or a priority fee past the cap. A SOL leg (CR-026) adds one shape only:
+ * the hot wallet's own wSOL account, amountIn moved into it and synced when SOL is sold, and that
+ * account closed back to the hot wallet.
  */
 export function inspectSwap(
   signed: VersionedMessage,
@@ -61,12 +65,20 @@ export function inspectSwap(
   let routes = 0
   let units = 200_000n
   let microLamports = 0n
+  const wrap = { transfer: 0, sync: 0, close: 0 }
+  const solIn = sides.tokenIn.equals(NATIVE_MINT)
+  const sol = solIn || sides.tokenOut.equals(NATIVE_MINT)
+  const wsol = getAssociatedTokenAddressSync(NATIVE_MINT, sides.hotWallet)
   for (const ix of expanded.instructions) {
     const program = ix.programId
     if (program.equals(JUPITER_PROGRAM_ID)) {
       routes++
       const reason = routeReason(ix, sides)
       if (reason) reasons.add(reason)
+    } else if (sol && program.equals(TOKEN_PROGRAM_ID) && isSync(ix, wsol)) {
+      wrap.sync++
+    } else if (sol && program.equals(TOKEN_PROGRAM_ID) && isClose(ix, wsol, sides.hotWallet)) {
+      wrap.close++
     } else if (program.equals(TOKEN_PROGRAM_ID) || program.equals(TOKEN_2022_PROGRAM_ID)) {
       reasons.add(tokenReason(ix))
     } else if (program.equals(ASSOCIATED_TOKEN_PROGRAM_ID)) {
@@ -76,6 +88,8 @@ export function inspectSwap(
       if (budget === undefined) reasons.add('SIM_UNEXPECTED_EFFECT')
       else if (budget.units !== undefined) units = budget.units
       else microLamports = budget.microLamports
+    } else if (solIn && isWrap(ix, sides.hotWallet, wsol, sides.amountIn)) {
+      wrap.transfer++
     } else if (program.equals(SystemProgram.programId)) {
       reasons.add('SIM_UNEXPECTED_EFFECT')
     } else {
@@ -84,6 +98,10 @@ export function inspectSwap(
   }
   // One route: a second could be a second trade the quote never showed.
   if (routes !== 1) reasons.add('SIM_UNEXPECTED_EFFECT')
+  const wrapped = solIn ? 1 : 0
+  if (sol && (wrap.transfer !== wrapped || wrap.sync !== wrapped || wrap.close !== 1)) {
+    reasons.add('SIM_UNEXPECTED_EFFECT')
+  }
   if (
     units > BigInt(MAX_COMPUTE_UNIT_LIMIT) ||
     (units * microLamports) / 1_000_000n > MAX_PRIORITY_LAMPORTS
@@ -129,6 +147,37 @@ function tokenReason(ix: TransactionInstruction): RejectCode {
     default:
       return 'SIM_UNEXPECTED_EFFECT'
   }
+}
+
+/** amountIn, exactly, from the hot wallet into its own wSOL account. */
+function isWrap(ix: TransactionInstruction, hot: PublicKey, wsol: PublicKey, amount: bigint) {
+  if (!ix.programId.equals(SystemProgram.programId)) return false
+  try {
+    if (SystemInstruction.decodeInstructionType(ix) !== 'Transfer') return false
+    const { fromPubkey, toPubkey, lamports } = SystemInstruction.decodeTransfer(ix)
+    return fromPubkey.equals(hot) && toPubkey.equals(wsol) && BigInt(lamports) === amount
+  } catch {
+    return false
+  }
+}
+
+const isSync = (ix: TransactionInstruction, wsol: PublicKey) =>
+  ix.data.length === 1 &&
+  ix.data[0] === TokenInstruction.SyncNative &&
+  ix.keys.length === 1 &&
+  ix.keys[0]!.pubkey.equals(wsol)
+
+/** The hot wallet's wSOL account closed back to it: the unwrap, and nothing else closes. */
+const isClose = (ix: TransactionInstruction, wsol: PublicKey, hot: PublicKey) => {
+  const [account, destination, owner] = ix.keys.map((key) => key.pubkey)
+  return (
+    ix.data.length === 1 &&
+    ix.data[0] === TokenInstruction.CloseAccount &&
+    ix.keys.length === 3 &&
+    !!account?.equals(wsol) &&
+    !!destination?.equals(hot) &&
+    !!owner?.equals(hot)
+  )
 }
 
 /** The hot wallet creating its own account for one side of the swap, and paying for it. */
