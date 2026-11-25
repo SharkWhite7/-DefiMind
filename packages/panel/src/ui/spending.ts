@@ -18,7 +18,9 @@ function copy(ctx: Context, address: string) {
   })
 }
 
-type Hot = KeysView['hotWallets'][number]
+type Hot = KeysView['hotWallets'][number] & {
+  gas?: { balance: string; minimum: string; symbol: string } | undefined
+}
 
 /**
  * The shared spending (hot) wallet of one chain. It pays from the vault within the daily limit, but
@@ -60,12 +62,19 @@ function ownCard(ctx: Context, wallet: NonNullable<KeysView['agentWallets']>[num
 
 /** Every spending wallet this DefiMind runs, or none on a guard-core that does not list them. */
 export async function spendingCards(ctx: Context) {
-  const keys = await ctx.api.keys().catch(() => undefined)
+  const [keys, overview] = await Promise.all([
+    ctx.api.keys().catch(() => undefined),
+    ctx.api.overview().catch(() => undefined),
+  ])
   if (keys === undefined) {
     return []
   }
+  // The balance comes from the overview (#165), and only for the same address the keys list.
+  const gas = (hot: KeysView['hotWallets'][number]) =>
+    overview?.chains.find((c) => c.chain === hot.chain && c.hotWallet?.address === hot.address)
+      ?.hotWallet?.gas
   return [
-    ...keys.hotWallets.map((hot) => hotCard(ctx, hot)),
+    ...keys.hotWallets.map((hot) => hotCard(ctx, { ...hot, gas: gas(hot) })),
     ...(keys.agentWallets ?? []).map((wallet) => ownCard(ctx, wallet)),
   ]
 }

@@ -63,4 +63,22 @@ describe.each([390, 1280])('the spending wallet at %i px', (width) => {
     expect(await page.getByText('Needs at least').count()).toBe(0)
     await close()
   })
+
+  it('keeps "Try it safely" open while the spending wallet is short of SOL', async () => {
+    const { guard, page, close } = await openDevice(browser, dist, width)
+    guard.state.hotGas = { balance: '1000000', minimum: '5000000', symbol: 'SOL' }
+    await signIn(page, guard.origin)
+    await page.goto(`${guard.origin}/panel/start/shadow`)
+    await page
+      .getByText(/^Before going live, send a little SOL to the spending wallet on Solana devnet/)
+      .waitFor()
+    await page.getByRole('button', { name: 'Back to Add money' }).waitFor()
+    expect(await page.getByRole('button', { name: 'Next' }).count()).toBe(0)
+
+    guard.state.hotGas = { balance: '9000000', minimum: '5000000', symbol: 'SOL' }
+    await page.reload()
+    await page.getByRole('button', { name: 'Next' }).waitFor()
+    expect(await page.getByText(/^Before going live/).count()).toBe(0)
+    await close()
+  })
 })

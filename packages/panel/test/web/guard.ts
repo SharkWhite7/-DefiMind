@@ -152,6 +152,9 @@ export async function guardCore(
   }
 
   const overview = () => ({
+    ...withHot(base()),
+  })
+  const base = () => ({
     // A fresh deployment has no vault, so no chain to draw on yet.
     chains: fresh
       ? []
@@ -213,6 +216,19 @@ export async function guardCore(
           },
         ],
   })
+
+  // #165: the overview names the shared spending wallet of Solana devnet with its SOL, when set.
+  function withHot<T extends { chains: { chain: string }[] }>(data: T) {
+    const solana = { chain: CHAINS.solanaDevnet, allowance: null }
+    const hot =
+      state.hotGas === undefined ? {} : { hotWallet: { address: HOT_WALLET, gas: state.hotGas } }
+    const chains = data.chains.some((c) => c.chain === solana.chain)
+      ? data.chains.map((c) => (c.chain === solana.chain ? { ...c, ...hot } : c))
+      : state.hotGas === undefined
+        ? data.chains
+        : [...data.chains, { ...solana, ...hot }]
+    return { ...data, chains }
+  }
 
   function issue(bound: { action: string; body: unknown } | null) {
     const challenge = b64(randomBytes(32))
@@ -347,7 +363,6 @@ export async function guardCore(
           {
             chain: CHAINS.solanaDevnet,
             address: HOT_WALLET,
-            ...(state.hotGas === undefined ? {} : { gas: state.hotGas }),
           },
         ],
         receiptKey: 'receipt-public-key',
