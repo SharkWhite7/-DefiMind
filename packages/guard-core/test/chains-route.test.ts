@@ -72,7 +72,11 @@ describe('GET /v1/admin/chains (CR-006)', () => {
     expect(res.statusCode).toBe(200)
     expect(res.json()).toEqual({
       chains: [
-        { chain: CHAINS.solanaDevnet, allowance: await solana.getAllowanceState() },
+        {
+          chain: CHAINS.solanaDevnet,
+          allowance: await solana.getAllowanceState(),
+          hotWallet: { address: 'stub', gas: { balance: '0', minimum: '0', symbol: 'TEST' } },
+        },
         { chain: CHAINS.baseSepolia, allowance: null },
       ],
     })
@@ -85,7 +89,13 @@ describe('GET /v1/admin/chains (CR-006)', () => {
     vi.spyOn(solana, 'getAllowanceState').mockResolvedValue({ status: 'none', delegate: 'hot' })
     const { get } = await setup([solana], [])
     expect((await get('/v1/admin/chains', ADMIN)).json()).toEqual({
-      chains: [{ chain: CHAINS.solanaDevnet, allowance: { status: 'none', delegate: 'hot' } }],
+      chains: [
+        {
+          chain: CHAINS.solanaDevnet,
+          allowance: { status: 'none', delegate: 'hot' },
+          hotWallet: { address: 'hot', gas: { balance: '0', minimum: '0', symbol: 'TEST' } },
+        },
+      ],
     })
   })
 

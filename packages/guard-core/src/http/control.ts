@@ -1,4 +1,4 @@
-import type { ChainStatus, Policy } from '@defimind/shared'
+import type { ChainStatus, HotWalletGas, Policy } from '@defimind/shared'
 import type { FastifyBaseLogger } from 'fastify'
 import { createAgent, listAgents, revokeAgent } from '../db/agents.js'
 import { clearWindow } from '../db/breaker.js'
@@ -14,6 +14,7 @@ import { HttpError } from './errors.js'
 import { REPORT_DEFAULT_SPAN_MS, REPORT_MAX_SPAN_MS, reportQuery } from './schemas.js'
 
 type Log = Pick<FastifyBaseLogger, 'warn' | 'error'>
+type HotWallet = { hotWallet?: { address: string; gas: HotWalletGas } }
 
 /**
  * What the operator's admin routes and the owner's panel both do, so the two cannot drift. `via`
@@ -62,11 +63,16 @@ export function controls(deps: PaymentDeps, via: 'admin' | 'panel' | 'bot') {
 
     // CR-006. A chain whose allowance cannot be read stays listed with null, like a kill payload:
     // the owner still has to see that the chain exists.
-    async chains(log: Log): Promise<ChainStatus[]> {
+    async chains(log: Log): Promise<(ChainStatus & HotWallet)[]> {
       return Promise.all(
-        [...deps.chains.values()].map(async (adapter): Promise<ChainStatus> => {
+        [...deps.chains.values()].map(async (adapter): Promise<ChainStatus & HotWallet> => {
+          // The shared hot wallet's address and fee coin, for the panel's spending-wallet card.
+          const gas = await adapter.getHotWalletGas().catch(() => undefined)
           try {
-            return { chain: adapter.chain, allowance: await adapter.getAllowanceState() }
+            const allowance = await adapter.getAllowanceState()
+            const hotWallet =
+              gas === undefined ? {} : { hotWallet: { address: allowance.delegate, gas } }
+            return { chain: adapter.chain, allowance, ...hotWallet }
           } catch (error) {
             log.warn({ err: error, chain: adapter.chain }, 'allowance read failed')
             return { chain: adapter.chain, allowance: null }

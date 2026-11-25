@@ -75,7 +75,11 @@ describe('the owner settings (CR-019)', () => {
     await put(o, [{ chain: CHAIN, rpcUrl: RPC, vault: OURS }])
     const overview = (await o.call('GET', '/v1/owner/overview')).json()
     expect(overview.chains).toEqual([
-      { chain: CHAIN, allowance: expect.objectContaining({ status: 'active', cap: '50000000' }) },
+      {
+        chain: CHAIN,
+        allowance: expect.objectContaining({ status: 'active', cap: '50000000' }),
+        hotWallet: expect.objectContaining({ address: expect.any(String) }),
+      },
     ])
   })
 

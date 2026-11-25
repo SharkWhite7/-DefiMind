@@ -78,6 +78,10 @@ describe('owner panel routes', () => {
       mandate.id,
     ])
     expect(overview.agents[0].agentId).toBe('agent-1')
+    expect(overview.chains[0].hotWallet).toEqual({
+      address: 'stub',
+      gas: { balance: '0', minimum: '0', symbol: 'TEST' },
+    })
     expect(overview.chains[0].chain).toBe(CHAIN)
     await owner.call('POST', `/v1/owner/intents/${intent.intentId}/decision`, {
       decision: 'reject',
