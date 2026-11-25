@@ -1,6 +1,9 @@
 import type { ChainAdapter } from '@defimind/onchain'
 import type { BalanceChange, PayIntent, SimulationResult } from '@defimind/shared'
 import { applyTrade, capPositions } from '../db/trades.js'
+import { correctSold } from '../db/day-book.js'
+import { utcDay } from '../db/repo.js'
+import { expectedOf } from '../domain/trading.js'
 import { listWallets } from '../db/wallets.js'
 import { parseAmount } from '../domain/amount.js'
 import { net } from '../domain/simulation.js'
@@ -116,6 +119,11 @@ export async function settle(
     { agentId: intent.agentId, chain: intent.chain, side, ...position },
     deps.now(),
   )
+  // The day's sells counted what this one was expected to bring; it now says what it brought.
+  if (side === 'sell' && changes !== undefined) {
+    const key = { agentId: intent.agentId, chain: intent.chain, day: utcDay(deps.now()) }
+    correctSold(deps.db, key, expectedOf(details), net(moved, details.tokenOut))
+  }
   if (changes === undefined) {
     await reconcile(deps, adapter, intent, position.token)
   }

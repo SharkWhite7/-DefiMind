@@ -1477,3 +1477,119 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
     passkey.
   - Jupiter's search can be wrong or hostile. It only lists candidates; adding one still takes the
     passkey and the onchain risk read.
+
+### CR-026 — Degen trading on Solana: any pair, per-token and per-operation limits, take-profit and stop-loss
+
+- **From:** integrator, from the owner's request relayed by the manager
+- **Date:** 2026-11-25
+- **Status:** approved by the owner on 2026-11-25 (relayed by the manager). His words, translated:
+  "first release it on Solana, leave everything ready: the user can trade any token", and "the user
+  chooses the limit for that token and for the operation". He picked token-to-token swaps,
+  take-profit and stop-loss, and per-operation limits. Specified in SPEC v0.20, "Degen trading". It
+  ships after today's launch, which keeps CR-021 and CR-025 as they are; until then it is announced
+  as coming soon.
+- **Why:** CR-021 trades only between the chain's dollar and one token, under one set of limits.
+  Owners want to trade any token they choose, swap one token for another, set a limit per token and
+  per kind of operation, and leave take-profit and stop-loss orders running.
+- **Scope:** Solana mainnet only, through Jupiter, behind the same guard as CR-021: the policy, the
+  onchain risk read, the transaction inspection and the balance-delta test run. Nothing about
+  payments changes.
+- **What changes:**
+  1. **Per-token limits.** `TradingPolicy.tokenLimits`: an allowed mint may carry its own
+     `maxBuyUsd` and `maxHeldUsd`, which override `maxTradeUsd` and `maxPositionUsd` for that mint.
+     "Any token that passes the risk checks" stays, with the agent's defaults.
+  2. **Per-operation limits.** `TradingPolicy.operations` sets per-trade and per-day caps for buy,
+     sell and swap. Buy keeps `maxTradeUsd` and `dailyTradeMax` as its defaults. Sells still never
+     wait for the owner.
+  3. **Any pair.** A swap from one token to another, from what the agent's wallet already holds. It
+     never draws from the vault, so the vault's outflow stays bounded by the onchain cap.
+     - Valuation for the limits: two venue quotes back to the dollar, one per leg, each within the
+       price-impact limit. SPEC v0.20 counts the higher of the two, which is stricter than the lower
+       first drafted here: a leg the venue prices low cannot carry a trade past a limit.
+     - Cost basis: carried over from the token sold.
+     - Test run: both legs in one transaction, balance deltas checked.
+  4. **Take-profit and stop-loss orders**, created by the owner or the agent, stored in guard-core
+     and watched by a loop there. A fill is a sell under the same checks.
+     - A trigger needs N consecutive checks over T seconds.
+     - The price impact of the whole order must stay within the limit.
+     - The minimum out comes from the trigger minus slippage.
+     - Orders are cancelled by Close and by kill. A paused agent's orders do not execute.
+     - Each fill is audited and pushed.
+  5. **Routes and tools.** Owner and agent swaps take any pair. New: `place_order`, `cancel_order`,
+     `list_orders`. Panel screens for per-token limits, the swap and the orders.
+- **Rows:**
+  - onchain: ON-35, the any-pair route build and the two-leg test run;
+  - guard-core: GC-70 (policy schema and valuation), GC-71 (the any-pair swap service), GC-72 (orders
+    and the watcher);
+  - mcp: MCP-34, the tools;
+  - panel: PANEL-24 (per-token limits and the swap screen), PANEL-25 (orders);
+  - integrator: INT-51, SPEC, shared types and the fork e2e.
+- **Risks for the owner to accept:**
+  - The venue's prices are untrusted. They size the limits, bounded by two quotes and the
+    price-impact limit, but they cannot move money past the test run, which checks what lands.
+  - A stop-loss is not a guarantee. When the price falls through the minimum out, the sale is refused
+    rather than sold at any price: the owner is told, and the position stays.
+  - "Any token" admits tokens the owner has never looked at. The onchain risk checks and the per-token
+    and per-operation limits still apply, and a first buy still waits for the owner.
+
+### CR-027 — The AI trader: a built-in trading agent on Solana
+
+- **From:** integrator, from the owner's request relayed by the manager
+- **Date:** 2026-11-25
+- **Status:** approved by the owner on 2026-11-25 (relayed by the manager). It replaces a first draft
+  of recurring-buy and grid bots, which the owner dropped. His words, translated: "an AI trading
+  agent, that's what we want, not a bot", and earlier "something that pleases degens and investors
+  while keeping it easy to use". Spot on Solana through Jupiter; no leverage and no perpetuals.
+  Specified in SPEC v0.21, "The AI trader". It builds on CR-026.
+- **Why:** owners want an agent that trades for them inside the limits they set, without running
+  their own MCP client.
+- **Scope:** Solana mainnet, spot, through Jupiter. The AI trader runs inside each owner's
+  guard-core, on a schedule, and decides its own trades with a Claude model. Every action goes
+  through the CR-021 and CR-026 pipeline, exactly as an MCP agent's does. Nothing about payments
+  changes.
+- **What changes:**
+  1. **The trader** is attached to one agent and uses that agent's wallet and policy. The owner
+     gives it:
+     - the tokens it may trade, within the policy;
+     - the CR-026 limits;
+     - a cadence (5, 15 or 60 minutes);
+     - instructions in plain words.
+       Each tick it reads the portfolio, quotes, risk cards and recent prices, then acts or holds.
+  2. **Execution:** every action is an intent through the same pipeline: the policy and every limit,
+     the risk reads, the inspection, the test run, the approval rules and orders. Sells never wait.
+     The model's reasons are shown to the owner and never used in a decision.
+  3. **Control:** turning it on, loosening it and resuming it need the passkey; pausing needs the
+     session. Stop everything and kill pause it, and Close positions turns it off. In shadow mode it
+     trades on paper first.
+  4. **The model:** the Claude API through the official TypeScript SDK, with the owner's own
+     ANTHROPIC_API_KEY as a secret on the deployment, never logged or returned. The panel shows only
+     whether the key is set. The default model is Claude Opus 5.5; the owner may pick Claude
+     Sonnet 5.5 or Claude Haiku 5.5 to cut cost.
+  5. **Cost and safety caps:**
+     - ticks per day;
+     - tokens per tick and per day;
+     - actions per tick;
+     - a pause after repeated API errors, refusals or refused trades.
+       Venue text is data, never instructions.
+  6. **Reporting:**
+     - a decision feed per tick (the action or the hold, the reason, links to the executions);
+     - realized profit and loss from landed amounts;
+     - positions at cost;
+     - the API tokens used today.
+       No projections and no promised returns.
+- **Rows:**
+  - guard-core: GC-73 (the trader loop, the scheduler, the cost caps and the tools over the existing
+    pipeline);
+  - panel: PANEL-26 (an "AI Trader" tab: key status, model, cadence, tokens, limits, instructions,
+    shadow or live with the passkey, the decision feed, positions and pause);
+  - integrator: INT-52 (SPEC, shared types and the fork e2e with a mocked Claude API).
+  - mcp: none.
+- **Risks for the owner to accept:**
+  - The trader trades without asking, inside the limits. The limits, the vault's onchain cap and the
+    approval rules are the bound, not the model's judgment. A model can be wrong, and a token can
+    lose all its value.
+  - The API key is billed to the owner. The caps bound the spend per tick and per day, not the price
+    per token, which Anthropic sets.
+  - Token names, symbols and every other venue field are hostile input. They reach the model as
+    delimited data, and nothing the model writes can widen the policy: a trade outside it is
+    refused.

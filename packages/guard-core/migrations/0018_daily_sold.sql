@@ -1,0 +1,1 @@
+ALTER TABLE `daily_trades` ADD `sold` text DEFAULT '0' NOT NULL;
