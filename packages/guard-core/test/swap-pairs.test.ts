@@ -1,7 +1,10 @@
 import type { TradingPolicy } from '@defimind/shared'
 import { describe, expect, it, vi } from 'vitest'
+import { schema } from '../src/db/client.js'
+import * as repo from '../src/db/repo.js'
 import { applyTrade, getPosition } from '../src/db/trades.js'
-import { CHAIN, harness, NOW } from './harness.js'
+import { hashToken } from '../src/domain/auth.js'
+import { CHAIN, harness, MINT as USDC, NOW } from './harness.js'
 import { BONK, trading, Venue } from './venue.js'
 
 const WIF = 'Wif1111111111111111111111111111111111111111'
@@ -93,5 +96,70 @@ describe('token-to-token swaps (CR-026)', () => {
     })
     const res = await h.agent('POST', '/v1/agent/swap', swap())
     expect(res.json()).toMatchObject({ rejectReasons: ['GAS_RESERVE'] })
+  })
+
+  it('lets a sell to the dollar through on low gas: its own test run decides (SPEC v0.21)', async () => {
+    const { h, chain } = await setup()
+    vi.spyOn(chain, 'getHotWalletGas').mockResolvedValue({
+      balance: '1',
+      minimum: '2',
+      symbol: 'SOL',
+    })
+    const res = await h.agent('POST', '/v1/agent/swap', swap('1000000', { tokenOut: USDC }))
+    expect(res.json()).toMatchObject({ status: 'executed' })
+  })
+
+  it('has two agents on the shared wallet take turns, from the test run to the signature', async () => {
+    const { h, chain } = await setup()
+    const token = 'second-agent-token-long-enough'
+    h.db
+      .insert(schema.agents)
+      .values({
+        id: 'agent-2',
+        name: 'agent-2',
+        tokenHash: hashToken(token),
+        createdAt: NOW.toISOString(),
+      })
+      .run()
+    const policy = repo.getPolicy(h.db, 'agent-1')
+    if (policy !== undefined) {
+      repo.putPolicy(h.db, { ...policy, agentId: 'agent-2' }, NOW.toISOString())
+    }
+    applyTrade(
+      h.db,
+      {
+        agentId: 'agent-2',
+        chain: CHAIN,
+        token: WIF,
+        side: 'buy',
+        amount: 5_000_000n,
+        cost: 1n,
+        decimals: 5,
+      },
+      NOW,
+    )
+    const steps: string[] = []
+    const simulate = chain.simulate.bind(chain)
+    const send = chain.send.bind(chain)
+    vi.spyOn(chain, 'simulate').mockImplementation(async (intent) => {
+      steps.push(`test ${intent.agentId}`)
+      await new Promise((done) => setTimeout(done, 20))
+      return simulate(intent)
+    })
+    vi.spyOn(chain, 'send').mockImplementation(async (intent) => {
+      steps.push(`sign ${intent.agentId}`)
+      return send(intent)
+    })
+    const as = (bearer: string, agentId: string) =>
+      h.app.inject({
+        method: 'POST',
+        url: '/v1/agent/swap',
+        headers: { authorization: `Bearer ${bearer}` },
+        payload: swap('1000000', { agentId }),
+      })
+    await Promise.all([h.agent('POST', '/v1/agent/swap', swap()), as(token, 'agent-2')])
+    expect(steps).toHaveLength(4)
+    expect(steps[0]?.split(' ')[1]).toBe(steps[1]?.split(' ')[1])
+    expect(steps[2]?.split(' ')[1]).toBe(steps[3]?.split(' ')[1])
   })
 })

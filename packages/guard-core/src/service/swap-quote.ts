@@ -114,12 +114,17 @@ export async function valueOf(
 
 /**
  * GAS_RESERVE when the trade would leave the hot wallet unable to pay for the next sell (CR-026).
- * A balance that cannot be read refuses too: the trade could not be signed anyway.
+ * A balance that cannot be read refuses too. A sell to the dollar is exempt (SPEC v0.21): it is
+ * how Close and the stop-losses get out, and its own test run shows whether its fee is there.
  */
 export async function gasReason(
   adapter: ChainAdapter,
   req: { tokenIn: string; amountIn: string },
+  side: Trade['side'],
 ): Promise<'GAS_RESERVE' | undefined> {
+  if (side === 'sell') {
+    return undefined
+  }
   const gas = await adapter.getHotWalletGas().catch(() => undefined)
   return gas === undefined || belowGasReserve(gas, req.tokenIn, req.amountIn)
     ? 'GAS_RESERVE'

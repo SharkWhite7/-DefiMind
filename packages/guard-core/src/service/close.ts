@@ -6,6 +6,7 @@ import { applyTrade, listPositions } from '../db/trades.js'
 import { listWallets } from '../db/wallets.js'
 import { evaluateTrade } from '../domain/trading.js'
 import { newIntent, reject, type PaymentDeps } from './payments.js'
+import { signerKey } from './wallets.js'
 import { clearSwap } from './swap.js'
 import { fetchQuote, VenueUnavailable, withQuote } from './swap-quote.js'
 
@@ -67,7 +68,9 @@ async function sell(
   if (agentId === undefined || policy === undefined) {
     return undefined
   }
-  return deps.serial(agentId, async () => {
+  const key =
+    owner === undefined ? `wallet:shared:${held.chain}` : signerKey(deps, owner, held.chain)
+  return deps.serial(key, async () => {
     const request = {
       agentId,
       chain: held.chain,
