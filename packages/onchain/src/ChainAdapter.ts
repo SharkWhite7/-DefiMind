@@ -93,7 +93,12 @@ export interface ChainAdapter {
    */
   mintFacts?(
     mint: Address,
-  ): Promise<{ freezeAuthority: boolean; mintAuthority: boolean; extensions: string[]; supply: Amount }>
+  ): Promise<{
+    freezeAuthority: boolean
+    mintAuthority: boolean
+    extensions: string[]
+    supply: Amount
+  }>
   /**
    * CR-026: what `amount` of a token would fetch in the chain's dollar now, for valuation and the
    * order watcher. A venue claim: it sizes limits and triggers, and is never signed. A token with no
