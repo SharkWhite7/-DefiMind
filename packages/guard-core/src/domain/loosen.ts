@@ -10,8 +10,9 @@ const LISTS = ['chains', 'tokens', 'allowedRecipients', 'allowedDomains'] as con
  * going live, no longer requiring a mandate), plus three it leaves out. Unpausing here is a resume
  * without the resume's passkey, and a higher breaker or price-jump limit lets more through. Any of
  * them needs the owner's passkey; a change that only tightens needs the session alone.
- * `stopsOpen` says whether the agent has an open stop: turning orders off then cancels the stops
- * that protect its positions, so it counts as a loosening (CR-028).
+ * `stopsOpen` says whether the agent has an open stop. Anything that would cancel it or keep it from
+ * selling then counts as a loosening (CR-028): orders or trading off, going to shadow, or dropping
+ * its chain or venue.
  */
 export function loosened(before: StoredPolicy, after: Policy, stopsOpen = false): string[] {
   const raised = LIMITS.filter((limit) => parseAmount(after[limit]) > parseAmount(before[limit]))
@@ -29,11 +30,26 @@ export function loosened(before: StoredPolicy, after: Policy, stopsOpen = false)
       ? ['priceIncreaseMaxPct']
       : []),
     // A PUT without trading keeps the stored one (repo.putPolicy), so it loosens nothing there.
-    ...(after.trading === undefined
-      ? []
-      : tradingLoosened(before.trading, after.trading, stopsOpen)
-    ).map((field) => `trading.${field}`),
+    ...(after.trading === undefined ? [] : tradingLoosened(before.trading, after.trading)).map(
+      (field) => `trading.${field}`,
+    ),
+    ...(stopsOpen && disarms(before, after) ? ['stops'] : []),
   ]
+}
+
+const ordersOn = (trading: TradingPolicy | undefined) =>
+  (trading?.enabled ?? false) && (trading?.orders?.enabled ?? false)
+
+/** A change after which an open stop would be cancelled, shadowed or refused when it fires. */
+function disarms(before: StoredPolicy, after: Policy): boolean {
+  // A PUT without trading keeps the stored one (repo.putPolicy).
+  const trading = after.trading ?? before.trading
+  return (
+    (ordersOn(before.trading) && !ordersOn(trading)) ||
+    (before.mode === 'live' && after.mode !== 'live') ||
+    before.chains.some((chain) => !after.chains.includes(chain)) ||
+    (before.trading?.venues ?? []).some((venue) => !(trading?.venues ?? []).includes(venue))
+  )
 }
 
 const TRADE_LIMITS = ['maxTradeUsd', 'dailyTradeMax', 'maxPositionUsd'] as const
@@ -52,12 +68,7 @@ const CLOSED: TradingPolicy = {
   maxPriceImpactBps: 0,
 }
 
-function tradingLoosened(
-  before: TradingPolicy = CLOSED,
-  after: TradingPolicy = CLOSED,
-  stopsOpen = false,
-): string[] {
-  const ordersOn = (policy: TradingPolicy) => policy.orders?.enabled ?? false
+function tradingLoosened(before: TradingPolicy = CLOSED, after: TradingPolicy = CLOSED): string[] {
   return [
     ...(after.enabled && !before.enabled ? ['enabled'] : []),
     ...(after.allowAnyToken && !before.allowAnyToken ? ['allowAnyToken'] : []),
@@ -72,7 +83,7 @@ function tradingLoosened(
     ...(['buy', 'sell', 'swap'] as const)
       .filter((kind) => amountsLoosened(before.operations?.[kind], after.operations?.[kind]))
       .map((kind) => `operations.${kind}`),
-    ...(ordersOn(after) !== ordersOn(before) && (ordersOn(after) || stopsOpen)
+    ...((after.orders?.enabled ?? false) && !(before.orders?.enabled ?? false)
       ? ['orders.enabled']
       : []),
     ...((after.orders?.maxOpen ?? 10) > (before.orders?.maxOpen ?? 10) ? ['orders.maxOpen'] : []),

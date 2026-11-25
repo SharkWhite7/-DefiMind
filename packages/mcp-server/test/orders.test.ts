@@ -114,6 +114,7 @@ describe('trailing stops (CR-028)', () => {
     const placeOrder = vi.fn(async () => ({
       ...order,
       kind: 'trailing_stop' as const,
+      triggerOut: '0',
       trailBps: 1000,
     }))
     const client = await connect(fakeGuard({ placeOrder }))
@@ -127,6 +128,7 @@ describe('trailing stops (CR-028)', () => {
       expect.objectContaining({ kind: 'trailing_stop', triggerOut: '0', trailBps: 1000 }),
     )
     expect(text).toContain('Trails its high by 1000 bps; confirmed high not set yet.')
+    expect(text).toContain('once it has a confirmed high to trail; no level yet')
     const wrong = await call(client, 'place_order', {
       token: order.token,
       kind: 'stop_loss',

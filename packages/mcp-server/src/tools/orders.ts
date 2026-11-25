@@ -162,6 +162,16 @@ export function registerOrders(server: McpServer, deps: ToolDeps): void {
   )
 }
 
+/** The level it sells at, as guard-core works it out: a trailing stop's follows its high. */
+function triggerOf(order: PlacedOrder): bigint {
+  const floor = BigInt(order.triggerOut)
+  if (order.kind !== 'trailing_stop' || order.peakOut === undefined) {
+    return floor
+  }
+  const trailed = (BigInt(order.peakOut) * BigInt(10_000 - (order.trailBps ?? 0))) / 10_000n
+  return trailed > floor ? trailed : floor
+}
+
 function describeOrder(order: PlacedOrder, deps: ToolDeps): string {
   const { label, when } = KIND[order.kind]
   const dollar = deps.usd(order.chain)?.symbol ?? ''
@@ -174,7 +184,9 @@ function describeOrder(order: PlacedOrder, deps: ToolDeps): string {
   const lines = [
     `${label} ${order.id}: ${order.status}.`,
     ...trail,
-    `Sells ${order.amount} smallest units of ${order.token} when the whole amount would fetch ${when} ${formatAmount(order.triggerOut)} ${dollar}`.trimEnd() +
+    (triggerOf(order) === 0n
+      ? `Sells ${order.amount} smallest units of ${order.token} once it has a confirmed high to trail; no level yet`
+      : `Sells ${order.amount} smallest units of ${order.token} when the whole amount would fetch ${when} ${formatAmount(triggerOf(order).toString())} ${dollar}`.trimEnd()) +
       `, with slippage up to ${order.maxSlippageBps} bps. Placed by the ${order.createdBy}, ${order.createdAt}${order.expiresAt === undefined ? '' : `; expires ${order.expiresAt}`}.`,
     STATUS[order.status],
   ]

@@ -136,15 +136,59 @@ describe('trailing stops and protective sells (CR-028)', () => {
     expect(getPosition(h.db, 'agent-1', CHAIN, BONK).amount).toBe(1_000_000n)
   })
 
-  it('fills past the sell limits and a mandate rule an agent could use up', async () => {
+  it('fills a stop past the sell limits and a mandate rule an agent could use up', async () => {
     const operations = { sell: { maxTradeUsd: '1', dailyMax: '1' } }
-    const { h, run } = await setup({
+    const over = {
       requireMandate: true,
       trading: { ...trading, orders: { enabled: true, maxOpen: 3 }, operations },
-    })
-    const order = (await h.agent('POST', '/v1/agent/orders', place())).json()
+    }
+    const stopped = await setup(over)
+    const stop = (
+      await stopped.h.agent(
+        'POST',
+        '/v1/agent/orders',
+        place({ kind: 'stop_loss', triggerOut: '1000' }),
+      )
+    ).json()
+    await stopped.run()
+    expect(getOrder(stopped.h.db, stop.id)?.status).toBe('filled')
+    // A take-profit is no protection, so it meets them like any sell.
+    const taken = await setup(over)
+    const profit = (await taken.h.agent('POST', '/v1/agent/orders', place())).json()
+    await taken.run()
+    expect(getOrder(taken.h.db, profit.id)).toMatchObject({ status: 'failed' })
+  })
+
+  it('sells a stop that fires at its trigger, with the venue keeping the slippage asked', async () => {
+    const { h, chain, run } = await setup()
+    chain.realistic = true
+    chain.sellOut = '899'
+    const stop = (
+      await h.agent('POST', '/v1/agent/orders', place({ kind: 'stop_loss', triggerOut: '900' }))
+    ).json()
     await run()
-    expect(getOrder(h.db, order.id)?.status).toBe('filled')
+    expect(getOrder(h.db, stop.id)?.status).toBe('filled')
+  })
+
+  it('after a gap below its floor, tells the owner once and waits for the market to return', async () => {
+    const { h, chain, run } = await setup()
+    chain.realistic = true
+    chain.clock = () => h.clock.now
+    chain.sellOut = '800'
+    const stop = (
+      await h.agent('POST', '/v1/agent/orders', place({ kind: 'stop_loss', triggerOut: '900' }))
+    ).json()
+    const quotes = () => chain.quotes
+    await run()
+    expect(getOrder(h.db, stop.id)?.status).toBe('open')
+    const after = quotes()
+    await run()
+    await run()
+    expect(quotes()).toBe(after)
+    expect(h.auditEvents().filter((e) => e === 'order_failed')).toHaveLength(1)
+    chain.sellOut = '895'
+    await run()
+    expect(getOrder(h.db, stop.id)?.status).toBe('filled')
   })
 
   it('needs the passkey to cancel a stop from the panel, and the session for a take-profit', async () => {

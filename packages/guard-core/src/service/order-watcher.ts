@@ -33,6 +33,8 @@ export interface WatchRules {
 export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
   const streaks = new Map<string, Streak>()
   const rises = new Map<string, Rise>()
+  /** Orders re-opened on price: each fires again only once the market is back at its floor. */
+  const parked = new Set<string>()
 
   function forget(id: string) {
     streaks.delete(id)
@@ -67,6 +69,10 @@ export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
     const out = parseAmount(quoted.out)
     const maxImpact = policy.trading?.maxPriceImpactBps ?? 0
     const watched = order.kind === 'trailing_stop' ? raise(order, out, quoted, maxImpact) : order
+    if (parked.has(order.id) && out < fillFloor(watched)) {
+      streaks.delete(order.id)
+      return
+    }
     const hit = hits(watched, out)
     const check = { hit, priceImpactBps: quoted.priceImpactBps, at: at.getTime() }
     const streak = step(streaks.get(order.id), check, maxImpact, 2 * rules.checkMs)
@@ -116,7 +122,8 @@ export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
       maxSlippageBps: order.maxSlippageBps,
       reason: `order: ${order.kind}`,
     }
-    const floor = { minAmountOut: toAmount(fillFloor(order)), by: 'order' as const }
+    const by = order.kind === 'take_profit' ? ('order' as const) : ('stop' as const)
+    const floor = { minAmountOut: toAmount(fillFloor(order)), by }
     let intent
     try {
       intent = await swap(deps, request, floor)
@@ -143,7 +150,11 @@ export function orderWatcher(deps: PaymentDeps, rules: WatchRules) {
     ) {
       const detail = { id: order.id, kind: order.kind, reopened: true, filledIntentId: intent.id }
       repo.audit(deps.db, { event: 'order_failed', agentId: order.agentId, detail }, deps.now())
-      deps.push?.order('order_failed', order, intent.id, true)
+      // Told once: it then waits, quietly, for the market to come back to its floor.
+      if (!parked.has(order.id)) {
+        deps.push?.order('order_failed', order, intent.id, true)
+      }
+      parked.add(order.id)
       return
     }
     close(order, 'failed', { failReason, filledIntentId: intent.id }, 'order_failed', 'triggered')

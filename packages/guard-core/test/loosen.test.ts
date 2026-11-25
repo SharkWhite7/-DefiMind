@@ -176,10 +176,20 @@ describe('loosened trading (CR-021)', () => {
     ).toEqual([])
   })
 
-  it('flags turning orders off while a stop is open, since that cancels it (CR-028)', () => {
-    const on = { ...trades, trading: { ...trading, orders: { enabled: true, maxOpen: 10 } } }
-    const off = { ...trades, trading: { ...trading, orders: { enabled: false, maxOpen: 10 } } }
-    expect(loosened(on, off, true)).toEqual(['trading.orders.enabled'])
-    expect(loosened(on, off, false)).toEqual([])
+  it('flags anything that would disarm an open stop (CR-028)', () => {
+    const on = {
+      ...trades,
+      mode: 'live' as const,
+      trading: { ...trading, orders: { enabled: true, maxOpen: 10 } },
+    }
+    const ordersOff = { ...on, trading: { ...on.trading, orders: { enabled: false, maxOpen: 10 } } }
+    const tradingOff = { ...on, trading: { ...on.trading, enabled: false } }
+    const shadow = { ...on, mode: 'shadow' as const }
+    const noVenue = { ...on, trading: { ...on.trading, venues: [] } }
+    const noChain = { ...on, chains: [] }
+    for (const change of [ordersOff, tradingOff, shadow, noVenue, noChain]) {
+      expect(loosened(on, change, true)).toContain('stops')
+      expect(loosened(on, change, false)).not.toContain('stops')
+    }
   })
 })

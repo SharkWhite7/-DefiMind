@@ -50,9 +50,8 @@ export interface TradeVerdict {
  * from a venue nobody trusts, so it is checked against the request and against itself, never
  * believed. Pure, so every attack case is a test.
  *
- * A protective sell (CR-028: an order's fill) skips the sell limits, the mandate rule and the price
- * impact: its floor bounds the price, and an agent must not be able to use up the room its own
- * stops need to sell.
+ * A protective sell (CR-028: a stop's fill) skips the sell limits and the mandate rule: an agent
+ * must not be able to use up the room its own stops need to sell.
  */
 export function evaluateTrade(
   trade: Trade,
@@ -90,9 +89,7 @@ export function evaluateTrade(
     add('TOKEN_NOT_TRADABLE')
   }
   for (const reason of quoteReasons(trade, trading, now)) {
-    if (!(guarded && reason === 'PRICE_IMPACT_TOO_HIGH')) {
-      add(reason)
-    }
+    add(reason)
   }
 
   const amountIn = parseAmount(request.amountIn)

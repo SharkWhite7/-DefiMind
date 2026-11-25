@@ -1,5 +1,5 @@
 import type { ChainAdapter } from '@defimind/onchain'
-import type { Amount, PayIntent, Policy, RejectCode } from '@defimind/shared'
+import type { Amount, PayIntent, Policy, RejectCode, SwapQuote } from '@defimind/shared'
 import { admit } from '../db/breaker.js'
 import { ownerApprovalMethod, recordOwnerApproval, saveClearance } from '../db/receipts.js'
 import * as repo from '../db/repo.js'
@@ -71,7 +71,7 @@ export async function quote(deps: PaymentDeps, req: QuoteRequest, policy: Policy
 export async function swap(
   deps: PaymentDeps,
   req: SwapRequest,
-  floor?: { minAmountOut: Amount; by: 'owner' | 'order' },
+  floor?: { minAmountOut: Amount; by: 'owner' | 'order' | 'stop' },
   trader?: { shadow: boolean; guard: () => RejectCode | undefined },
 ): Promise<PayIntent> {
   const shadow = trader?.shadow ?? false
@@ -111,9 +111,14 @@ export async function swap(
       return reject(deps, intent, [early ?? 'TRADING_DISABLED'])
     }
     const slippage = Math.min(policy.trading.maxSlippageBps, req.maxSlippageBps ?? Infinity)
-    const answer = await fetchQuote(adapter, req, slippage)
-    if (answer === 'no_route') {
+    const first = await fetchQuote(adapter, req, slippage)
+    if (first === 'no_route') {
       return reject(deps, intent, ['NO_EXIT_ROUTE'])
+    }
+    const filling = floor !== undefined && floor.by !== 'owner'
+    const answer = filling ? await toFloor(adapter, req, first, floor, slippage) : first
+    if (answer === undefined) {
+      return reject(deps, withQuote(intent, first, req.tokenOut) ?? intent, ['SLIPPAGE_TOO_HIGH'])
     }
     const priced = withQuote(intent, answer, req.tokenOut)
     if (priced === undefined) {
@@ -144,7 +149,7 @@ export async function swap(
       { ...where, dollar: dollarOf(deps, req.chain), day: repo.utcDay(now()) },
       shadow || policy.mode === 'shadow',
     )
-    const protective = floor?.by === 'order'
+    const protective = floor?.by === 'stop'
     const verdict = evaluateTrade(trade, policy, book, now(), protective)
     repo.audit(
       db,
@@ -179,6 +184,32 @@ export async function swap(
     recordOwnerApproval(db, intent.id, 'passkey')
     return clearSwap(deps, adapter, priced, how, 'approved')
   })
+}
+
+/**
+ * An order's fill, quoted so its own minimum is the order's floor or more (CR-028). The venue's
+ * minimum is its expected amount less the slippage asked, so a stop that fires at its trigger
+ * would never clear a floor of the trigger less that same slippage: the fill asks for only the
+ * room left between the expected amount and the floor. Below the floor it is refused.
+ */
+async function toFloor(
+  adapter: ChainAdapter,
+  req: SwapRequest,
+  answer: SwapQuote,
+  floor: { minAmountOut: Amount },
+  slippage: number,
+): Promise<SwapQuote | undefined> {
+  const least = parseAmount(floor.minAmountOut)
+  if (parseAmount(answer.minAmountOut) >= least) {
+    return answer
+  }
+  const expected = parseAmount(answer.expectedOut)
+  const room = expected > least ? Number(((expected - least) * 10_000n) / expected) : 0
+  if (room < 1) {
+    return undefined
+  }
+  const again = await fetchQuote(adapter, req, Math.min(slippage, room))
+  return again === 'no_route' || parseAmount(again.minAmountOut) < least ? undefined : again
 }
 
 /**
