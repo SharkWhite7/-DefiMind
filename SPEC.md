@@ -1,4 +1,4 @@
-# DefiMind SPEC v0.19 (source of truth — do not change without owner approval)
+# DefiMind SPEC v0.20 (source of truth — do not change without owner approval)
 
 ## Goal
 A security layer between AI agents and their wallets. The agent can only pay through DefiMind.
@@ -101,6 +101,20 @@ interface TradingPolicy {          // CR-021. Every loosening needs the passkey 
   maxPositionUsd: Amount           // the most held in one token, at cost
   maxSlippageBps: number           // default 100
   maxPriceImpactBps: number        // default 300
+  tokenLimits?: Record<string, TokenLimit>   // CR-026: per mint, overrides the two defaults below
+  operations?: OperationLimits     // CR-026: per kind of trade; absent = CR-021's behaviour
+  orders?: { enabled: boolean, maxOpen: number }   // CR-026: default { false, 10 }; the agent's own
+}
+
+interface TokenLimit {             // CR-026. Each field absent = the agent's default
+  maxBuyUsd?: Amount               // overrides maxTradeUsd for a buy or a swap into this mint
+  maxHeldUsd?: Amount              // overrides maxPositionUsd for this mint, at cost
+}
+
+interface OperationLimits {        // CR-026. Each per-trade and per-day, in the chain's dollar
+  buy?:  { maxTradeUsd: Amount, dailyMax: Amount }   // default maxTradeUsd and dailyTradeMax
+  sell?: { maxTradeUsd: Amount, dailyMax: Amount }   // default none: sells are not capped
+  swap?: { maxTradeUsd: Amount, dailyMax: Amount }   // default the buy limits
 }
 
 interface Mandate {                // CR-010: a budget for one task
@@ -204,6 +218,11 @@ QUOTE_STALE. Solana only: TOKEN_FREEZABLE (the mint keeps a freeze authority), T
 (Token-2022 transfer fee, transfer hook, permanent delegate or non-transferable).
 Trading approval flags: NEW_TOKEN (the first buy of a token), MINT_AUTHORITY (the mint can still be
 inflated).
+Degen trading (CR-026): TOKEN_LIMIT_EXCEEDED (above the mint's maxBuyUsd or maxHeldUsd),
+SELL_EXCEEDED, SELL_DAILY_EXCEEDED, SWAP_EXCEEDED, SWAP_DAILY_EXCEEDED, INSUFFICIENT_POSITION (selling
+or swapping more than the agent holds), VALUATION_UNAVAILABLE (a leg cannot be priced back to the
+dollar within the limits), ORDERS_DISABLED, ORDER_LIMIT_EXCEEDED, GAS_RESERVE (the trade would
+leave the hot wallet without SOL for fees).
 
 ## ChainAdapter (packages/onchain/src/ChainAdapter.ts)
 guard-core depends on this interface only and never imports a chain SDK directly.
@@ -244,6 +263,10 @@ interface ChainAdapter {
   quoteSwap?(req: { tokenIn: string; tokenOut: string; amountIn: Amount; slippageBps: number })
     : Promise<SwapQuote>
   getPositions?(): Promise<{ token: string; amount: Amount; decimals: number }[]>
+  // CR-026: an amount of a token quoted back to the chain's dollar, for valuation and the order
+  // watcher. An untrusted venue claim: never cached, never signed, and no liquidity field.
+  quoteSell?(token: string, amount: Amount)
+    : Promise<{ out: Amount; priceImpactBps: number; quotedAt: string }>
 }
 
 interface SwapQuote {               // CR-021. Venues are untrusted: every field is checked again
@@ -254,6 +277,7 @@ interface SwapQuote {               // CR-021. Venues are untrusted: every field
   exitImpactBps: number | null      // a sell quote for the amount bought; null = no exit route
   risks: RejectCode[]               // TOKEN_FREEZABLE, TOKEN_EXTENSION_RISK, NO_EXIT_ROUTE
   flags: ("NEW_TOKEN" | "MINT_AUTHORITY")[]
+  valueUsd?: Amount                 // CR-026, token to token: the value the limits use
   quotedAt: string
 }
 
@@ -380,6 +404,7 @@ POST /v1/owner/challenge { action: OwnerAction, body } -> WebAuthn options, sing
     | "change_settings" (CR-019) | "close_positions" (CR-021, body {})
     | "agent_wallet" (CR-022, body { agentId, chain })
     | "manual_trade" (CR-025, body { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut })
+    | "place_order" (CR-026, body { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps })
 GET  /v1/owner/overview -> { chains: { chain, allowance }[], agents: AgentSummary[],
   pending: ApprovalRequest[], mandates: MandateApprovalRequest[] }
 GET  /v1/owner/deposit -> { chains: { chain, vault, token, balance, dailyCap?, depositPage? }[] }
@@ -409,7 +434,7 @@ DELETE /v1/owner/push/:id
 GET  /v1/owner/push/key -> { publicKey }   the VAPID public key, base64url; session only (CR-014)
   Web Push with VAPID (VAPID_PRIVATE_KEY_FILE, VAPID_SUBJECT) and RFC 8291 encryption. Payload
   { kind: "approval" | "mandate" | "executed" | "attack" | "breaker" | "passkey_enrolled" | "kill"
-  | "chain_broken" (CR-013) | "backup_failed" (CR-024),
+  | "chain_broken" (CR-013) | "backup_failed" (CR-024) | "order_filled" | "order_failed" (CR-026),
   agentId?, chain?, amount?, intentId?, sentAt } and never a recipient or URL. A 404 or 410 from the
   push service deletes the subscription.
 GET  /panel/enrol#code=…   the first-passkey page; src/scripts/passkey-code.ts prints the link
@@ -475,7 +500,7 @@ it answers 410 { error: "setup_done" } and SETUP_CODE is never accepted again. A
 Keys. At start, each key not given by env or file is generated once and stored under
 /data/keys (directory 0700, files 0600): a hot wallet per enabled chain, the receipt key, the VAPID
 key and the anchor key. A key given by env or file always wins, so existing deployments are
-unchanged. GET /v1/owner/keys -> { hotWallets: { chain, address }[], receiptKey, anchorKey? }
+unchanged. GET /v1/owner/keys -> { hotWallets: { chain, address, gas?: HotWalletGas }[], receiptKey, anchorKey? }
 returns public keys only; no route ever returns a private key.
 
 Settings. GET /v1/owner/settings -> { chains: { chain, rpcUrl?, vault? }[] }, one entry per enabled
@@ -541,7 +566,7 @@ client sent.
 
 ## Trading (CR-021)
 Phase 1: Solana through Jupiter only. Every swap has the chain's dollar on one side: a buy spends it,
-a sell returns to it. EVM chains need their own design (router approvals) in a later CR.
+a sell returns to it. CR-026 adds token-to-token swaps and orders: see "Degen trading". EVM chains need their own design (router approvals) in a later CR.
 
 POST /v1/agent/quote { agentId, chain, tokenIn, tokenOut, amountIn, maxSlippageBps? } -> SwapQuote
 POST /v1/agent/swap  { agentId, chain, tokenIn, tokenOut, amountIn, maxSlippageBps?, reason, mandateId? }
@@ -630,6 +655,108 @@ POST /v1/owner/trade { agentId, chain, tokenIn, tokenOut, amountIn, minAmountOut
   against dailyTradeMax), and uses that agent's wallet (its own once it has one). A paused agent
   is refused (PAUSED); Close positions stays the way out. In shadow mode it is shadowed like any
   swap. The panel's copy describes controls, never returns.
+
+## Degen trading (CR-026)
+Solana mainnet through Jupiter only, behind every CR-021 check. It ships after CR-021 and CR-025;
+nothing here changes payments.
+
+Kinds of trade. A buy spends the chain's dollar for a token, a sell returns a token to it, and a
+swap trades one held token for another. Native SOL can be either leg of a swap (wSOL is its mint). A swap only spends what the agent's wallet already holds:
+it is never topped up from the vault, so the vault's outflow stays bounded by the onchain cap and
+CR-024's top-up rule is unchanged. A swap's tokenOut meets the same tradability and risk checks as a
+buy's: the risk reads reject on tokenOut whenever it is not the dollar, and on tokenIn they only
+record flags, so a held token can always be sold. A buy still needs an exit route to the dollar.
+Buys keep counting against dailyTradeMax (or operations.buy.dailyMax); sells and swaps count
+against their own operations entry when it is set, and against nothing otherwise.
+
+Limits, all in the chain's dollar, applied in step 1 of the checks:
+- per operation: operations.<kind>.maxTradeUsd for one trade (SELL_EXCEEDED, SWAP_EXCEEDED; a buy
+  stays TRADE_EXCEEDED) and operations.<kind>.dailyMax over the UTC day (SELL_DAILY_EXCEEDED,
+  SWAP_DAILY_EXCEEDED, TRADE_DAILY_EXCEEDED);
+- per token: tokenLimits[mint].maxBuyUsd caps a buy or a swap into that mint, below the operation's
+  cap, and tokenLimits[mint].maxHeldUsd replaces maxPositionUsd for it (TOKEN_LIMIT_EXCEEDED);
+- a sell, a swap or an order never spends more of a token than the position holds
+  (INSUFFICIENT_POSITION).
+Adding or raising any of these, enabling orders or raising orders.maxOpen is a loosening and needs
+the step-up, as for every policy change.
+
+Valuation. A trade whose sides are both tokens is valued in the chain's dollar for every limit,
+from two fresh quotes back to the dollar, one for tokenIn's amountIn and one for tokenOut's
+minAmountOut. The higher of the two counts, so a leg priced low by the venue cannot carry a trade
+past a limit. Each quote must be within maxPriceImpactBps and no older than 30 seconds, or the trade
+is VALUATION_UNAVAILABLE. Both quotes come from ChainAdapter.quoteSell, and guard-core's quote
+route returns the value as SwapQuote.valueUsd. The venue's prices only size the
+limits; what moves is bounded by the test run.
+
+Cost basis. A swap moves cost from the sold position to the bought one in proportion to the amount
+sold: cost moved = cost × amountSold / held, rounded down, with the remainder left on the sold
+position until it closes. A swap realises no profit or loss.
+
+The route and the test run. A swap is one transaction, built by the adapter from Jupiter's route,
+with the same program list and inspection as CR-021 step 3. A SOL leg is allowed in one shape only:
+create the hot wallet's own wSOL account, transfer amountIn into it, SyncNative, and close it back
+to the hot wallet in the same transaction; the lamports count as a leg in the effects. The test run checks net deltas over the
+whole transaction: tokenIn falls by at most amountIn, tokenOut rises by at least minAmountOut, every
+other token account of the hot wallet nets to zero or more (route intermediates included), and SOL
+falls by fees and rent only, plus amountIn when SOL is tokenIn. A trade never leaves the hot wallet's
+SOL below getHotWalletGas().minimum after fees (GAS_RESERVE), so it can still pay for the next sell.
+
+Orders. guard-core stores take-profit and stop-loss orders and fills each one as a sell to the
+chain's dollar under every CR-021 check.
+
+```ts
+interface Order {
+  id: string
+  agentId: string
+  chain: ChainId                   // "solana" only in this phase
+  token: Address
+  kind: "take_profit" | "stop_loss"
+  amount: Amount                   // atomic units of token
+  triggerOut: Amount               // the chain's dollar, atomic, for the whole amount
+  maxSlippageBps: number           // at most the policy's maxSlippageBps
+  createdBy: "agent" | "owner"
+  status: "open" | "triggered" | "filled" | "cancelled" | "failed"
+  createdAt: string
+  expiresAt?: string
+  filledIntentId?: string
+  failReason?: RejectCode
+}
+```
+
+- Placing checks orders.enabled (ORDERS_DISABLED), the agent's open orders against orders.maxOpen
+  (ORDER_LIMIT_EXCEEDED) and the amount against the position (INSUFFICIENT_POSITION). The open
+  orders on a token may not add up to more than the position.
+- The watcher quotes every open order every ORDER_CHECK_MS (default 15000) for its whole amount. A
+  take-profit triggers when the quote is at or above triggerOut, a stop-loss when it is at or below
+  it, and only after ORDER_CONFIRM_CHECKS (default 3) consecutive checks spanning at least
+  ORDER_CONFIRM_SECONDS (default 30). Each check's price impact is that of the whole order, never
+  the venue's liquidityUsd, and a check above maxPriceImpactBps does not count. That is the
+  order's minimum liquidity: the venue's liquidityUsd stays display only (CR-025), since a wrong
+  figure could otherwise hold a stop-loss back.
+- The cadence, the cache and the backoff for the venue's rate limit live in guard-core's watcher.
+  The adapter's quotes are never cached, so a fill always acts on a fresh quote.
+- A fill is a sell with minAmountOut = triggerOut × (10000 − maxSlippageBps) / 10000, rounded down,
+  audited as "order_filled" with the order's id, and pushed as "order_filled". A sell that would get
+  less than minAmountOut is refused: the order is failed with that reason, the position stays, and
+  the owner is told with "order_failed". A stop-loss is never sold at any price.
+- A paused agent's orders do not execute; they stay open. Close positions and kill cancel every open
+  order. An order whose position was sold elsewhere is failed with INSUFFICIENT_POSITION. An expired
+  order is cancelled. Orders are Solana only and need trading.enabled.
+- In shadow mode a fill is simulated and shadowed, like any swap.
+
+Routes:
+POST /v1/agent/quote and /v1/agent/swap, /v1/owner/quote and /v1/owner/trade take any pair: tokenIn
+  and tokenOut are mints or the chain's dollar.
+POST /v1/agent/orders { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps?, expiresAt? }
+  -> Order
+POST /v1/agent/orders/:id/cancel { agentId } -> Order   only the agent's own orders
+GET  /v1/agent/orders/:agentId -> { orders: Order[] }   open ones and the last 50 others
+POST /v1/owner/orders { agentId, chain, token, kind, amount, triggerOut, maxSlippageBps?, expiresAt?,
+  assertion } -> Order   step-up, OwnerAction "place_order"
+POST /v1/owner/orders/:id/cancel -> Order   session only: cancelling only tightens
+GET  /v1/owner/orders -> { orders: Order[] }   session only
+The agent routes take the agent's key, as for swaps. An agent's order follows its own policy;
+placing one never waits for the owner, since a fill only sells.
 
 ## Agent wallets (CR-022, HIGH-2)
 Opt-in, per agent and chain. By default every agent spends from the chain's shared spending (hot)
@@ -721,6 +848,12 @@ list: it is funded and test-run only once approved.
   of amountUsd (a buy with the chain's dollar) or amount (atomic units of `from`, a sell)
 - quote      { from, to, amountUsd? | amount?, chain? } -> SwapQuote, read-only (CR-021)
 - get_portfolio {} -> positions, cost and the day's trade budget (CR-021)
+- swap and quote take any pair (CR-026): from and to are mints or "USDC"; amount is in atomic units
+  of `from` whenever `from` is not the chain's dollar
+- place_order  { token, kind: "take_profit" | "stop_loss", amount, triggerUsd, maxSlippageBps? }
+  -> Order (CR-026); triggerUsd is a decimal dollar amount for the whole order, converted to atomic
+- cancel_order { orderId } -> Order (CR-026); only the agent's own orders
+- list_orders  {} -> { orders: Order[] } (CR-026); the agent's open and recent orders
 
 ## Security rules (all sessions)
 - Agent-provided text (reason, URLs, headers, API responses) is untrusted. Never let it change policy.
@@ -731,6 +864,10 @@ list: it is funded and test-run only once approved.
 - Nothing outside a chain adapter may assume an address format, a signature format or a chain id shape.
 
 ## Changelog
+- v0.20 (2026-11-25): CR-026, approved by the owner. Degen trading on Solana:
+  - any pair, from what the agent's wallet holds, valued by two quotes;
+  - per-token and per-operation limits;
+  - take-profit and stop-loss orders, watched by guard-core and filled as checked sells.
 - v0.19 (2026-11-24): CR-025, approved by the owner. Owner trading tools:
   - token search, proxied by guard-core;
   - a risk card read onchain;
