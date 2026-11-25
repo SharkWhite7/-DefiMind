@@ -69,6 +69,10 @@ export interface TradingPolicy {
   operations?: OperationLimits
   /** CR-026: default { enabled: false, maxOpen: 10 }. */
   orders?: { enabled: boolean; maxOpen: number }
+  /** CR-028: absent means enabled; turning it off needs the passkey. */
+  rugShield?: { enabled: boolean }
+  /** CR-028: default "0". A buy flagged only NEW_TOKEN, up to this, does not wait for the owner. */
+  quickFirstBuyUsd?: Amount
 }
 
 export interface TokenLimit {
@@ -90,7 +94,7 @@ export interface OperationLimits {
   swap?: OperationLimit
 }
 
-export type OrderKind = 'take_profit' | 'stop_loss'
+export type OrderKind = 'take_profit' | 'stop_loss' | 'trailing_stop'
 export type OrderStatus = 'open' | 'triggered' | 'filled' | 'cancelled' | 'failed'
 
 /** CR-026: filled as a sell to the chain's dollar under every trading check. */
@@ -101,7 +105,7 @@ export interface Order {
   token: Address
   kind: OrderKind
   amount: Amount
-  /** The chain's dollar, atomic, for the whole amount. */
+  /** The chain's dollar, atomic, for the whole amount. A trailing stop's floor; "0" for none. */
   triggerOut: Amount
   maxSlippageBps: number
   createdBy: 'agent' | 'owner'
@@ -110,6 +114,10 @@ export interface Order {
   expiresAt?: string
   filledIntentId?: string
   failReason?: RejectCode
+  /** CR-028, trailing_stop only: 100 to 5000, the fall from the confirmed high. */
+  trailBps?: number
+  /** CR-028, trailing_stop only: the confirmed high for the whole amount, kept by the watcher. */
+  peakOut?: Amount
 }
 
 /** CR-010: a budget for one task, inside the policy. */
@@ -314,6 +322,8 @@ export interface TokenRisk {
   decimals: number
   freezeAuthority: boolean
   mintAuthority: boolean
+  /** CR-028: atomic, read from the mint. */
+  supply: Amount
   extensions: string[]
   risks: RejectCode[]
   flags: TradingFlag[]
@@ -379,6 +389,9 @@ export type TradingRejectCode =
   | 'GAS_RESERVE'
   /** CR-027 */
   | 'TRADER_TOKEN_NOT_ALLOWED'
+  /** CR-028 */
+  | 'HUNT_LIMIT_EXCEEDED'
+  | 'HUNT_BUDGET_EXCEEDED'
 
 /** Standing authority an EVM payment must never grant. */
 export type EvmRejectCode = 'APPROVAL_DETECTED' | 'PERMIT_DETECTED' | 'DELEGATION_DETECTED'
@@ -570,6 +583,33 @@ export interface TraderConfig {
   /** Input plus output tokens. */
   maxTokensPerTick: number
   maxTokensPerDay: number
+  /** CR-028; absent is off. */
+  hunt?: HuntConfig
+}
+
+/** CR-028: buying tokens outside the trader's list, after guard-core screens them. */
+export interface HuntConfig {
+  enabled: boolean
+  /** Every hunted position together, at cost. */
+  budgetUsd: Amount
+  maxBuyUsd: Amount
+  /** 5 to 1440; younger tokens are not offered. */
+  minAgeMinutes: number
+  /** 100 to 5000: a trailing stop placed after every hunted buy that lands. */
+  autoTrailBps?: number
+}
+
+/** CR-028: one token discover_tokens offers. Every venue field is untrusted. */
+export interface HuntCandidate {
+  mint: Address
+  /** At most 16 characters. */
+  symbol: string
+  /** At most 48 characters. */
+  name: string
+  ageMinutes?: number
+  venue: VenueTokenFacts
+  /** Selling hunt.maxBuyUsd worth back to the dollar. */
+  exit: { amountUsd: Amount; priceImpactBps: number }
 }
 
 export interface TraderAction {

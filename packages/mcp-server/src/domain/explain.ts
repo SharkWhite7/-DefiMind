@@ -50,6 +50,8 @@ const REASONS: Record<RejectCode, string> = {
   ORDER_LIMIT_EXCEEDED: 'the agent already has as many open orders as the owner allows',
   GAS_RESERVE: 'the trade would leave the spending wallet without SOL for network fees',
   TRADER_TOKEN_NOT_ALLOWED: "the token is not on the AI trader's own list",
+  HUNT_LIMIT_EXCEEDED: "the buy is above the AI trader's limit for one hunted token",
+  HUNT_BUDGET_EXCEEDED: "the AI trader's hunted tokens would go over the owner's hunt budget",
 }
 
 /** Codes where the right next step is not the generic "do not retry". */
