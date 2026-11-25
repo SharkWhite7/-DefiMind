@@ -48,6 +48,7 @@ const REASONS: Record<RejectCode, string> = {
   VALUATION_UNAVAILABLE: 'the trade could not be priced back to the dollar within the limits',
   ORDERS_DISABLED: 'the owner has not turned on take-profit and stop-loss orders',
   ORDER_LIMIT_EXCEEDED: 'the agent already has as many open orders as the owner allows',
+  GAS_RESERVE: 'the trade would leave the spending wallet without SOL for network fees',
 }
 
 /** Codes where the right next step is not the generic "do not retry". */

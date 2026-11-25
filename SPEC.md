@@ -221,7 +221,8 @@ inflated).
 Degen trading (CR-026): TOKEN_LIMIT_EXCEEDED (above the mint's maxBuyUsd or maxHeldUsd),
 SELL_EXCEEDED, SELL_DAILY_EXCEEDED, SWAP_EXCEEDED, SWAP_DAILY_EXCEEDED, INSUFFICIENT_POSITION (selling
 or swapping more than the agent holds), VALUATION_UNAVAILABLE (a leg cannot be priced back to the
-dollar within the limits), ORDERS_DISABLED, ORDER_LIMIT_EXCEEDED.
+dollar within the limits), ORDERS_DISABLED, ORDER_LIMIT_EXCEEDED, GAS_RESERVE (the trade would
+leave the hot wallet without SOL for fees).
 
 ## ChainAdapter (packages/onchain/src/ChainAdapter.ts)
 guard-core depends on this interface only and never imports a chain SDK directly.
@@ -262,6 +263,10 @@ interface ChainAdapter {
   quoteSwap?(req: { tokenIn: string; tokenOut: string; amountIn: Amount; slippageBps: number })
     : Promise<SwapQuote>
   getPositions?(): Promise<{ token: string; amount: Amount; decimals: number }[]>
+  // CR-026: an amount of a token quoted back to the chain's dollar, for valuation and the order
+  // watcher. An untrusted venue claim: never cached, never signed, and no liquidity field.
+  quoteSell?(token: string, amount: Amount)
+    : Promise<{ out: Amount; priceImpactBps: number; quotedAt: string }>
 }
 
 interface SwapQuote {               // CR-021. Venues are untrusted: every field is checked again
@@ -272,6 +277,7 @@ interface SwapQuote {               // CR-021. Venues are untrusted: every field
   exitImpactBps: number | null      // a sell quote for the amount bought; null = no exit route
   risks: RejectCode[]               // TOKEN_FREEZABLE, TOKEN_EXTENSION_RISK, NO_EXIT_ROUTE
   flags: ("NEW_TOKEN" | "MINT_AUTHORITY")[]
+  valueUsd?: Amount                 // CR-026, token to token: the value the limits use
   quotedAt: string
 }
 
@@ -494,7 +500,7 @@ it answers 410 { error: "setup_done" } and SETUP_CODE is never accepted again. A
 Keys. At start, each key not given by env or file is generated once and stored under
 /data/keys (directory 0700, files 0600): a hot wallet per enabled chain, the receipt key, the VAPID
 key and the anchor key. A key given by env or file always wins, so existing deployments are
-unchanged. GET /v1/owner/keys -> { hotWallets: { chain, address }[], receiptKey, anchorKey? }
+unchanged. GET /v1/owner/keys -> { hotWallets: { chain, address, gas?: HotWalletGas }[], receiptKey, anchorKey? }
 returns public keys only; no route ever returns a private key.
 
 Settings. GET /v1/owner/settings -> { chains: { chain, rpcUrl?, vault? }[] }, one entry per enabled
@@ -655,10 +661,12 @@ Solana mainnet through Jupiter only, behind every CR-021 check. It ships after C
 nothing here changes payments.
 
 Kinds of trade. A buy spends the chain's dollar for a token, a sell returns a token to it, and a
-swap trades one held token for another. A swap only spends what the agent's wallet already holds:
+swap trades one held token for another. Native SOL can be either leg of a swap (wSOL is its mint). A swap only spends what the agent's wallet already holds:
 it is never topped up from the vault, so the vault's outflow stays bounded by the onchain cap and
 CR-024's top-up rule is unchanged. A swap's tokenOut meets the same tradability and risk checks as a
-buy's. Buys keep counting against dailyTradeMax (or operations.buy.dailyMax); sells and swaps count
+buy's: the risk reads reject on tokenOut whenever it is not the dollar, and on tokenIn they only
+record flags, so a held token can always be sold. A buy still needs an exit route to the dollar.
+Buys keep counting against dailyTradeMax (or operations.buy.dailyMax); sells and swaps count
 against their own operations entry when it is set, and against nothing otherwise.
 
 Limits, all in the chain's dollar, applied in step 1 of the checks:
@@ -672,21 +680,26 @@ Limits, all in the chain's dollar, applied in step 1 of the checks:
 Adding or raising any of these, enabling orders or raising orders.maxOpen is a loosening and needs
 the step-up, as for every policy change.
 
-Valuation. A trade whose sides are both tokens is valued for the limits at the lower of two fresh
-quotes back to the chain's dollar, one for tokenIn's amountIn and one for tokenOut's minAmountOut.
-Each must be within maxPriceImpactBps and no older than 30 seconds, or the trade is
-VALUATION_UNAVAILABLE. The venue's prices only size the limits; what moves is bounded by the test
-run.
+Valuation. A trade whose sides are both tokens is valued in the chain's dollar for every limit,
+from two fresh quotes back to the dollar, one for tokenIn's amountIn and one for tokenOut's
+minAmountOut. The higher of the two counts, so a leg priced low by the venue cannot carry a trade
+past a limit. Each quote must be within maxPriceImpactBps and no older than 30 seconds, or the trade
+is VALUATION_UNAVAILABLE. Both quotes come from ChainAdapter.quoteSell, and guard-core's quote
+route returns the value as SwapQuote.valueUsd. The venue's prices only size the
+limits; what moves is bounded by the test run.
 
 Cost basis. A swap moves cost from the sold position to the bought one in proportion to the amount
 sold: cost moved = cost × amountSold / held, rounded down, with the remainder left on the sold
 position until it closes. A swap realises no profit or loss.
 
 The route and the test run. A swap is one transaction, built by the adapter from Jupiter's route,
-with the same program list and inspection as CR-021 step 3. The test run checks net deltas over the
+with the same program list and inspection as CR-021 step 3. A SOL leg is allowed in one shape only:
+create the hot wallet's own wSOL account, transfer amountIn into it, SyncNative, and close it back
+to the hot wallet in the same transaction; the lamports count as a leg in the effects. The test run checks net deltas over the
 whole transaction: tokenIn falls by at most amountIn, tokenOut rises by at least minAmountOut, every
 other token account of the hot wallet nets to zero or more (route intermediates included), and SOL
-falls by fees and rent only.
+falls by fees and rent only, plus amountIn when SOL is tokenIn. A trade never leaves the hot wallet's
+SOL below getHotWalletGas().minimum after fees (GAS_RESERVE), so it can still pay for the next sell.
 
 Orders. guard-core stores take-profit and stop-loss orders and fills each one as a sell to the
 chain's dollar under every CR-021 check.
@@ -717,7 +730,11 @@ interface Order {
   take-profit triggers when the quote is at or above triggerOut, a stop-loss when it is at or below
   it, and only after ORDER_CONFIRM_CHECKS (default 3) consecutive checks spanning at least
   ORDER_CONFIRM_SECONDS (default 30). Each check's price impact is that of the whole order, never
-  the venue's liquidityUsd, and a check above maxPriceImpactBps does not count.
+  the venue's liquidityUsd, and a check above maxPriceImpactBps does not count. That is the
+  order's minimum liquidity: the venue's liquidityUsd stays display only (CR-025), since a wrong
+  figure could otherwise hold a stop-loss back.
+- The cadence, the cache and the backoff for the venue's rate limit live in guard-core's watcher.
+  The adapter's quotes are never cached, so a fill always acts on a fresh quote.
 - A fill is a sell with minAmountOut = triggerOut × (10000 − maxSlippageBps) / 10000, rounded down,
   audited as "order_filled" with the order's id, and pushed as "order_filled". A sell that would get
   less than minAmountOut is refused: the order is failed with that reason, the position stays, and

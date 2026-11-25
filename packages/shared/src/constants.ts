@@ -72,4 +72,5 @@ export const SHARED_REJECT_CODES = [
   'VALUATION_UNAVAILABLE',
   'ORDERS_DISABLED',
   'ORDER_LIMIT_EXCEEDED',
+  'GAS_RESERVE',
 ] as const satisfies readonly SharedRejectCode[]

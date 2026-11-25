@@ -1503,8 +1503,9 @@ manifest-src 'self'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'
      wait for the owner.
   3. **Any pair.** A swap from one token to another, from what the agent's wallet already holds. It
      never draws from the vault, so the vault's outflow stays bounded by the onchain cap.
-     - Valuation for the limits: the lower of two venue quotes back to the dollar, one per leg, each
-       within the price-impact limit.
+     - Valuation for the limits: two venue quotes back to the dollar, one per leg, each within the
+       price-impact limit. SPEC v0.20 counts the higher of the two, which is stricter than the lower
+       first drafted here: a leg the venue prices low cannot carry a trade past a limit.
      - Cost basis: carried over from the token sold.
      - Test run: both legs in one transaction, balance deltas checked.
   4. **Take-profit and stop-loss orders**, created by the owner or the agent, stored in guard-core
