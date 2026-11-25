@@ -406,6 +406,16 @@ A sell never spends more than the agent's position holds (`INSUFFICIENT_POSITION
 
 Adding, raising or removing any of these caps, enabling orders, or raising `maxOpen` is a loosening, and needs the passkey. Only lowering a cap that is already set tightens.
 
+### Token-to-token swaps (CR-026)
+
+A swap's `tokenIn` and `tokenOut` can both be tokens other than the chain's dollar. Its `tokenOut` meets the same tradability and risk checks as a buy's.
+
+- **Valuation.** For every limit, a swap is valued at the higher of two legs, both priced back to the dollar with `quoteSell`: `tokenIn` for `amountIn`, and `tokenOut` for `minAmountOut`. A leg older than 30 s, beyond `maxPriceImpactBps`, or with no route makes the swap `VALUATION_UNAVAILABLE`. The quote route returns the valuation as `valueUsd`.
+- **Limits.** A swap is held to `operations.swap`, or to the buy limits without one, on its own day's count (`SWAP_EXCEEDED`, `SWAP_DAILY_EXCEEDED`). It meets the token limits of what it brings in.
+- **Spending.** A swap spends only what the wallet holds, and is never topped up from the vault. Asking for more than the position holds is `INSUFFICIENT_POSITION`.
+- **Cost basis.** Cost moves from the sold position to the bought one in proportion to the amount sold, rounded down, with the remainder left on the sold position until it closes. A swap realises no profit or loss.
+- **Gas.** No trade may leave the hot wallet's SOL below the next sell's fees (`GAS_RESERVE`).
+
 ### Owner trading tools (CR-025)
 
 Every route needs the owner's session. These routes serve Solana mainnet through Jupiter only.

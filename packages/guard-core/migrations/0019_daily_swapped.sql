@@ -1,0 +1,1 @@
+ALTER TABLE `daily_trades` ADD `swapped` text DEFAULT '0' NOT NULL;

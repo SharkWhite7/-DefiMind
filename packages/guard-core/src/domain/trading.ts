@@ -7,7 +7,6 @@ import type {
   TradingFlag,
   TradingPolicy,
 } from '@defimind/shared'
-import { z } from 'zod'
 import { parseAmount } from './amount.js'
 import { type Book, limitReasons } from './trade-limits.js'
 
@@ -23,13 +22,18 @@ const QUOTE_SKEW_MS = 5_000
 const BPS = 10_000n
 
 /**
- * One swap as the policy sees it. Every swap has the chain's dollar on one side (phase 1): a buy
- * spends it on `token`, a sell turns `token` back into it.
+ * One swap as the policy sees it. A buy spends the chain's dollar on `token`, a sell turns `token`
+ * back into it, and a swap (CR-026) trades another held token for `token`.
  */
 export interface Trade {
-  side: 'buy' | 'sell'
-  /** The token that is not the chain's dollar. */
+  side: 'buy' | 'sell' | 'swap'
+  /** The token that is not the chain's dollar; for a swap, the one it brings in. */
   token: string
+  /**
+   * A swap's worth in the chain's dollar, from two quotes back to it; undefined when either leg
+   * could not be priced within the limits, which refuses the swap.
+   */
+  valueUsd?: bigint
   /** What the agent asked for: the quote must answer exactly this. */
   request: { tokenIn: string; tokenOut: string; amountIn: string; maxSlippageBps?: number }
   quote: SwapQuote
@@ -70,7 +74,8 @@ export function evaluateTrade(trade: Trade, policy: Policy, book: Book, now: Dat
     add('VENUE_NOT_ALLOWED')
   }
   // Selling is always allowed, so an agent can leave a token the owner has since taken off the list.
-  if (side === 'buy' && !trading.allowAnyToken && !trading.tokens.includes(trade.token)) {
+  const bringsIn = side !== 'sell'
+  if (bringsIn && !trading.allowAnyToken && !trading.tokens.includes(trade.token)) {
     add('TOKEN_NOT_TRADABLE')
   }
   for (const reason of quoteReasons(trade, trading, now)) {
@@ -79,15 +84,19 @@ export function evaluateTrade(trade: Trade, policy: Policy, book: Book, now: Dat
 
   const amountIn = parseAmount(request.amountIn)
   // A sell counts at what it is expected to bring: a cap is not slipped under on the slippage.
-  const valueUsd = side === 'buy' ? amountIn : parseAmount(quote.expectedOut)
+  const valueUsd =
+    side === 'buy' ? amountIn : side === 'sell' ? parseAmount(quote.expectedOut) : trade.valueUsd
+  if (valueUsd === undefined) {
+    add('VALUATION_UNAVAILABLE')
+  }
   for (const reason of limitReasons(
     trading,
-    { side, token: trade.token, amountIn, valueUsd },
+    { side, token: trade.token, amountIn, valueUsd: valueUsd ?? 0n },
     book,
   )) {
     add(reason)
   }
-  if (side === 'buy') {
+  if (bringsIn) {
     for (const risk of quote.risks) {
       add(risk)
     }
@@ -105,7 +114,7 @@ export function evaluateTrade(trade: Trade, policy: Policy, book: Book, now: Dat
     return { decision: 'approve', reasons: [], flags: [] }
   }
   const flags = buyFlags(quote, book)
-  const waits = flags.length > 0 || amountIn >= parseAmount(policy.approvalThreshold)
+  const waits = flags.length > 0 || (valueUsd ?? 0n) >= parseAmount(policy.approvalThreshold)
   return { decision: waits ? 'needs_approval' : 'approve', reasons: [], flags }
 }
 
@@ -143,13 +152,7 @@ function buyFlags(quote: SwapQuote, book: Book): TradingFlag[] {
   return book.boughtBefore ? flags : ['NEW_TOKEN', ...flags]
 }
 
-const stored = z.object({ expectedOut: z.string().regex(/^\d+$/) })
-
-/**
- * What a recorded swap was expected to bring: kept beside its SwapDetails since CR-026. A swap
- * recorded before that counts at its minimum, the only figure it kept.
- */
+/** What a recorded swap was expected to bring. One recorded before CR-026 kept only its minimum. */
 export function expectedOf(swap: SwapDetails | undefined): bigint {
-  const kept = stored.safeParse(swap)
-  return kept.success ? BigInt(kept.data.expectedOut) : parseAmount(swap?.minAmountOut ?? '0')
+  return parseAmount(swap?.expectedOut ?? swap?.minAmountOut ?? '0')
 }

@@ -1,8 +1,8 @@
 import type { ChainAdapter } from '@defimind/onchain'
 import type { BalanceChange, PayIntent, SimulationResult } from '@defimind/shared'
+import { applySwap } from '../db/swap-book.js'
 import { applyTrade, capPositions } from '../db/trades.js'
 import { correctSold } from '../db/day-book.js'
-import { utcDay } from '../db/repo.js'
 import { expectedOf } from '../domain/trading.js'
 import { listWallets } from '../db/wallets.js'
 import { parseAmount } from '../domain/amount.js'
@@ -79,8 +79,10 @@ export async function settle(
   deps: PaymentDeps,
   adapter: ChainAdapter,
   intent: PayIntent,
-  side: 'buy' | 'sell',
+  side: 'buy' | 'sell' | 'swap',
   simulation: SimulationResult,
+  /** The day the trade was counted on, so a sell landing after midnight corrects that day. */
+  day: string,
   wait: (ms: number) => Promise<void> = (ms) => new Promise((done) => setTimeout(done, ms)),
 ): Promise<PayIntent> {
   const details = intent.swap
@@ -98,6 +100,23 @@ export async function settle(
   const moved: SimulationResult =
     changes === undefined ? simulation : { summary: 'landed', balanceChanges: changes }
   const spent = -net(moved, intent.token)
+  if (side === 'swap') {
+    const got = net(moved, details.tokenOut)
+    const to = {
+      token: details.tokenOut,
+      // A bad read must not book a negative position.
+      amount: got > 0n ? got : 0n,
+      decimals: details.decimalsOut,
+      ...(details.symbolOut === undefined ? {} : { symbol: details.symbolOut }),
+    }
+    const from = { token: intent.token, amount: spent > 0n ? spent : parseAmount(intent.amount) }
+    applySwap(deps.db, { agentId: intent.agentId, chain: intent.chain, from, to }, deps.now())
+    if (changes === undefined) {
+      await reconcile(deps, adapter, intent, from.token)
+      await reconcile(deps, adapter, intent, to.token)
+    }
+    return finish(deps, intent, { status: 'executed', txId })
+  }
   const position =
     side === 'buy'
       ? {
@@ -121,7 +140,7 @@ export async function settle(
   )
   // The day's sells counted what this one was expected to bring; it now says what it brought.
   if (side === 'sell' && changes !== undefined) {
-    const key = { agentId: intent.agentId, chain: intent.chain, day: utcDay(deps.now()) }
+    const key = { agentId: intent.agentId, chain: intent.chain, day }
     correctSold(deps.db, key, expectedOf(details), net(moved, details.tokenOut))
   }
   if (changes === undefined) {
