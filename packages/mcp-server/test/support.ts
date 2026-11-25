@@ -50,6 +50,9 @@ export function fakeGuard(overrides: Partial<Guard>): Guard {
     quote: unexpected,
     swap: unexpected,
     portfolio: unexpected,
+    placeOrder: unexpected,
+    cancelOrder: unexpected,
+    orders: unexpected,
     hasReceipt: () => Promise.resolve(false),
     ...overrides,
   }

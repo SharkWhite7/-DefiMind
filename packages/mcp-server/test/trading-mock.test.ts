@@ -54,3 +54,46 @@ describe('trading tools against a fake guard-core over HTTP', () => {
     expect(refused.text).toContain('Tell the user the owner has to allow it.')
   })
 })
+
+describe('degen trading against a fake guard-core over HTTP (CR-026)', () => {
+  const JUP = 'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN'
+
+  it('swaps one held token for another, places and cancels a stop-loss, and refuses one over the position', async () => {
+    mock = await startMockGuard({ agentId: 'agent-1', token: 'tok', tradable: [BONK, JUP] })
+    const client = await connect(httpGuard({ baseUrl: mock.url, agentId: 'agent-1', token: 'tok' }))
+    await call(client, 'swap', { from: 'USDC', to: BONK, amountUsd: '2', reason: 'demo' })
+
+    const rotated = await call(client, 'swap', {
+      from: BONK,
+      to: JUP,
+      amount: '40000000',
+      reason: 'demo',
+    })
+    expect(rotated.text).toContain(`Swap 40000000 units of ${BONK} for ${JUP}`)
+    expect(rotated.text).toContain(': executed.')
+    const held = await call(client, 'get_portfolio')
+    expect(held.text).toContain(
+      `- 40 of ${JUP} (40000000 smallest units) on Solana devnet, cost $0.80 USDC`,
+    )
+
+    const placed = await call(client, 'place_order', {
+      token: JUP,
+      kind: 'stop_loss',
+      amount: '40000000',
+      triggerUsd: '0.5',
+    })
+    expect(placed.text).toMatch(/^Stop-loss [0-9a-f-]{36}: open\./)
+    const id = /Stop-loss ([0-9a-f-]{36})/.exec(placed.text)?.[1] ?? ''
+    expect((await call(client, 'list_orders')).text).toContain(`Stop-loss ${id}: open.`)
+    expect((await call(client, 'cancel_order', { orderId: id })).text).toContain(': cancelled.')
+
+    const tooMuch = await call(client, 'place_order', {
+      token: JUP,
+      kind: 'take_profit',
+      amount: '99000000',
+      triggerUsd: '5',
+    })
+    expect(tooMuch.text).toContain('DefiMind refused this order')
+    expect(tooMuch.text).toContain('- INSUFFICIENT_POSITION:')
+  })
+})

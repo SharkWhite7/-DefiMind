@@ -313,6 +313,9 @@ leaves the token in your shell history.
 | `swap`          | `{ from, to, amountUsd? \| amount?, maxSlippageBps?, reason, chain? }` | Buys or sells a token inside the owner's trading limits     |
 | `quote`         | `{ from, to, amountUsd? \| amount?, chain? }`                          | Prices a swap without making it                             |
 | `get_portfolio` | `{}`                                                                   | Tokens held from trades, their cost, the day's trade budget |
+| `place_order`   | `{ token, kind, amount, triggerUsd, maxSlippageBps? }`                 | Leaves a take-profit or stop-loss on a token held (CR-026)  |
+| `cancel_order`  | `{ orderId }`                                                          | Cancels one of the agent's open orders                      |
+| `list_orders`   | `{}`                                                                   | The agent's open and recent orders                          |
 
 - **Amounts are decimal strings** such as `"0.25"`, never JSON numbers: a number has already been
   through a float by the time it arrives. A sign, an exponent, `NaN`, `Infinity` and more than 6
@@ -351,11 +354,11 @@ With the owner's `trading` policy turned on, the agent can swap tokens on Solana
 from the same spending wallet and under the same daily cap. Against a guard-core without the trading routes, all three tools
 say "Trading is not available on this DefiMind yet" rather than a 404's "no record".
 
-- **One side is always the chain's dollar.** A buy is `from: "USDC"` with `amountUsd`, the dollars
-  to spend. A sell is `to: "USDC"` with `amount`, in the smallest units of the token sold, as
-  `get_portfolio` shows them. `"USD"`, `"USDC"`, `"USDG"`, `"$"` and the dollar's own address all
-  mean the dollar. Anything else, including two tokens or two dollars, is refused before DefiMind is
-  asked.
+- **Buy, sell or swap.** A buy is `from: "USDC"` with `amountUsd`, the dollars to spend. A sell is
+  `to: "USDC"` with `amount`, in the smallest units of the token sold, as `get_portfolio` shows them.
+  With CR-026, a swap from one token to another also takes `amount`, of the token spent. `"USD"`,
+  `"USDC"`, `"USDG"`, `"$"` and the dollar's own address all mean the dollar. Two dollars, the same
+  token twice, or the wrong amount field is refused before DefiMind is asked.
 - **`quote`** prices the same request without trading. It shows:
   - the expected and minimum amount out, slippage and price impact;
   - for a buy, whether the token can be sold back;
@@ -374,6 +377,34 @@ say "Trading is not available on this DefiMind yet" rather than a 404's "no reco
 - **Approval:** a buy at or above the approval threshold waits for the owner, and so does any buy
   with a flag: `NEW_TOKEN` for the first buy of a token, `MINT_AUTHORITY` when the issuer can still
   create more of it. A sell never waits. Poll `check_intent` as for a payment.
+
+### Degen trading (CR-026)
+
+Solana only, behind every check above. It ships after the launch of CR-021's trading.
+
+- **Any pair.** `swap` and `quote` take two mints. A swap spends only what the agent already holds,
+  never a top-up from the vault, and the cost of what it spends moves to what it buys.
+- **More limits** the owner sets per token and per kind of trade. Each refusal says which and what to
+  do: `TOKEN_LIMIT_EXCEEDED`, `SELL_EXCEEDED`, `SELL_DAILY_EXCEEDED`, `SWAP_EXCEEDED`,
+  `SWAP_DAILY_EXCEEDED`, `INSUFFICIENT_POSITION` (more than the agent holds, counting its open
+  orders), and `VALUATION_UNAVAILABLE` (a leg could not be priced back to the dollar).
+- **Take-profit and stop-loss orders.** `place_order` takes the token, the amount in smallest units,
+  and `triggerUsd`, the dollars the whole amount must sell for. DefiMind turns that into atomic
+  units and watches the price. Once the trigger holds for several checks in a row, it sells to the
+  dollar under every trading check.
+  - **A stop-loss is not a guarantee.** If the sale would get less than the trigger minus slippage,
+    it is refused and the tokens stay, and the owner is told.
+  - **When orders do not run:** a paused agent's orders do not execute, and Close positions or a kill
+    cancels them.
+  - **No approval to place one:** placing never waits for the owner, since a fill only sells. The
+    owner can turn orders off (`ORDERS_DISABLED`) and caps how many are open
+    (`ORDER_LIMIT_EXCEEDED`).
+- **`cancel_order` and `list_orders`** act on the agent's own orders only.
+- **The `trading-agent` prompt** adds the rules for orders:
+  - place one only when the user asks, and repeat back what it will do;
+  - say a stop-loss may not fill;
+  - report fills and failures;
+  - never use orders to get around a limit.
 
 ### Handling `pending_approval`
 

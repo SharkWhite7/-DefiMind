@@ -5,6 +5,7 @@ import { registerPaidFetch } from './tools/paid-fetch.js'
 import { registerStartTask } from './tools/start-task.js'
 import { registerStatusTools } from './tools/status.js'
 import { type GatewayDeps, registerGateway } from './tools/gateway.js'
+import { registerOrders } from './tools/orders.js'
 import { registerTrading } from './tools/trading.js'
 import { registerTradingPrompt } from './tools/trading-prompt.js'
 import { registerTransfer } from './tools/transfer.js'
@@ -31,6 +32,7 @@ export function createServer(options: ServerDeps): McpServer {
   registerStatusTools(server, deps)
   registerStartTask(server, deps)
   registerTrading(server, deps)
+  registerOrders(server, deps)
   registerTradingPrompt(server)
   if (gateway) {
     registerGateway(server, gateway)

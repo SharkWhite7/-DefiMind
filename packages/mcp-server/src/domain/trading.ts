@@ -8,29 +8,41 @@ export interface SwapRequest {
 }
 
 export type ResolvedSwap =
-  | { ok: true; side: 'buy' | 'sell'; tokenIn: string; tokenOut: string; amountIn: bigint }
+  | {
+      ok: true
+      side: 'buy' | 'sell' | 'swap'
+      tokenIn: string
+      tokenOut: string
+      amountIn: bigint
+    }
   | { ok: false; error: string }
 
 const DOLLAR_ALIASES = /^(usd|usdc|usdg|\$)$/i
 const ATOMIC = /^[1-9]\d{0,39}$/
 
 /**
- * Phase 1 of trading always has the chain's dollar on one side: a buy spends it, a sell returns to
- * it. So the side follows from the tokens, and so does which amount field is meaningful.
+ * A buy spends the chain's dollar, a sell returns to it, and a swap trades one held token for
+ * another (CR-026). The side follows from the tokens, and so does which amount field is meaningful:
+ * dollars to buy with, or the smallest units of whatever token is spent.
  */
 export function resolveSwap(request: SwapRequest, dollar: string): ResolvedSwap {
   const isDollar = (token: string) => DOLLAR_ALIASES.test(token) || token === dollar
   const fromDollar = isDollar(request.from)
   const toDollar = isDollar(request.to)
-  if (fromDollar === toDollar) {
+  if (fromDollar && toDollar) {
     return {
       ok: false,
-      error:
-        "One side of a swap must be the chain's dollar and the other a token: a buy spends dollars, a sell returns to them.",
+      error: "A trade needs a token on at least one side, not the chain's dollar on both.",
     }
   }
+  if (!fromDollar && request.from === request.to) {
+    return { ok: false, error: 'from and to are the same token.' }
+  }
   if ((request.amountUsd === undefined) === (request.amount === undefined)) {
-    return { ok: false, error: 'Give exactly one of amountUsd (to buy) or amount (to sell).' }
+    return {
+      ok: false,
+      error: 'Give exactly one of amountUsd (to buy) or amount (to sell or swap a token).',
+    }
   }
   if (fromDollar) {
     if (request.amountUsd === undefined) {
@@ -49,14 +61,14 @@ export function resolveSwap(request: SwapRequest, dollar: string): ResolvedSwap 
     return {
       ok: false,
       error:
-        'A sell takes amount: a whole number above zero, in the smallest units of the token sold (get_portfolio shows them).',
+        'Selling or swapping a token takes amount: a whole number above zero, in the smallest units of the token spent (get_portfolio shows them).',
     }
   }
   return {
     ok: true,
-    side: 'sell',
+    side: toDollar ? 'sell' : 'swap',
     tokenIn: request.from,
-    tokenOut: dollar,
+    tokenOut: toDollar ? dollar : request.to,
     amountIn: BigInt(request.amount),
   }
 }

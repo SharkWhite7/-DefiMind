@@ -15,10 +15,13 @@ describe('tool listing', () => {
     const client = await connect(fakeGuard({}))
     const { tools } = await client.listTools()
     expect(tools.map((tool) => tool.name).sort()).toEqual([
+      'cancel_order',
       'check_intent',
       'get_budget',
       'get_portfolio',
+      'list_orders',
       'paid_fetch',
+      'place_order',
       'quote',
       'start_task',
       'swap',
