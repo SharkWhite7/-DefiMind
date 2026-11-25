@@ -39,7 +39,7 @@ import { confirm, connect, findSpendingLimit, spendingLimitPda, VAULT_INDEX } fr
 import { useSpendingLimit } from './draw.js'
 import { expectedTransfer, transferInstructions, type Payment } from './transfer.js'
 import { jupiter, type Venue } from './swap/jupiter.js'
-import { tokenRisk } from './swap/risk.js'
+import { sellQuote, tokenRisk } from './swap/risk.js'
 import { swaps } from './swap/service.js'
 import { gatedScheme } from './x402.js'
 
@@ -178,6 +178,8 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
           getPositions: trading.getPositions,
           tokenRisk: (token: Address) =>
             tokenRisk({ connection, dollar: mint, venue: deps.venue!, chain }, token),
+          quoteSell: (token: Address, amount: Amount) =>
+            sellQuote(deps.venue!, mint, token, atomic(amount)),
         }
       : {}),
 
@@ -187,7 +189,11 @@ export function svmAdapter(deps: SvmAdapterDeps): SvmAdapter {
         maxSupportedTransactionVersion: 0,
       })
       if (!tx?.meta) throw new Error(`tx_not_found: ${txId}`)
-      return landedChanges(tx.meta, hotWallet.publicKey.toBase58())
+      // A signer, so among the message's static keys: the first of them pays the fee.
+      const index = tx.transaction.message
+        .getAccountKeys()
+        .staticAccountKeys.findIndex((key) => key.equals(hotWallet.publicKey))
+      return landedChanges(tx.meta, hotWallet.publicKey.toBase58(), index)
     },
 
     async getAllowanceState(): Promise<AllowanceState> {
