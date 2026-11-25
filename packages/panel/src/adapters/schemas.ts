@@ -23,8 +23,12 @@ export const allowance = z
 /** CR-025: what Jupiter says about a token, labelled as the venue's. Untrusted display text. */
 const venue = z.object({
   holders: z.number().int().nonnegative().optional(),
-  liquidityUsd: atomic.optional(),
-  organicScore: z.number().min(0).max(100).optional(),
+  // A decimal string, as the venue reports it: display only, never used in a decision.
+  liquidityUsd: z
+    .string()
+    .regex(/^\d{1,20}(\.\d{1,2})?$/)
+    .optional(),
+  organicScore: z.number().nonnegative().optional(),
   createdAt: isoTime.optional(),
 })
 
@@ -64,6 +68,10 @@ export const swapQuote = z.object({
   slippageBps: bps,
   priceImpactBps: bps,
   exitImpactBps: bps.nullable(),
+  decimalsIn: z.number().int().min(0).max(255).optional(),
+  decimalsOut: z.number().int().min(0).max(255).optional(),
+  symbolIn: text(32).optional(),
+  symbolOut: text(32).optional(),
   risks: z.array(text(64)).max(16),
   flags: z.array(text(64)).max(8),
   quotedAt: isoTime,
@@ -217,7 +225,17 @@ export const budget = z.object({
   perTxMax: atomic,
   paused: z.boolean(),
   shadowSpentToday: atomic.optional(),
-  shadow: z.object({ since: isoTime, total: atomic, count: z.number().int() }).optional(),
+  shadow: z
+    .object({
+      since: isoTime,
+      total: atomic,
+      count: z.number().int(),
+      // GC-68: how often live would have asked the owner, and the flags behind it.
+      asked: z
+        .object({ count: z.number().int().nonnegative(), flags: z.array(text(64)).max(16) })
+        .optional(),
+    })
+    .optional(),
 })
 
 export const report = z.object({
@@ -241,8 +259,8 @@ export const doctor = z.object({
         // CR-022 names an agent's own wallet in the id: chain, agent and check.
         id: text(256),
         status: z.enum(['ok', 'warn', 'fail']),
-        message: text(500),
-        fix: text(500).optional(),
+        message: text(2000),
+        fix: text(2000).optional(),
       }),
     )
     .max(64),
@@ -339,7 +357,20 @@ export const settingsView = z.object({
     .max(16),
 })
 export const keys = z.object({
-  hotWallets: z.array(z.object({ chain: text(64), address: text(128) })).max(16),
+  hotWallets: z
+    .array(
+      z.object({
+        chain: text(64),
+        address: text(128),
+        // #165: its native coin, for fees; absent when guard-core could not read it.
+        gas: z.object({ balance: atomic, minimum: atomic, symbol: text(16) }).optional(),
+      }),
+    )
+    .max(16),
+  agentWallets: z
+    .array(z.object({ agentId, chain: text(64), address: text(128) }))
+    .max(256)
+    .optional(),
   receiptKey: text(512),
   anchorKey: text(512).optional(),
 })
@@ -368,6 +399,7 @@ export type Overview = z.infer<typeof overview>
 export type ApprovalView = z.infer<typeof approvalRequest>
 export type MandateView = z.infer<typeof mandateRequest>
 export type AgentView = z.infer<typeof agentSummary>
+export type KeysView = z.infer<typeof keys>
 export type AgentWalletView = z.infer<typeof agentWallet>
 export type TokenInfo = z.infer<typeof tokenInfo>
 export type TokenRiskView = z.infer<typeof tokenRisk>

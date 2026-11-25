@@ -289,7 +289,9 @@ GET  /v1/agent/intents/:id  -> PayIntent
 GET  /v1/agent/budget/:agentId -> { spentToday, shadowSpentToday, dailyMax, perTxMax, hotWalletBalances, paused, chains, mandates }
   mandates: the agent's active mandates (CR-010).
   shadow?: { since, total, count }: since the agent's first shadowed payment, what shadow mode would
-  have spent in all and how many payments (CR-011). Absent when it never ran in shadow.
+  have spent in all and how many payments (CR-011). Absent when it never ran in shadow. It carries
+  asked: { count, flags }, how many of those live would have taken to the owner and the distinct
+  flags behind them, at most 16 (CR-024).
   chains: the CAIP-2 ids guard-core runs an adapter for AND this agent's Policy.chains allows, so an
   agent learns only where it may actually pay, never the operator's full setup.
 
@@ -407,7 +409,7 @@ DELETE /v1/owner/push/:id
 GET  /v1/owner/push/key -> { publicKey }   the VAPID public key, base64url; session only (CR-014)
   Web Push with VAPID (VAPID_PRIVATE_KEY_FILE, VAPID_SUBJECT) and RFC 8291 encryption. Payload
   { kind: "approval" | "mandate" | "executed" | "attack" | "breaker" | "passkey_enrolled" | "kill"
-  | "chain_broken" (CR-013),
+  | "chain_broken" (CR-013) | "backup_failed" (CR-024),
   agentId?, chain?, amount?, intentId?, sentAt } and never a recipient or URL. A 404 or 410 from the
   push service deletes the subscription.
 GET  /panel/enrol#code=…   the first-passkey page; src/scripts/passkey-code.ts prints the link
@@ -517,11 +519,14 @@ build so a modified /sign can be detected.
 Backups (CR-024). guard-core backs up its own database every day at BACKUP_HOUR_UTC (default 3),
 with SQLite's online backup (the same as db:backup), to backups/guard-<UTC date>.db beside the
 database on the data volume, mode 0600. It keeps the newest 14 and deletes older ones, and never
-serves a backup over HTTP. With BACKUP_BUCKET_URL set (an S3-compatible bucket, with
-BACKUP_ACCESS_KEY_ID and BACKUP_SECRET_ACCESS_KEY as secrets), each backup is also uploaded,
-encrypted with AES-256-GCM under BACKUP_ENCRYPTION_KEY, which a bucket requires. The doctor's
-backup check reads the newest backup: ok under 26 hours old, warn otherwise, and it names the last
-upload when a bucket is set. A failed backup or upload alerts the owner once a day.
+serves a backup over HTTP. With BACKUP_BUCKET_URL set (an S3-compatible bucket, path-style
+https://<endpoint>/<bucket>[/<prefix>], signed with SigV4 for BACKUP_REGION, default "auto", with
+BACKUP_ACCESS_KEY_ID and BACKUP_SECRET_ACCESS_KEY as secrets), each backup is also uploaded as
+<name>.enc, encrypted with AES-256-GCM under BACKUP_ENCRYPTION_KEY (12-byte IV, ciphertext, 16-byte
+tag), which a bucket requires. The doctor's backup check reads the newest backup: ok under 26 hours
+old, warn otherwise; with a bucket it names the last upload and warns until one is under 26 hours
+old. A failed backup or upload alerts the owner once a day:
+{ kind: "backup_failed" } to the bot and Web Push "backup_failed".
 
 Hosting behind one public listener. ADMIN_ROUTES=false leaves /v1/admin/* unregistered, as the
 one-click deployment does. With one listener (PUBLIC_PORT unset), guard-core refuses to start with
@@ -589,8 +594,9 @@ GET  /v1/owner/tokens/search?q=&chain= -> { tokens: TokenInfo[] }
   fields are dropped except those below. Verified tokens come first; the panel shows unverified
   ones only after an explicit "Show unverified tokens", with a warning.
   TokenInfo = { chain, mint, symbol, name, decimals, verified, venue: { holders?, liquidityUsd?,
-  organicScore?, createdAt? } }. The symbol and name are display only and always shown beside the
-  full mint. The decimals are the venue's and are re-read from the mint before any use. No remote
+  organicScore?, createdAt? } }. liquidityUsd is the venue's figure as a decimal string, display
+  only: never money and never in a decision. The symbol and name are display only and always shown
+  beside the full mint. The decimals are the venue's and are re-read from the mint before any use. No remote
   image is ever loaded: the CSP allows img-src 'self' data: only, so at most a mint-derived
   identicon.
 GET  /v1/owner/tokens/:mint/risk?chain= -> TokenRisk
@@ -658,7 +664,8 @@ Gas: the agent's wallet pays its own fees. The panel shows the address and the g
 doctor warns below the minimum.
 
 Kill. POST /v1/owner/kill still pauses every agent, and now returns one ownerTransactions entry per
-chain and wallet, shared and per agent: every limit is removed. POST /v1/owner/agents/:id/kill {}
+chain and wallet, shared and per agent: every limit is removed. An agent's entry carries
+wallet: { agentId, address }, and its links name that wallet. POST /v1/owner/agents/:id/kill {}
 (session) pauses that agent and returns ownerTransactions for its own wallets only. Revoking an agent
 with its own wallet returns the same transactions and says the limit is still live until they are
 signed. The bot's and the admin's kill pause everything, as before, and carry no links.
@@ -693,12 +700,15 @@ POST {BOT_URL}/hooks/alert             (same X-Guard-Signature scheme; CR-010)
   | { kind: "passkey_enrolled", detail: string, sentAt: string }
   | { kind: "chain_broken", detail: string, sentAt: string }   (CR-013)
   | { kind: "admin_loosen_refused", detail: string, sentAt: string }   (CR-022)
+  | { kind: "backup_failed", detail: string, sentAt: string }   (CR-024: never a URL or a key)
 The approval-request body gains flags: ("RECIPIENT_CHANGED" | "PRICE_JUMP")[] (empty when none),
 pinned?: { recipient, amount } (the last executed payment to that domain, present with a flag),
 passkey: boolean (approve only through /owner/approve), and mandate?: Mandate when the request is to
 open a mandate rather than to pay (then intent is absent; approveBefore and simulation still come,
 simulation with an empty balanceChanges). A mandate request also carries ttlSeconds, how long the budget
-runs once approved: while pending, the mandate's expiresAt is only the approval deadline.
+runs once approved: while pending, the mandate's expiresAt is only the approval deadline. A buy asked
+before its test run (CR-024) carries untested: true, on the webhook, Web Push and the owner's pending
+list: it is funded and test-run only once approved.
 
 ## MCP tools (mcp-server)
 - paid_fetch { url, method?, headers?, body?, maxAmountUsd? }

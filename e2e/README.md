@@ -162,5 +162,28 @@ Not covered here, and why:
 - Close positions: the recording holds only the buy, so a sell is covered by guard-core's tests
   until a sell route is recorded.
 - A stale quote: guard-core's unit tests cover it.
-- A swap waiting for the owner does not reach Telegram yet, because the bot refuses swap intents.
-  The panel shows it. This is marked as a todo.
+
+A swap waiting for the owner reaches Telegram with both sides and the reason it waits.
+
+## The independent review's fixes, `test/cr022-review-fixes.test.ts` and `test/cr022-hosting.test.ts`
+
+CR-022, end to end:
+
+- **The admin token only tightens.** The reviewer's attack, a wider policy that pays a thief, is
+  refused. It changes nothing, and the owner reads "Possible attack blocked" in Telegram. Going live
+  and resuming are refused too. Lowering a limit, pausing and the kill still pass. An admin mandate
+  waits for the owner.
+- **One listener never serves the admin API publicly by accident.** The config refuses
+  HOST=0.0.0.0 with the admin routes on, unless the listeners are split, the admin routes are off,
+  or ALLOW_PUBLIC_ADMIN says so.
+- **An approval pays only the request the owner saw.** Another query, path or method is a new
+  intent. The same request redeems it once.
+- **The Host header.** A name the owner never gave the deployment gets 421; `/health` answers any.
+- **The first passkey** comes only from the setup code when one is set. The admin passkey routes
+  answer `use_setup_code`, and the owner is alerted.
+- **The doctor** warns when one key can empty a vault, and names the hardware-wallet fix on Solana.
+
+## The first live trade's fixes, `test/cr024-live-fixes.test.ts`
+
+On the mainnet fork: a buy that waits for the owner, with an empty hot wallet, draws nothing from
+the vault. Once approved, it is topped up, test-run and landed.

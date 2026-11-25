@@ -20,6 +20,7 @@ import { telegram } from './telegram.js'
 // The admin token only tightens (CR-022), so the suite writes its policies where the panel's
 // passkey-checked route would: straight into the database.
 import { putPolicy } from '../../../packages/guard-core/src/db/repo.js'
+import { Wallets, type WalletKeys } from '../../../packages/guard-core/src/service/wallets.js'
 
 const ADMIN_TOKEN = 'a'.repeat(64)
 const BOT_TOKEN = 'b'.repeat(64)
@@ -55,7 +56,18 @@ export function policy(
  * them. Only the chain (a stub that signs nothing) and Telegram (recorded, not sent) are fake, and
  * one clock drives all three so expiry can be tested without waiting.
  */
-export async function stack(options: { chain?: StubChain; net?: Net; panel?: boolean } = {}) {
+export async function stack(
+  options: {
+    chain?: StubChain
+    net?: Net
+    panel?: boolean
+    setupCode?: string
+    /** CR-022: where agents' own wallets come from; without it every agent uses the shared one. */
+    walletKeys?: WalletKeys
+    /** guard-core's outbound fetch, for a test that plays a venue's HTTP API. */
+    fetch?: typeof fetch
+  } = {},
+) {
   const net = options.net ?? SOLANA
   const log = pino({ level: 'silent' })
   const clock = { now: START }
@@ -79,22 +91,30 @@ export async function stack(options: { chain?: StubChain; net?: Net; panel?: boo
   migrateDb(db)
   const agentToken = createAgent(db, AGENT)
   const chain = options.chain ?? new StubChain(net.chain, 100_000_000n)
+  const wallets = options.walletKeys && new Wallets(db, options.walletKeys)
+  const config = loadConfig({
+    ADMIN_TOKEN,
+    BOT_TOKEN,
+    BOT_URL: botUrl,
+    BOT_WEBHOOK_SECRET: WEBHOOK_SECRET,
+    LOG_LEVEL: 'fatal',
+    ...(options.setupCode === undefined ? {} : { SETUP_CODE: options.setupCode }),
+    // The flows approve through the bot unless they test the panel, its default since CR-012.
+    ...(options.panel
+      ? { PASSKEY_RP_ID: PANEL_RP.id, PASSKEY_ORIGIN: PANEL_RP.origin }
+      : { TELEGRAM_APPROVALS: 'true' }),
+  })
   const guard = await buildGuard({
     db,
-    config: loadConfig({
-      ADMIN_TOKEN,
-      BOT_TOKEN,
-      BOT_URL: botUrl,
-      BOT_WEBHOOK_SECRET: WEBHOOK_SECRET,
-      LOG_LEVEL: 'fatal',
-      // The flows approve through the bot unless they test the panel, its default since CR-012.
-      ...(options.panel
-        ? { PASSKEY_RP_ID: PANEL_RP.id, PASSKEY_ORIGIN: PANEL_RP.origin }
-        : { TELEGRAM_APPROVALS: 'true' }),
-    }),
+    config,
     chains: new Map([[chain.chain, chain]]),
     now,
     sweepMs: 20,
+    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+    // The settings and agent-wallet routes come with a chain host; nothing here changes the chain.
+    ...(wallets === undefined
+      ? {}
+      : { wallets, host: { env: config, build: async () => new Map([[chain.chain, chain]]) } }),
     ...(options.panel ? { receiptKey: generateKeyPairSync('ed25519').privateKey } : {}),
   })
   const guardUrl = await guard.listen({ port: 0, host: '127.0.0.1' })
@@ -134,8 +154,8 @@ export async function stack(options: { chain?: StubChain; net?: Net; panel?: boo
     agentToken,
     telegram: tg,
     admin,
-    setPolicy: (overrides: Partial<Policy> = {}) =>
-      putPolicy(db, { agentId: AGENT, ...policy(overrides, net) }, clock.now.toISOString()),
+    setPolicy: (overrides: Partial<Policy> = {}, agentId = AGENT) =>
+      putPolicy(db, { agentId, ...policy(overrides, net) }, clock.now.toISOString()),
     /** Calls an MCP tool the way an agent would, and returns the text it reads back. */
     async tool(name: string, args: Record<string, unknown> = {}) {
       const result = (await client.callTool({ name, arguments: args })) as CallToolResult

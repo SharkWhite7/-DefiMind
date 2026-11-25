@@ -1,4 +1,5 @@
 import { createSvmAnchor } from '@defimind/onchain'
+import { bucketConfig } from './adapters/bucket.js'
 import { readKeypairFile, readReceiptKeyFile } from './adapters/keypair.js'
 import { keysDir, withKeys } from './adapters/keystore.js'
 import { publicKeys } from './adapters/public-keys.js'
@@ -92,6 +93,11 @@ const [app, publicApp] = await buildServers(
     keys,
     host,
     wallets,
+    backups: {
+      databaseUrl: config.DATABASE_URL,
+      hour: config.BACKUP_HOUR_UTC,
+      bucket: bucketConfig(config),
+    },
     ...(anchorPublisher === undefined ? {} : { anchorPublisher }),
     ...(vapid === undefined
       ? {}

@@ -17,6 +17,8 @@ import { HttpError } from './errors.js'
 import { ownerKeysRoute } from './owner-setup.js'
 import { type ChainHost, ownerSettingsRoutes } from './owner-settings.js'
 import { ownerGuideRoutes } from './owner-guide.js'
+import { ownerTradingRoutes } from './owner-trading.js'
+import { jupiterTokens, type TokenSearch } from '../adapters/jupiter-tokens.js'
 import { ownerWalletRoutes, type Signing, withLinks } from './owner-wallets.js'
 import type { PublicKeys } from '../adapters/public-keys.js'
 import {
@@ -52,6 +54,8 @@ export function ownerPanelRoutes(
     signing?: Signing
     keys?: PublicKeys
     host?: ChainHost
+    /** Jupiter's token search; a test passes its own. */
+    tokenSearch?: TokenSearch
   },
 ) {
   const { db, now } = deps
@@ -73,13 +77,17 @@ export function ownerPanelRoutes(
   return async (app: FastifyInstance) => {
     await app.register(ownerExecutions(deps))
     if (setup.keys !== undefined) {
-      await app.register(ownerKeysRoute(setup.keys, db))
+      await app.register(ownerKeysRoute(setup.keys, deps))
     }
     if (setup.host !== undefined) {
       await app.register(ownerSettingsRoutes(deps, setup.host, stepUp))
       await app.register(ownerGuideRoutes(deps, setup.host, setup.signing?.page))
       await app.register(ownerWalletRoutes(deps, rp.origin, setup.host, stepUp, setup.signing))
     }
+
+    await app.register(
+      ownerTradingRoutes(deps, setup.tokenSearch ?? jupiterTokens(deps.fetch), stepUp),
+    )
 
     app.post('/v1/owner/challenge', async (request) => {
       const { action, body } = ownerChallenge.parse(request.body)

@@ -211,9 +211,16 @@ describe.skipIf(skipped)(
         untouched()
       })
 
-      // The bot's webhook schemas know only x402 and transfer intents, so it refuses a swap's
-      // approval request; the panel shows it. Panel owns the fix (INT-47 follow-up).
-      it.todo('reaches the owner on Telegram, with MINT_AUTHORITY explained')
+      it('reaches the owner on Telegram, with both sides and MINT_AUTHORITY explained', async () => {
+        f.patchMint(WSOL, { mintAuthority: ATTACKER })
+        const id = intentIdIn(await buy())
+        await vi.waitFor(() => expect(s.telegram.approvalFor(id)).toBeDefined())
+        const text = s.telegram.approvalFor(id)!.text
+        expect(text).toContain('Buy with')
+        expect(text).toContain(WSOL.toBase58())
+        expect(text).toContain('mint more')
+        untouched()
+      })
     })
   },
 )

@@ -1,7 +1,7 @@
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator'
 import { mkdirSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { StubChain } from '../src/adapters/stub.js'
 import { openDb, schema } from '../src/db/client.js'
@@ -58,7 +58,10 @@ describe('the doctor', () => {
       minimum: '2',
       symbol: 'SOL',
     })
-    expect((await byId(d))[`${CHAIN}:gas`]).toMatchObject({ status: 'warn' })
+    expect((await byId(d))[`${CHAIN}:gas`]).toMatchObject({
+      status: 'warn',
+      fix: 'Send some SOL to stub, the address of the hot wallet.',
+    })
   })
 
   it('fails a read that throws without quoting the error, which may carry a URL or a key', async () => {
@@ -134,12 +137,12 @@ describe('the doctor', () => {
       return deps({ databaseUrl: `file:${join(dir, 'guard.db')}` })
     }
 
-    it('is happy with a backup from the last two days', async () => {
+    it('is happy with a backup from the last 26 hours', async () => {
       expect((await byId(withBackup(3_600_000)))['backup']?.status).toBe('ok')
     })
 
-    it('warns when the newest backup is older than two days', async () => {
-      expect((await byId(withBackup(3 * 86_400_000)))['backup']?.status).toBe('warn')
+    it('warns when the newest backup is older than 26 hours', async () => {
+      expect((await byId(withBackup(27 * 3_600_000)))['backup']?.status).toBe('warn')
     })
 
     it('warns when there is no backup at all', async () => {
@@ -149,13 +152,36 @@ describe('the doctor', () => {
       })
     })
 
-    // CR-019: a one-click owner has the host's dashboard, not a terminal for a cron job.
-    it('points a one-click host at its disk snapshots', async () => {
+    // CR-019: a one-click owner has the host's dashboard, not a terminal.
+    it('points a one-click host at its disk', async () => {
       const hosted = { ...withBackup(), hosted: true }
-      expect((await byId(hosted))['backup']?.fix).toMatch(/host's daily disk snapshots/)
-      expect((await byId(withBackup()))['backup']?.fix).toBe(
-        'Run the database backup, and schedule it daily.',
-      )
+      expect((await byId(hosted))['backup']?.fix).toMatch(/host's disk snapshots/)
+      expect((await byId(withBackup()))['backup']?.fix).toMatch(/run the database backup by hand/)
+    })
+
+    it('with a bucket, names the last upload, and warns before the first', async () => {
+      const d = { ...withBackup(3_600_000), bucket: true }
+      expect((await byId(d))['backup']).toMatchObject({
+        status: 'warn',
+        message: expect.stringContaining('None has been uploaded'),
+      })
+      const dir = join(dirname(d.databaseUrl.slice('file:'.length)), 'backups')
+      writeFileSync(join(dir, 'last-upload'), '2026-11-03T03:00:00.000Z')
+      expect((await byId(d))['backup']).toMatchObject({
+        status: 'ok',
+        message: expect.stringContaining('2026-11-03T03:00:00.000Z'),
+      })
+    })
+
+    it('warns when the last upload is over 26 hours old, and reads only a timestamp', async () => {
+      const d = { ...withBackup(3_600_000), bucket: true }
+      const dir = join(dirname(d.databaseUrl.slice('file:'.length)), 'backups')
+      writeFileSync(join(dir, 'last-upload'), '2026-11-01T03:00:00.000Z')
+      expect((await byId(d))['backup']).toMatchObject({ status: 'warn', fix: expect.any(String) })
+      writeFileSync(join(dir, 'last-upload'), `2026-11-03T03:00:00.000Z${'x'.repeat(10_000)}`)
+      const check = (await byId(d))['backup']
+      expect(check?.message).toContain('None has been uploaded')
+      expect(check?.message.length).toBeLessThan(200)
     })
   })
 })
@@ -189,11 +215,12 @@ describe('public admin routes (CR-022)', () => {
       const check = (await byId(d))[`${CHAIN}:control`]
       expect(check).toMatchObject({ status: 'warn' })
       expect(check?.message).toContain('config authority')
-      expect(check?.fix).toContain('Ledger')
+      expect(check?.fix).toMatch(/^For larger balances/)
+      expect(check?.fix).toContain('both as config authority and as member')
       expect(check?.fix).not.toMatch(/threshold|2-of-3/)
     })
 
-    it('on EVM advises another owner or a 2-of-3', async () => {
+    it('on EVM advises a 2-of-3 or a replaced owner, never one more owner at threshold 1', async () => {
       const base = 'eip155:8453'
       const chain = new StubChain(base, 1_000_000n)
       vi.spyOn(chain, 'getVault').mockResolvedValue({

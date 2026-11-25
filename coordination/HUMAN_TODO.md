@@ -76,25 +76,6 @@ can start. The runbook was `docs/migration.md` (Parts A to F, with a rollback), 
 
 ---
 
-## ⬜ HUMAN-35 — Decide when to launch publicly
-
-On 2026-11-23 the owner decided not to launch publicly yet. In his words: "eu nao quero lançar agora
-para o publico quero fazer o video para mostrar para os co fundadores". The demo video is private, for
-his co-founders. Until he decides to launch, no announcement, launch copy, release or tag goes out.
-The same day he chose to leave the repository's visibility as it is and only take the GitHub links
-off the site (SITE-5): "Deixa como está, so remove o github site eu nao vou por ainda para publico".
-
-What the public launch still needs, once he decides:
-
-1. SITE-4, copy fixes on the site. It still mentions Telegram's `/kill`, Base as live and SPEC v0.5.
-2. The site's Vercel project builds from the legacy repository. Reconnect it
-   to `SharkWhite7/-DefiMind` with Root Directory `site`.
-3. `defimind-sign.vercel.app` answered 404 at its root after HUMAN-34. Recheck the project's
-   deployments and domains, then the integrator verifies the files and merges GC-58 (#89).
-4. HUMAN-25, the Phantom review, now also for `defimind-sign.vercel.app`.
-
----
-
 ## ⬜ HUMAN-32 — Retire the Telegram bot
 
 The owner dropped Telegram on 2026-11-20: approvals and alerts go through the web panel only. At
@@ -106,20 +87,6 @@ HUMAN-31 F2, together with the old apps:
 Until CR-017 lands, guard-core still tries the bot hook on each event: it logs a warning, writes an
 `approval_request_failed` audit row on each approval, and `doctor` reports the bot as down. Nothing
 is lost: the panel's push goes out first.
-
----
-
-## ⬜ HUMAN-33 — Verify the one-click deploy on Render (CR-019) — risk accepted, run optional
-
-On 2026-11-20 the owner chose to ship the Deploy to Render button without a verified run, in his
-words: "o render tá testado vamos usar mesmo assim eu aceito o risco ja deixa implementado se der
-algum problema nos testamos novamente". The button is in the README (#73), and
-`docs/getting-started.md` says the route is new and asks people to report a failing step. No
-complete run on Render has been recorded yet.
-
-Still useful, whenever the owner wants: one run from the button on a paid Starter instance with a
-disk, or panel's free devnet variant (no disk), which proves every step up to "live" except
-persistence. A failed step comes back through panel. No key is shared either way.
 
 ---
 
@@ -169,3 +136,4 @@ Only if simulation needs a second provider. Not needed so far.
 | HUMAN-28 | `SIGN_PAGE_URL` set on `defimind-guard-core` from the bot's live value                | 2026-11-19 | the legacy signing page, until GC-58                                           |
 | HUMAN-23 | Passkey enrolled for the panel, on the owner's iPhone (HUMAN-31 D1)                   | 2026-11-20 | `defimind-guard-core.fly.dev`; link carried by QR, never pasted                |
 | HUMAN-34 | Hosted signing page `defimind-sign` published on Vercel from this repository (CR-020) | 2026-11-23 | `https://defimind-sign.vercel.app`; `/?action=kill` says the link is not valid |
+| HUMAN-33 | One-click deploy on Render verified by the owner from the Deploy button (CR-019)      | 2026-11-24 | the owner reported it works end to end                                         |

@@ -126,6 +126,23 @@ describe('an agent with its own wallet (CR-022)', () => {
     )
     expect(checks.some((c: { id: string }) => c.id === `${CHAIN}:agent-1:control`)).toBe(false)
   })
+
+  it("names the agent's own wallet in full when it needs gas", async () => {
+    const { owner, create, own } = await setup()
+    await create()
+    const chain = own.get('/keys/agent-1')
+    if (chain !== undefined) {
+      vi.spyOn(chain, 'getHotWalletGas').mockResolvedValue({
+        balance: '1',
+        minimum: '2',
+        symbol: 'SOL',
+      })
+    }
+    const checks = (await owner.call('GET', '/v1/owner/doctor')).json().checks
+    expect(checks.find((c: { id: string }) => c.id === `${CHAIN}:agent-1:gas`)?.fix).toBe(
+      `Send some SOL to ${OWN}, the address of agent-1's own wallet.`,
+    )
+  })
 })
 
 describe('stopping agents with their own wallets (CR-022)', () => {
@@ -140,7 +157,8 @@ describe('stopping agents with their own wallets (CR-022)', () => {
     expect(new URL(shared.pageLink).searchParams.get('hot')).toBe('shared-hot')
     expect(new URL(own.pageLink).searchParams.get('hot')).toBe(OWN)
     expect(own.description).toMatch(/^agent-1's own wallet: /)
-    expect(own.wallet).toBeUndefined()
+    expect(own.wallet).toEqual({ agentId: 'agent-1', address: OWN })
+    expect(shared.wallet).toBeUndefined()
   })
 
   it("one agent's kill pauses it alone and removes only its own wallet's limit", async () => {

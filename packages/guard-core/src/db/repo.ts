@@ -1,5 +1,6 @@
 import type {
   Amount,
+  BudgetView,
   ChainId,
   PayIntent,
   Policy,
@@ -7,6 +8,7 @@ import type {
   RejectCode,
 } from '@defimind/shared'
 import { and, eq, gt, gte, inArray, isNotNull, isNull, like, lte, sql } from 'drizzle-orm'
+import { z } from 'zod'
 import { matchesHash } from '../domain/auth.js'
 import type { StoredPolicy } from '../domain/policy.js'
 import type { Db } from './client.js'
@@ -221,10 +223,7 @@ export function shadowSpentToday(db: Db, agentId: string, day: string): Amount {
 }
 
 /** Since the agent's first shadowed payment: when, what shadow mode would have spent, how often. */
-export function shadowSummary(
-  db: Db,
-  agentId: string,
-): { since: string; total: Amount; count: number } | undefined {
+export function shadowSummary(db: Db, agentId: string): BudgetView['shadow'] {
   const rows = db
     .select({ amount: intents.amount, createdAt: intents.createdAt })
     .from(intents)
@@ -236,7 +235,36 @@ export function shadowSummary(
     return undefined
   }
   const total = rows.reduce((sum, row) => sum + BigInt(row.amount), 0n)
-  return { since: first.createdAt, total: total.toString(), count: rows.length }
+  return {
+    since: first.createdAt,
+    total: total.toString(),
+    count: rows.length,
+    asked: shadowAsked(db, agentId),
+  }
+}
+
+const askedRow = z.object({ wouldAsk: z.literal(true), flags: z.array(z.string()).optional() })
+
+/**
+ * How many shadowed intents live would have taken to the owner, and why (CR-024): the owner's
+ * "Live would have asked you". Distinct flags only, so the answer stays small.
+ */
+function shadowAsked(db: Db, agentId: string): { count: number; flags: string[] } {
+  const flags = new Set<string>()
+  let count = 0
+  const rows = db
+    .select({ detail: auditLog.detail })
+    .from(auditLog)
+    .where(and(eq(auditLog.agentId, agentId), eq(auditLog.event, 'shadowed')))
+    .all()
+  for (const row of rows) {
+    const asked = askedRow.safeParse(row.detail)
+    if (asked.success) {
+      count += 1
+      asked.data.flags?.forEach((flag) => flags.add(flag.slice(0, 32)))
+    }
+  }
+  return { count, flags: [...flags].slice(0, 16) }
 }
 
 export function addSpend(
