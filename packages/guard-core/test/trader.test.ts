@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as repo from '../src/db/repo.js'
 import * as schema from '../src/db/schema.js'
+import { savePrice } from '../src/db/prices.js'
 import { getTrader } from '../src/db/traders.js'
 import { CHAIN, NOW } from './harness.js'
 import { buy, setup } from './trader-setup.js'
@@ -34,6 +35,22 @@ describe('a trader tick (CR-027)', () => {
     expect(system.at(-1)).toMatchObject({ cache_control: { type: 'ephemeral' } })
     expect(system.at(-1)?.text).toContain('Buy dips.')
     expect(JSON.stringify(body['messages'])).toContain('<tick_data>')
+  })
+
+  it("puts each token's latest price and changes in the tick, and a 1h window for 5-minute traders (CR-028)", async () => {
+    const prices = { name: 'recent_prices', input: { mint: BONK } }
+    const { h, fake, tick } = await setup([{ tools: [prices] }, { text: 'Fine.' }], {
+      cadenceMinutes: 5,
+    })
+    savePrice(h.db, CHAIN, BONK, '0.001', new Date(NOW.getTime() - 2 * 3_600_000), 15)
+    savePrice(h.db, CHAIN, BONK, '0.0011', NOW, 1)
+    await tick()
+    const messages = fake.sent[0]?.body['messages'] as { content: string }[]
+    const first = messages[0]?.content ?? ''
+    expect(first).toContain('"priceUsd":"0.0011"')
+    expect(first).toContain('"change1h":"+10.00%","change24h":null')
+    const second = JSON.stringify(fake.sent[1]?.body['messages'])
+    expect(second).toContain('\\"window\\":\\"1h\\"')
   })
 
   it('sends no fallback on Haiku 5.5', async () => {

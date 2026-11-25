@@ -42,7 +42,7 @@ const inputs = {
   get_portfolio: z.strictObject({}),
   quote: pair,
   token_risk: z.strictObject({ mint }),
-  recent_prices: z.strictObject({ mint }),
+  recent_prices: z.strictObject({ mint, window: z.enum(['1h', '24h']).optional() }),
   swap: pair.extend({ maxSlippageBps: slippage, reason: z.string() }),
   place_order: z
     .strictObject({
@@ -129,8 +129,10 @@ async function run(ctx: TickContext, name: Name, input: unknown): Promise<ToolOu
         content: await tokenRisk(deps, ctx.search, chain, inputs.token_risk.parse(input).mint),
       }
     case 'recent_prices': {
-      const { mint: token } = inputs.recent_prices.parse(input)
-      return { content: { samples: recentPrices(deps.db, chain, token, now) } }
+      const { mint: token, window } = inputs.recent_prices.parse(input)
+      // A 5-minute trader looks at the last hour by default, a slower one at the last day.
+      const span = window ?? (ctx.config.cadenceMinutes === 5 ? '1h' : '24h')
+      return { content: { window: span, samples: recentPrices(deps.db, chain, token, now, span) } }
     }
     case 'swap':
       return trade(ctx, inputs.swap.parse(input))

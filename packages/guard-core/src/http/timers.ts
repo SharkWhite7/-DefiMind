@@ -10,10 +10,11 @@ import { orderWatcher } from '../service/order-watcher.js'
 import { rugShield, type ShieldRules } from '../service/rug-shield.js'
 import type { Claude } from '../adapters/claude.js'
 import { jupiterTokens } from '../adapters/jupiter-tokens.js'
-import { dueTicks, samplePrices } from '../service/trader-schedule.js'
+import { dueTicks, sampleFastPrices, samplePrices } from '../service/trader-schedule.js'
 import { endInterrupted } from '../db/traders.js'
 
 const PRICE_EVERY_MS = 15 * 60_000
+const FAST_PRICE_EVERY_MS = 60_000
 
 /** The order watcher (CR-026): off when unset, as in tests that tick it directly. */
 export type Watch = { checkMs: number; confirmChecks: number; confirmSeconds: number }
@@ -47,6 +48,7 @@ export function startTimers(
     }
     every(first, checkMs, () => dueTicks(t))
     every(first, PRICE_EVERY_MS, () => samplePrices(t))
+    every(first, FAST_PRICE_EVERY_MS, () => sampleFastPrices(t))
   }
   if (options.orders !== undefined) {
     const { checkMs } = options.orders

@@ -43,7 +43,10 @@ export const traderTicks = sqliteTable(
   (t) => [index('trader_ticks_agent').on(t.agentId, t.startedAt)],
 )
 
-/** What recent_prices reads: a quoteSell of 10 dollars' worth, every 15 minutes, kept 7 days. */
+/**
+ * What recent_prices reads: a quoteSell of 10 dollars' worth, every 15 minutes, kept 7 days; and,
+ * for 5-minute traders' tokens, every minute, kept 24 hours (CR-028).
+ */
 export const priceSamples = sqliteTable(
   'price_samples',
   {
@@ -51,6 +54,8 @@ export const priceSamples = sqliteTable(
     mint: text('mint').$type<Address>().notNull(),
     at: text('at').notNull(),
     priceUsd: text('price_usd').notNull(),
+    /** Minutes between samples of this series: 15, or 1 for the fast one. */
+    step: integer('step').notNull().default(15),
   },
   (t) => [primaryKey({ columns: [t.chain, t.mint, t.at] })],
 )

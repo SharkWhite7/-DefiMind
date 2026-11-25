@@ -1,0 +1,1 @@
+ALTER TABLE `price_samples` ADD `step` integer DEFAULT 15 NOT NULL;

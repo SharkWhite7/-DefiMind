@@ -1164,7 +1164,7 @@ Faster prices. recent_prices takes { mint, window?: "1h" | "24h" }:
   They are kept for 24 hours.
 - The default window is "1h" for a 5-minute trader and "24h" otherwise.
 - Each tick's user message also carries, for every listed and held token, its latest sample and the
-  change over the last hour and day, as data.
+  change against the latest sample at least an hour and a day old (null without one), as data.
 
 Quick first buys. TradingPolicy.quickFirstBuy = { maxUsd: Amount, dailyUsd: Amount }, absent meaning
 off. Setting it or raising either amount is a loosening and needs the step-up.

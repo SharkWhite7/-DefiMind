@@ -43,6 +43,8 @@ export function tickMessage(data: {
   maxActionsPerTick: number
   portfolio: unknown
   limits: unknown
+  /** CR-028: each listed and held token's latest price and its change over an hour and a day. */
+  prices: unknown
 }): string {
   const { now, ...rest } = data
   return `A new tick. Decide whether to act or hold.\n${tagged('tick_data', { time: now.toISOString(), ...rest })}`

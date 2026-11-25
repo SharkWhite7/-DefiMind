@@ -176,6 +176,13 @@
       "when": 1795631717815,
       "tag": "0024_rug_shield",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1795634118514,
+      "tag": "0025_fast_prices",
+      "breakpoints": true
     }
   ]
 }

@@ -51,8 +51,11 @@ export const TOOLS: BetaTool[] = [
   ),
   tool(
     'recent_prices',
-    'Up to 96 price samples { at, priceUsd } from the last 24 hours, oldest first.',
-    { mint: { type: 'string', description: 'The token mint address.' } },
+    'Price samples { at, priceUsd }, oldest first: "1h" gives up to 60 from the last hour, one a minute for a 5-minute trader; "24h" gives up to 96 from the last day, one every 15 minutes. The default is "1h" for a 5-minute trader and "24h" otherwise.',
+    {
+      mint: { type: 'string', description: 'The token mint address.' },
+      window: { type: 'string', enum: ['1h', '24h'] },
+    },
     ['mint'],
   ),
   tool(

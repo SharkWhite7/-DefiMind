@@ -9,7 +9,10 @@ import { randomUUID } from 'node:crypto'
 import type { Claude, ClaudeRequest } from '../adapters/claude.js'
 import type { TokenSearch } from '../adapters/jupiter-tokens.js'
 import * as repo from '../db/repo.js'
+import { priceAt } from '../db/prices.js'
 import { getTrader, saveTick, setPaused, setStreak, traderToday } from '../db/traders.js'
+import { listPositions } from '../db/trades.js'
+import { priceChange } from '../domain/prices.js'
 import { clip, nextStreak, skipReason, type Streak, tokensOf } from '../domain/trader.js'
 import type { PaymentDeps } from './payments.js'
 import { portfolio } from './portfolio.js'
@@ -105,6 +108,7 @@ async function converse(
     maxActionsPerTick: config.maxActionsPerTick,
     portfolio: portfolio(deps.db, agentId, deps.now()),
     limits: repo.getPolicy(deps.db, agentId)?.trading ?? null,
+    prices: priceSummary(ctx, deps.now()),
   }
   const messages: BetaMessageParam[] = [{ role: 'user', content: tickMessage(data) }]
   try {
@@ -258,4 +262,26 @@ function record(deps: PaymentDeps, streak: Streak, tick: TraderTick): void {
     repo.audit(db, { event: 'trader_paused', agentId, detail: { by: next.pause } }, now())
     deps.push?.traderPaused(agentId)
   }
+}
+
+const HOUR_MS = 3_600_000
+
+/** CR-028: saves the model a recent_prices call per token on most ticks. */
+function priceSummary(ctx: TickContext, now: Date) {
+  const { deps, chain, agentId, config } = ctx
+  const held = listPositions(deps.db, agentId).map((p) => p.token)
+  return [...new Set([...config.tokens, ...held])].map((mint) => {
+    const latest = priceAt(deps.db, chain, mint, now)
+    const past = (ms: number) =>
+      priceAt(deps.db, chain, mint, new Date(now.getTime() - ms))?.priceUsd
+    return latest === undefined
+      ? { mint, priceUsd: null }
+      : {
+          mint,
+          priceUsd: latest.priceUsd,
+          at: latest.at,
+          change1h: priceChange(latest.priceUsd, past(HOUR_MS)),
+          change24h: priceChange(latest.priceUsd, past(24 * HOUR_MS)),
+        }
+  })
 }

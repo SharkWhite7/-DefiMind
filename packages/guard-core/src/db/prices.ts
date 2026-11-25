@@ -1,32 +1,77 @@
-import { and, asc, eq, gte, lt } from 'drizzle-orm'
+import { and, desc, eq, gte, lt } from 'drizzle-orm'
 import type { Db } from './client.js'
 import { priceSamples } from './trader-schema.js'
 
-const DAY_MS = 86_400_000
+const HOUR_MS = 3_600_000
+const DAY_MS = 24 * HOUR_MS
 
-export function savePrice(db: Db, chain: string, mint: string, priceUsd: string, at: Date): void {
+export type Window = '1h' | '24h'
+
+export function savePrice(
+  db: Db,
+  chain: string,
+  mint: string,
+  priceUsd: string,
+  at: Date,
+  step: 1 | 15 = 15,
+): void {
   db.insert(priceSamples)
-    .values({ chain, mint, at: at.toISOString(), priceUsd })
+    .values({ chain, mint, at: at.toISOString(), priceUsd, step })
     .onConflictDoNothing()
     .run()
 }
 
-/** The last 24 hours, oldest first: at most 96 samples at one every 15 minutes. */
-export function recentPrices(db: Db, chain: string, mint: string, now: Date) {
-  const since = new Date(now.getTime() - DAY_MS).toISOString()
+/**
+ * Oldest first. "24h": the 15-minute series, at most 96 samples. "1h": every sample of the last
+ * hour, at most 60, from the one-minute series where it runs (CR-028).
+ */
+export function recentPrices(
+  db: Db,
+  chain: string,
+  mint: string,
+  now: Date,
+  window: Window = '24h',
+) {
+  const hour = window === '1h'
+  const since = new Date(now.getTime() - (hour ? HOUR_MS : DAY_MS)).toISOString()
+  const where = and(
+    eq(priceSamples.chain, chain),
+    eq(priceSamples.mint, mint),
+    gte(priceSamples.at, since),
+    ...(hour ? [] : [eq(priceSamples.step, 15)]),
+  )
+  return db
+    .select({ at: priceSamples.at, priceUsd: priceSamples.priceUsd })
+    .from(priceSamples)
+    .where(where)
+    .orderBy(desc(priceSamples.at))
+    .limit(hour ? 60 : 96)
+    .all()
+    .reverse()
+}
+
+/** The latest sample at or before `at`, from either series. */
+export function priceAt(db: Db, chain: string, mint: string, at: Date) {
   return db
     .select({ at: priceSamples.at, priceUsd: priceSamples.priceUsd })
     .from(priceSamples)
     .where(
-      and(eq(priceSamples.chain, chain), eq(priceSamples.mint, mint), gte(priceSamples.at, since)),
+      and(
+        eq(priceSamples.chain, chain),
+        eq(priceSamples.mint, mint),
+        lt(priceSamples.at, new Date(at.getTime() + 1).toISOString()),
+      ),
     )
-    .orderBy(asc(priceSamples.at))
-    .limit(96)
-    .all()
+    .orderBy(desc(priceSamples.at))
+    .get()
 }
 
-/** Samples are kept for 7 days. */
+/** The 15-minute series is kept for 7 days, the one-minute series for 24 hours. */
 export function prunePrices(db: Db, now: Date): void {
-  const cutoff = new Date(now.getTime() - 7 * DAY_MS).toISOString()
-  db.delete(priceSamples).where(lt(priceSamples.at, cutoff)).run()
+  const week = new Date(now.getTime() - 7 * DAY_MS).toISOString()
+  const day = new Date(now.getTime() - DAY_MS).toISOString()
+  db.delete(priceSamples).where(lt(priceSamples.at, week)).run()
+  db.delete(priceSamples)
+    .where(and(eq(priceSamples.step, 1), lt(priceSamples.at, day)))
+    .run()
 }
